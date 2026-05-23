@@ -1,0 +1,37 @@
+# Node
+node_modules/
+.env
+.env.local
+dist/
+coverage/
+
+# Prisma
+api/prisma/migrations/*.sql.bak
+
+# iOS / Xcode
+ios/**/.DS_Store
+ios/**/build/
+ios/**/*.xcworkspace/xcuserdata/
+ios/**/*.xcodeproj/xcuserdata/
+ios/**/DerivedData/
+ios/**/*.ipa
+ios/**/*.dSYM.zip
+ios/**/*.dSYM
+ios/Pods/
+ios/**/*.xcarchive
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editor
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Uploads (local dev)
+api/uploads/

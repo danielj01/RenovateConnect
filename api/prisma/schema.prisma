@@ -1,0 +1,142 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CLIENT
+  BUSINESS
+  ADMIN
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  CLOSED
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  role         Role      @default(CLIENT)
+  name         String
+  phone        String?
+  avatarUrl    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  business     Business?
+  sentMessages     Message[]   @relation("SentMessages")
+  conversations    Conversation[] @relation("ClientConversations")
+  estimations      Estimation[]
+}
+
+model Business {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  companyName     String
+  description     String
+  logoUrl         String?
+  website         String?
+  licenseNumber   String?
+  yearsInBusiness Int       @default(0)
+
+  // Location
+  address         String?
+  city            String
+  state           String
+  zipCode         String
+  lat             Float?
+  lng             Float?
+
+  // Specialties (stored as array)
+  specialties     String[]
+
+  // Rating
+  averageRating   Float     @default(0)
+  reviewCount     Int       @default(0)
+
+  // Promoted listing
+  isPromoted      Boolean   @default(false)
+  promotedUntil   DateTime?
+  stripeCustomerId String?
+  stripeSubId      String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  conversations   Conversation[]
+  leads           Lead[]
+  reviews         Review[]
+}
+
+model Conversation {
+  id          String    @id @default(cuid())
+  clientId    String
+  businessId  String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  client      User      @relation("ClientConversations", fields: [clientId], references: [id])
+  business    Business  @relation(fields: [businessId], references: [id])
+  messages    Message[]
+  lead        Lead?
+
+  @@unique([clientId, businessId])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  conversationId String
+  senderId       String
+  body           String
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         User         @relation("SentMessages", fields: [senderId], references: [id])
+}
+
+model Lead {
+  id             String       @id @default(cuid())
+  conversationId String       @unique
+  businessId     String
+  status         LeadStatus   @default(NEW)
+  billed         Boolean      @default(false)
+  billedAt       DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  business       Business     @relation(fields: [businessId], references: [id])
+}
+
+model Estimation {
+  id          String   @id @default(cuid())
+  userId      String
+  imageUrls   String[]
+  roomType    String?
+  description String?
+  result      Json
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  businessId  String
+  authorName  String
+  rating      Int
+  body        String?
+  createdAt   DateTime @default(now())
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
