@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 
 struct EstimationView: View {
+    @EnvironmentObject private var notifications: NotificationManager
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
     @State private var roomType = ""
@@ -94,6 +95,9 @@ struct EstimationView: View {
                 roomType: roomType.isEmpty ? nil : roomType,
                 description: description.isEmpty ? nil : description
             )
+            // A completed estimate is a high-value moment — a good time to prime
+            // notification permission (so we can tell them "your estimate is ready").
+            notifications.considerPriming()
         } catch {
             self.error = error.localizedDescription
         }
@@ -103,6 +107,7 @@ struct EstimationView: View {
 struct EstimationResultView: View {
     let estimation: Estimation
     @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var router: TabRouter
 
     var body: some View {
         NavigationStack {
@@ -137,6 +142,18 @@ struct EstimationResultView: View {
                 }
                 Section("Confidence: \(estimation.result.confidence.capitalized)") {
                     Text(estimation.result.notes).font(.caption).foregroundStyle(.secondary)
+                }
+
+                // Bridge the post-estimate cliff: send the user straight to
+                // contractors instead of letting the result dead-end.
+                Section {
+                    Button {
+                        dismiss()
+                        router.selection = TabRouter.explore
+                    } label: {
+                        Label("Find contractors for this project", systemImage: "magnifyingglass")
+                            .fontWeight(.semibold)
+                    }
                 }
             }
             .navigationTitle("Estimate")

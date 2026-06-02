@@ -11,6 +11,8 @@ struct MyProjectsView: View {
     }
 
     @EnvironmentObject private var favorites: FavoritesStore
+    @EnvironmentObject private var router: TabRouter
+    @Environment(\.dismiss) private var dismiss
     @State private var segment: Segment = .saved
     @State private var estimations: [Estimation] = []
     @State private var loadingEstimates = true
@@ -49,11 +51,19 @@ struct MyProjectsView: View {
     @ViewBuilder
     private var savedSection: some View {
         if favorites.businesses.isEmpty {
-            ContentUnavailableView(
-                "No saved contractors",
-                systemImage: "heart",
-                description: Text("Tap the heart on a contractor to save them here for later.")
-            )
+            ContentUnavailableView {
+                Label("No saved contractors", systemImage: "heart")
+            } description: {
+                Text("Tap the heart on a contractor to save them here for later.")
+            } actions: {
+                Button {
+                    goToTab(TabRouter.explore)
+                } label: {
+                    Text("Explore contractors").fontWeight(.semibold)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.primary)
+            }
             .padding(.top, 60)
         } else {
             LazyVStack(spacing: 12) {
@@ -77,11 +87,19 @@ struct MyProjectsView: View {
         if loadingEstimates {
             ProgressView().padding(.top, 60)
         } else if estimations.isEmpty {
-            ContentUnavailableView(
-                "No estimates yet",
-                systemImage: "camera.viewfinder",
-                description: Text("Snap a photo of your space in the Estimate tab to get an AI cost breakdown.")
-            )
+            ContentUnavailableView {
+                Label("No estimates yet", systemImage: "camera.viewfinder")
+            } description: {
+                Text("Snap a photo of your space to get an instant AI cost breakdown.")
+            } actions: {
+                Button {
+                    goToTab(TabRouter.estimate)
+                } label: {
+                    Text("Get an estimate").fontWeight(.semibold)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.primary)
+            }
             .padding(.top, 60)
         } else {
             LazyVStack(spacing: 12) {
@@ -93,6 +111,13 @@ struct MyProjectsView: View {
             .padding(.top, 4)
             .padding(.bottom, 40)
         }
+    }
+
+    /// Pop back to the Profile root, then switch to the target tab so the user
+    /// lands cleanly on Explore/Estimate rather than behind the pushed hub.
+    private func goToTab(_ tab: Int) {
+        dismiss()
+        router.selection = tab
     }
 
     private func loadEstimates() async {

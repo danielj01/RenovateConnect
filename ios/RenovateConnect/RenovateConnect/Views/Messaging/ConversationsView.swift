@@ -6,6 +6,8 @@ struct ConversationsView: View {
     @State private var deepLinkConversation: Conversation?
     @EnvironmentObject private var inbox: InboxStore
     @EnvironmentObject private var notifications: NotificationManager
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var router: TabRouter
 
     var body: some View {
         NavigationStack {
@@ -13,7 +15,23 @@ struct ConversationsView: View {
                 if isLoading {
                     ProgressView()
                 } else if conversations.isEmpty {
-                    ContentUnavailableView("No conversations yet", systemImage: "message", description: Text("Contact a business to start a conversation."))
+                    if auth.currentUser?.role == .client {
+                        ContentUnavailableView {
+                            Label("No conversations yet", systemImage: "message")
+                        } description: {
+                            Text("Find a contractor and start a conversation about your project.")
+                        } actions: {
+                            Button {
+                                router.selection = TabRouter.explore
+                            } label: {
+                                Text("Explore contractors").fontWeight(.semibold)
+                            }
+                            .buttonStyle(.borderedProminent)
+                            .tint(Theme.primary)
+                        }
+                    } else {
+                        ContentUnavailableView("No conversations yet", systemImage: "message", description: Text("Leads from homeowners will appear here."))
+                    }
                 } else {
                     List(conversations) { conv in
                         NavigationLink(destination: MessagingView(conversation: conv)) {

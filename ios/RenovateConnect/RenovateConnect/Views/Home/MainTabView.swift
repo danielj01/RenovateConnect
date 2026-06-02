@@ -6,10 +6,10 @@ struct MainTabView: View {
     @StateObject private var inbox = InboxStore()
     @StateObject private var favorites = FavoritesStore()
     @StateObject private var chat = ChatStore()
-    @State private var selectedTab = 0
+    @StateObject private var router = TabRouter()
 
     // Messages sits at index 3 in both the client and business tab bars.
-    private let messagesTab = 3
+    private let messagesTab = TabRouter.messages
 
     init() {
         let appearance = UITabBarAppearance()
@@ -31,16 +31,17 @@ struct MainTabView: View {
         .environmentObject(inbox)
         .environmentObject(favorites)
         .environmentObject(chat)
+        .environmentObject(router)
         .task {
             inbox.startPolling()
             // Homeowners can save contractors — preload their list for heart state.
             if !auth.isBusiness { await favorites.refresh() }
             // Cold start from a tapped push: jump straight to Messages.
-            if notifications.pendingConversationId != nil { selectedTab = messagesTab }
+            if notifications.pendingConversationId != nil { router.selection = messagesTab }
         }
         .onDisappear { inbox.stopPolling() }
         .onChange(of: notifications.pendingConversationId) { _, newValue in
-            if newValue != nil { selectedTab = messagesTab }
+            if newValue != nil { router.selection = messagesTab }
         }
         .sheet(isPresented: $notifications.showPriming) {
             PushPrimingSheet()
@@ -51,7 +52,7 @@ struct MainTabView: View {
 
     // Homeowners: discover contractors, estimate, chat, message.
     private var clientTabs: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: $router.selection) {
             BusinessSearchView()
                 .tabItem { Label("Explore", systemImage: "safari.fill") }
                 .tag(0)
@@ -77,7 +78,7 @@ struct MainTabView: View {
 
     // Contractors: run their business — dashboard, leads, portfolio, messages.
     private var businessTabs: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: $router.selection) {
             DashboardView()
                 .tabItem { Label("Dashboard", systemImage: "chart.bar.fill") }
                 .tag(0)
