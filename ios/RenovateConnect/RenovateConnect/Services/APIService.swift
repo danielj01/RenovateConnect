@@ -256,11 +256,11 @@ final class APIService {
     }
 
     // AI Chat
-    func chat(message: String, history: [[String: String]]) async throws -> String {
+    func chat(message: String, history: [[String: String]]) async throws -> (reply: String, mentioned: [BusinessRef]) {
         struct Body: Encodable { let message: String; let history: [[String: String]] }
-        struct Resp: Decodable { let reply: String }
+        struct Resp: Decodable { let reply: String; let mentioned: [BusinessRef]? }
         let resp: Resp = try await request("chat", method: "POST", body: Body(message: message, history: history))
-        return resp.reply
+        return (resp.reply, resp.mentioned ?? [])
     }
 }
 

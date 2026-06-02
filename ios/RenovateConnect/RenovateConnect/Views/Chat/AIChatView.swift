@@ -1,9 +1,8 @@
 import SwiftUI
 
 struct AIChatView: View {
-    @State private var history: [(role: String, content: String)] = []
+    @EnvironmentObject private var chat: ChatStore
     @State private var input = ""
-    @State private var isLoading = false
 
     var body: some View {
         NavigationStack {
@@ -11,35 +10,32 @@ struct AIChatView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 12) {
-                            if history.isEmpty {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                                        .font(.system(size: 48))
-                                        .foregroundStyle(.blue)
-                                    Text("AI Renovation Assistant")
-                                        .font(.headline)
-                                    Text("Describe your project and I'll match you with the right contractors.")
-                                        .multilineTextAlignment(.center)
-                                        .foregroundStyle(.secondary)
-                                        .font(.subheadline)
+                            if chat.messages.isEmpty {
+                                emptyState
+                            }
+
+                            ForEach(chat.messages) { msg in
+                                VStack(alignment: msg.isUser ? .trailing : .leading, spacing: 6) {
+                                    ChatBubble(text: msg.content, isUser: msg.isUser)
+                                    // Deep links to any contractors the assistant named.
+                                    if !msg.mentioned.isEmpty {
+                                        recommendations(msg.mentioned)
+                                    }
                                 }
-                                .frame(maxWidth: .infinity)
-                                .padding(.top, 60)
+                                .frame(maxWidth: .infinity, alignment: msg.isUser ? .trailing : .leading)
+                                .id(msg.id)
                             }
 
-                            ForEach(Array(history.enumerated()), id: \.offset) { i, msg in
-                                ChatBubble(text: msg.content, isUser: msg.role == "user")
-                                    .id(i)
-                            }
-
-                            if isLoading {
+                            if chat.isLoading {
                                 ChatBubble(text: "…", isUser: false)
                             }
                         }
                         .padding()
                     }
-                    .onChange(of: history.count) {
-                        withAnimation { proxy.scrollTo(history.count - 1, anchor: .bottom) }
+                    .onChange(of: chat.messages.count) {
+                        if let last = chat.messages.last {
+                            withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
                     }
                 }
 
@@ -48,33 +44,63 @@ struct AIChatView: View {
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(1...4)
                     Button {
-                        Task { await send() }
+                        let text = input
+                        input = ""
+                        Task { await chat.send(text) }
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.title2)
                     }
-                    .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty || isLoading)
+                    .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty || chat.isLoading)
                 }
                 .padding()
             }
             .navigationTitle("AI Assistant")
+            .toolbar {
+                if !chat.messages.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Clear") { chat.clear() }
+                    }
+                }
+            }
         }
     }
 
-    private func send() async {
-        let msg = input.trimmingCharacters(in: .whitespaces)
-        guard !msg.isEmpty else { return }
-        input = ""
-        history.append((role: "user", content: msg))
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            let apiHistory = history.dropLast().map { ["role": $0.role, "content": $0.content] }
-            let reply = try await APIService.shared.chat(message: msg, history: apiHistory)
-            history.append((role: "assistant", content: reply))
-        } catch {
-            history.append((role: "assistant", content: "Sorry, something went wrong. Please try again."))
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "bubble.left.and.bubble.right.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(Theme.primary)
+            Text("AI Renovation Assistant")
+                .font(.headline)
+            Text("Describe your project and I'll match you with the right contractors.")
+                .multilineTextAlignment(.center)
+                .foregroundStyle(.secondary)
+                .font(.subheadline)
         }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 60)
+    }
+
+    @ViewBuilder
+    private func recommendations(_ refs: [BusinessRef]) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(refs) { ref in
+                NavigationLink(destination: BusinessDetailView(businessId: ref.id)) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "building.2.fill").font(.caption2)
+                        Text(ref.companyName).font(.subheadline.weight(.semibold)).lineLimit(1)
+                        Image(systemName: "chevron.right").font(.caption2)
+                    }
+                    .padding(.horizontal, 12).padding(.vertical, 8)
+                    .background(Theme.primaryLight)
+                    .foregroundStyle(Theme.primary)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .frame(maxWidth: 280, alignment: .leading)
     }
 }
 
@@ -88,7 +114,7 @@ struct ChatBubble: View {
             Text(text)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
-                .background(isUser ? Color.blue : Color(.systemGray5))
+                .background(isUser ? Theme.primary : Color(.systemGray5))
                 .foregroundStyle(isUser ? .white : .primary)
                 .clipShape(RoundedRectangle(cornerRadius: 18))
                 .frame(maxWidth: 280, alignment: isUser ? .trailing : .leading)

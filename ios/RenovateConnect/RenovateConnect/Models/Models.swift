@@ -108,6 +108,26 @@ struct LineItem: Codable, Identifiable {
     let unit: String
 }
 
+// MARK: - AI chat
+
+/// A reference to a business the AI assistant named, used to deep-link from a
+/// chat reply straight to its detail page.
+struct BusinessRef: Codable, Identifiable, Hashable {
+    let id: String
+    let companyName: String
+}
+
+/// One turn in the AI assistant conversation. Persisted so history survives
+/// tab switches and app restarts.
+struct ChatTurn: Codable, Identifiable {
+    var id = UUID()
+    let role: String          // "user" | "assistant"
+    let content: String
+    var mentioned: [BusinessRef] = []
+
+    var isUser: Bool { role == "user" }
+}
+
 struct AuthResponse: Codable {
     let token: String
     let user: User

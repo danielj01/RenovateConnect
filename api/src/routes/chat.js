@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { z } = require('zod');
 const { authMiddleware } = require('../middleware/auth');
 const { chatWithAssistant } = require('../services/ai');
+const { extractMentions } = require('../utils/mentions');
 const db = require('../services/db');
 
 const chatSchema = z.object({
@@ -15,11 +16,13 @@ router.post('/', authMiddleware, async (req, res, next) => {
 
     // Load all active businesses so the AI can recommend specific ones
     const businesses = await db.business.findMany({
-      select: { companyName: true, city: true, state: true, specialties: true, averageRating: true },
+      select: { id: true, companyName: true, city: true, state: true, specialties: true, averageRating: true },
     });
 
     const reply = await chatWithAssistant({ message, businessSummaries: businesses, history });
-    res.json({ reply });
+    // Surface any businesses the assistant named so the client can deep-link them.
+    const mentioned = extractMentions(reply, businesses);
+    res.json({ reply, mentioned });
   } catch (err) {
     next(err);
   }

@@ -5,6 +5,7 @@ struct MainTabView: View {
     @EnvironmentObject private var notifications: NotificationManager
     @StateObject private var inbox = InboxStore()
     @StateObject private var favorites = FavoritesStore()
+    @StateObject private var chat = ChatStore()
     @State private var selectedTab = 0
 
     // Messages sits at index 3 in both the client and business tab bars.
@@ -29,6 +30,7 @@ struct MainTabView: View {
         }
         .environmentObject(inbox)
         .environmentObject(favorites)
+        .environmentObject(chat)
         .task {
             inbox.startPolling()
             // Homeowners can save contractors — preload their list for heart state.

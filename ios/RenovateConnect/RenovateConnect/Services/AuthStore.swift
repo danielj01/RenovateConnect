@@ -63,6 +63,9 @@ final class AuthStore: ObservableObject {
         // Unregister this device from push before dropping the session.
         Task { await NotificationManager.shared.unregisterCurrentDevice() }
         UserDefaults.standard.removeObject(forKey: "authToken")
+        // Drop locally-persisted AI chat history so the next account on this
+        // device doesn't inherit the previous user's conversation.
+        UserDefaults.standard.removeObject(forKey: "aiChatHistory")
         currentUser = nil
     }
 
