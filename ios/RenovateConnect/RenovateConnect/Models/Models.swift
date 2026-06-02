@@ -33,6 +33,13 @@ struct Business: Codable, Identifiable {
     let reviews: [Review]?
     var profileViews: Int?
     var portfolio: [PortfolioProject]?
+
+    // Trust signals
+    var verified: Bool?
+    var verifiedAt: String?
+    var licenseNumber: String?
+
+    var isVerified: Bool { verified ?? false }
 }
 
 struct Review: Codable, Identifiable {

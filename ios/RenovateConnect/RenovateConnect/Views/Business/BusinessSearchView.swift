@@ -154,10 +154,18 @@ struct FeaturedBusinessCard: View {
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(business.companyName)
-                        .font(.subheadline.bold())
-                        .foregroundStyle(.primary)
-                        .lineLimit(2)
+                    HStack(spacing: 4) {
+                        Text(business.companyName)
+                            .font(.subheadline.bold())
+                            .foregroundStyle(.primary)
+                            .lineLimit(2)
+                        if business.isVerified {
+                            Image(systemName: "checkmark.seal.fill")
+                                .font(.caption2)
+                                .foregroundStyle(VerifiedBadge.trust)
+                                .accessibilityLabel("Verified")
+                        }
+                    }
 
                     HStack(spacing: 3) {
                         Image(systemName: "mappin.circle.fill")
@@ -184,6 +192,8 @@ struct FeaturedBusinessCard: View {
 
 struct BusinessListCard: View {
     let business: Business
+    @EnvironmentObject private var favorites: FavoritesStore
+    @EnvironmentObject private var auth: AuthStore
 
     var body: some View {
         RCCard {
@@ -197,8 +207,25 @@ struct BusinessListCard: View {
                             Text(business.companyName)
                                 .font(.headline)
                                 .foregroundStyle(.primary)
+                            if business.isVerified {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.subheadline)
+                                    .foregroundStyle(VerifiedBadge.trust)
+                                    .accessibilityLabel("Verified")
+                            }
                             Spacer()
                             if business.isPromoted { FeaturedBadge() }
+                            if auth.currentUser?.role == .client {
+                                Button {
+                                    favorites.toggle(business)
+                                } label: {
+                                    Image(systemName: favorites.isSaved(business.id) ? "heart.fill" : "heart")
+                                        .foregroundStyle(favorites.isSaved(business.id) ? Theme.primary : Color(.tertiaryLabel))
+                                        .font(.subheadline)
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(favorites.isSaved(business.id) ? "Remove from saved" : "Save contractor")
+                            }
                         }
 
                         HStack(spacing: 4) {

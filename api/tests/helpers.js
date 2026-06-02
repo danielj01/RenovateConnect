@@ -10,6 +10,7 @@ async function resetDb() {
   await db.review.deleteMany();
   await db.estimation.deleteMany();
   await db.deviceToken.deleteMany();
+  await db.favorite.deleteMany();
   await db.business.deleteMany();
   await db.user.deleteMany();
 }
@@ -26,6 +27,18 @@ async function createClient(overrides = {}) {
       name: overrides.name || 'Test Client',
       role: 'CLIENT',
       phone: overrides.phone,
+    },
+  });
+  return { user, token: tokenFor(user) };
+}
+
+async function createAdmin(overrides = {}) {
+  const user = await db.user.create({
+    data: {
+      email: overrides.email || `admin_${Date.now()}_${Math.random()}@test.com`,
+      passwordHash: 'x',
+      name: overrides.name || 'Test Admin',
+      role: 'ADMIN',
     },
   });
   return { user, token: tokenFor(user) };
@@ -54,4 +67,4 @@ async function createBusiness(overrides = {}) {
   return { user, business, token: tokenFor(user) };
 }
 
-module.exports = { db, resetDb, tokenFor, createClient, createBusiness };
+module.exports = { db, resetDb, tokenFor, createClient, createBusiness, createAdmin };

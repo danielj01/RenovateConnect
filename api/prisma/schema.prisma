@@ -39,6 +39,7 @@ model User {
   conversations    Conversation[] @relation("ClientConversations")
   estimations      Estimation[]
   deviceTokens     DeviceToken[]
+  favorites        Favorite[]
 }
 
 model DeviceToken {
@@ -81,6 +82,11 @@ model Business {
   averageRating   Float     @default(0)
   reviewCount     Int       @default(0)
 
+  // Trust signals — admin-reviewed verification (license, insurance, identity).
+  // Dynamic badge surfaces "Verified · checked {verifiedAt}".
+  verified        Boolean   @default(false)
+  verifiedAt      DateTime?
+
   // Analytics
   profileViews    Int       @default(0)
 
@@ -97,6 +103,21 @@ model Business {
   leads           Lead[]
   reviews         Review[]
   portfolio       PortfolioProject[]
+  favoritedBy     Favorite[]
+}
+
+// A homeowner saving a contractor to revisit later ("My Projects" hub).
+model Favorite {
+  id         String   @id @default(cuid())
+  userId     String
+  businessId String
+  createdAt  DateTime @default(now())
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, businessId])
+  @@index([userId])
 }
 
 model Conversation {

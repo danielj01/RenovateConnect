@@ -6,6 +6,7 @@ struct BusinessDetailView: View {
     @State private var isLoading = true
     @State private var showContact = false
     @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var favorites: FavoritesStore
 
     var body: some View {
         Group {
@@ -34,6 +35,19 @@ struct BusinessDetailView: View {
             }
         }
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if auth.currentUser?.role == .client, let biz = business {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        favorites.toggle(biz)
+                    } label: {
+                        Image(systemName: favorites.isSaved(biz.id) ? "heart.fill" : "heart")
+                            .foregroundStyle(favorites.isSaved(biz.id) ? Theme.primary : Color(.label))
+                    }
+                    .accessibilityLabel(favorites.isSaved(biz.id) ? "Remove from saved" : "Save contractor")
+                }
+            }
+        }
         .task { await load() }
     }
 
@@ -59,6 +73,7 @@ struct BusinessDetailView: View {
                         Text(biz.companyName)
                             .font(.title2.bold())
                             .foregroundStyle(.white)
+                        if biz.isVerified { VerifiedBadge() }
                         if biz.isPromoted { FeaturedBadge() }
                     }
                     HStack(spacing: 4) {
@@ -110,6 +125,44 @@ struct BusinessDetailView: View {
                         .lineSpacing(4)
                 }
                 .padding(16)
+            }
+
+            // Trust & credentials — shown when verified or a license is on file.
+            if biz.isVerified || (biz.licenseNumber?.isEmpty == false) {
+                RCCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Trust & Credentials", systemImage: "checkmark.shield.fill")
+                            .font(.headline)
+                            .foregroundStyle(VerifiedBadge.trust)
+
+                        if biz.isVerified {
+                            HStack(spacing: 10) {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .foregroundStyle(VerifiedBadge.trust)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Verified by RenovateConnect")
+                                        .font(.subheadline.weight(.semibold))
+                                    if let checked = biz.verifiedAt?.verifiedDateText {
+                                        Text("Checked \(checked)")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+
+                        if let license = biz.licenseNumber, !license.isEmpty {
+                            HStack(spacing: 10) {
+                                Image(systemName: "doc.text.fill")
+                                    .foregroundStyle(Theme.primary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("License").font(.subheadline.weight(.semibold))
+                                    Text(license).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                    .padding(16)
+                }
             }
 
             // Specialties
@@ -206,6 +259,21 @@ struct BusinessDetailView: View {
     private func load() async {
         defer { isLoading = false }
         business = try? await APIService.shared.getBusiness(id: businessId)
+    }
+}
+
+// MARK: - Helpers
+
+private extension String {
+    /// Render an ISO-8601 verifiedAt timestamp as a relative phrase
+    /// (e.g. "2 days ago") for the dynamic "Verified · checked …" badge.
+    var verifiedDateText: String? {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = iso.date(from: self) ?? ISO8601DateFormatter().date(from: self) else { return nil }
+        let fmt = RelativeDateTimeFormatter()
+        fmt.unitsStyle = .full
+        return fmt.localizedString(for: date, relativeTo: Date())
     }
 }
 

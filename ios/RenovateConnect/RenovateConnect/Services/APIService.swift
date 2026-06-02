@@ -239,6 +239,22 @@ final class APIService {
         try await requestNoContent("devices/\(token)", method: "DELETE")
     }
 
+    // Saved contractors (favorites)
+    func myFavorites() async throws -> [Business] {
+        try await request("favorites")
+    }
+
+    @discardableResult
+    func saveFavorite(businessId: String) async throws -> Bool {
+        struct Resp: Decodable { let id: String; let businessId: String }
+        let _: Resp = try await request("favorites/\(businessId)", method: "POST")
+        return true
+    }
+
+    func removeFavorite(businessId: String) async throws {
+        try await requestNoContent("favorites/\(businessId)", method: "DELETE")
+    }
+
     // AI Chat
     func chat(message: String, history: [[String: String]]) async throws -> String {
         struct Body: Encodable { let message: String; let history: [[String: String]] }

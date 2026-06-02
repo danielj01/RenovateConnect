@@ -4,6 +4,7 @@ struct MainTabView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var notifications: NotificationManager
     @StateObject private var inbox = InboxStore()
+    @StateObject private var favorites = FavoritesStore()
     @State private var selectedTab = 0
 
     // Messages sits at index 3 in both the client and business tab bars.
@@ -27,8 +28,11 @@ struct MainTabView: View {
             }
         }
         .environmentObject(inbox)
+        .environmentObject(favorites)
         .task {
             inbox.startPolling()
+            // Homeowners can save contractors — preload their list for heart state.
+            if !auth.isBusiness { await favorites.refresh() }
             // Cold start from a tapped push: jump straight to Messages.
             if notifications.pendingConversationId != nil { selectedTab = messagesTab }
         }

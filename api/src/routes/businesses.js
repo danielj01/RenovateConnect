@@ -140,6 +140,24 @@ router.put('/:id', authMiddleware, requireRole('BUSINESS'), async (req, res, nex
   }
 });
 
+// Admin: toggle a business's verified trust badge. Stamps verifiedAt so the
+// client can render a dynamic "Verified · checked {date}" badge.
+router.patch('/:id/verify', authMiddleware, requireRole('ADMIN'), async (req, res, next) => {
+  try {
+    const { verified } = z.object({ verified: z.boolean() }).parse(req.body);
+    const existing = await db.business.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+
+    const updated = await db.business.update({
+      where: { id: req.params.id },
+      data: { verified, verifiedAt: verified ? new Date() : null },
+    });
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Public: add review
 router.post('/:id/reviews', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
   try {

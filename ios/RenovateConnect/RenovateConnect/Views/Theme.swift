@@ -78,6 +78,22 @@ struct FeaturedBadge: View {
     }
 }
 
+struct VerifiedBadge: View {
+    // Trust-blue, distinct from the gold "Featured" badge so the two read
+    // as different signals at a glance.
+    static let trust = Color(red: 0.16, green: 0.50, blue: 0.86)
+
+    var body: some View {
+        Label("Verified", systemImage: "checkmark.seal.fill")
+            .font(.system(size: 10, weight: .bold))
+            .padding(.horizontal, 8).padding(.vertical, 3)
+            .background(VerifiedBadge.trust.opacity(0.14))
+            .foregroundStyle(VerifiedBadge.trust)
+            .clipShape(Capsule())
+            .overlay(Capsule().stroke(VerifiedBadge.trust.opacity(0.30), lineWidth: 0.5))
+    }
+}
+
 struct SpecialtyTag: View {
     let text: String
 

@@ -46,6 +46,32 @@ struct ProfileView: View {
                         }
                         .padding(.horizontal, 16)
 
+                        // My Projects hub — homeowners' return point for saved
+                        // contractors and past estimates.
+                        if user.role == .client {
+                            NavigationLink {
+                                MyProjectsView()
+                            } label: {
+                                RCCard {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "folder.fill")
+                                            .foregroundStyle(Theme.primary).frame(width: 28)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("My Projects").font(.subheadline).foregroundStyle(.primary)
+                                            Text("Saved contractors & estimates")
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    .padding(16)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 16)
+                        }
+
                         // Business card if applicable
                         if let biz = user.business {
                             RCCard {
