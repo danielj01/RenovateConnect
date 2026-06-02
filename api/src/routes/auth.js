@@ -2,7 +2,27 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { z } = require('zod');
+const { createPublicKey } = require('crypto');
+const https = require('https');
 const db = require('../services/db');
+const { authMiddleware } = require('../middleware/auth');
+
+// Fetch Apple's public JWK keys (used to verify identity tokens)
+function fetchAppleKeys() {
+  return new Promise((resolve, reject) => {
+    https.get('https://appleid.apple.com/auth/keys', res => {
+      let data = '';
+      res.on('data', chunk => (data += chunk));
+      res.on('end', () => resolve(JSON.parse(data).keys));
+      res.on('error', reject);
+    });
+  });
+}
+
+function base64urlDecode(str) {
+  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  return Buffer.from(b64.padEnd(b64.length + (4 - (b64.length % 4)) % 4, '='), 'base64').toString();
+}
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -48,13 +68,83 @@ router.post('/login', async (req, res, next) => {
   }
 });
 
-router.get('/me', require('../middleware/auth').authMiddleware, async (req, res, next) => {
+// Sign in with Apple
+router.post('/apple', async (req, res, next) => {
+  try {
+    const { identityToken, givenName, familyName, email } = req.body;
+    if (!identityToken) return res.status(400).json({ error: 'identityToken required' });
+
+    // Decode JWT header to find the key id (kid)
+    const [headerB64] = identityToken.split('.');
+    const { kid } = JSON.parse(base64urlDecode(headerB64));
+
+    // Verify against Apple's public keys
+    const keys = await fetchAppleKeys();
+    const jwk = keys.find(k => k.kid === kid);
+    if (!jwk) return res.status(401).json({ error: 'Apple public key not found' });
+
+    let payload;
+    try {
+      payload = jwt.verify(identityToken, createPublicKey({ key: jwk, format: 'jwk' }), {
+        algorithms: ['RS256'],
+        issuer: 'https://appleid.apple.com',
+      });
+    } catch {
+      return res.status(401).json({ error: 'Invalid Apple identity token' });
+    }
+
+    // Apple only provides email on first sign-in — fall back to relay address
+    const userEmail = email || payload.email || `${payload.sub}@privaterelay.appleid.com`;
+    const userName = [givenName, familyName].filter(Boolean).join(' ') || 'Apple User';
+
+    // Find existing account or create one
+    let user = await db.user.findUnique({ where: { email: userEmail } });
+    if (!user) {
+      user = await db.user.create({
+        data: {
+          email: userEmail,
+          passwordHash: await bcrypt.hash(payload.sub, 10),
+          name: userName,
+          role: 'CLIENT',
+        },
+      });
+    }
+
+    res.json({ token: signToken(user), user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/me', authMiddleware, async (req, res, next) => {
   try {
     const user = await db.user.findUnique({
       where: { id: req.user.id },
       include: { business: true },
       omit: { passwordHash: true },
     });
+    res.json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
+const updateMeSchema = z.object({
+  name: z.string().min(1).optional(),
+  phone: z.string().nullable().optional(),
+  pushEnabled: z.boolean().optional(),
+});
+
+// PATCH /me — update the current user's editable profile fields / preferences.
+router.patch('/me', authMiddleware, async (req, res, next) => {
+  try {
+    const data = updateMeSchema.parse(req.body);
+    const user = await db.user.update({
+      where: { id: req.user.id },
+      data,
+      include: { business: true },
+    });
+    delete user.passwordHash;
     res.json(user);
   } catch (err) {
     next(err);

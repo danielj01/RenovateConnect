@@ -12,6 +12,7 @@ const chatRoutes = require('./routes/chat');
 const leadRoutes = require('./routes/leads');
 const advertisingRoutes = require('./routes/advertising');
 const webhookRoutes = require('./routes/webhooks');
+const deviceRoutes = require('./routes/devices');
 
 const app = express();
 
@@ -34,6 +35,7 @@ app.use('/conversations', messageRoutes);
 app.use('/chat', chatRoutes);
 app.use('/leads', leadRoutes);
 app.use('/advertising', advertisingRoutes);
+app.use('/devices', deviceRoutes);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
@@ -44,6 +46,9 @@ app.use((err, _req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`API running on :${PORT}`));
+// Don't bind a port under test — supertest drives the app object directly.
+if (process.env.NODE_ENV !== 'test' && require.main === module) {
+  app.listen(PORT, () => console.log(`API running on :${PORT}`));
+}
 
 module.exports = app;
