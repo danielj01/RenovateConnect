@@ -148,6 +148,33 @@ struct BusinessSearchResponse: Codable {
     let limit: Int
 }
 
+// MARK: - Saved searches
+
+/// A homeowner's stored search criteria. When a new contractor appears that
+/// matches, the owner gets an alert (push + activity feed). Each non-nil field
+/// narrows the match.
+struct SavedSearch: Codable, Identifiable {
+    let id: String
+    let name: String?
+    let specialty: String?
+    let city: String?
+    let state: String?
+    let q: String?
+    let createdAt: String
+
+    /// A human-readable label for the row, falling back to a description of the
+    /// criteria when the user didn't name the search.
+    var displayLabel: String {
+        if let name, !name.isEmpty { return name }
+        var parts: [String] = []
+        if let specialty { parts.append(specialty) }
+        if let q { parts.append("\u{201C}\(q)\u{201D}") }
+        let loc = [city, state].compactMap { $0 }.joined(separator: ", ")
+        if !loc.isEmpty { parts.append("in \(loc)") }
+        return parts.isEmpty ? "Saved search" : parts.joined(separator: " ")
+    }
+}
+
 // MARK: - Business-side features
 
 struct PortfolioProject: Codable, Identifiable {
@@ -274,6 +301,7 @@ enum ActivityType: String, Codable {
     case message = "MESSAGE"
     case appointment = "APPOINTMENT"
     case review = "REVIEW"
+    case savedSearch = "SAVED_SEARCH"
     // Future-proof: unknown server types decode to `.other` rather than failing.
     case other
 
@@ -288,6 +316,7 @@ enum ActivityType: String, Codable {
         case .message: return "message.fill"
         case .appointment: return "calendar"
         case .review: return "star.fill"
+        case .savedSearch: return "magnifyingglass"
         case .other: return "bell.fill"
         }
     }

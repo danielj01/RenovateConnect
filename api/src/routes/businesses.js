@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { z } = require('zod');
 const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
+const { notifyMatchingSearches } = require('../services/savedSearch');
 
 const profileSchema = z.object({
   companyName: z.string().min(1),
@@ -119,6 +120,9 @@ router.post('/', authMiddleware, requireRole('BUSINESS'), async (req, res, next)
   try {
     const data = profileSchema.parse(req.body);
     const business = await db.business.create({ data: { ...data, userId: req.user.id } });
+    // Alert homeowners whose saved searches match this new contractor. Awaited so
+    // it's deterministic under test; the service swallows its own errors.
+    await notifyMatchingSearches(business);
     res.status(201).json(business);
   } catch (err) {
     next(err);

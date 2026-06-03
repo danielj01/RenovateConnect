@@ -274,6 +274,29 @@ final class APIService {
         try await requestNoContent("favorites/\(businessId)", method: "DELETE")
     }
 
+    // Saved searches (alerts on new matching contractors)
+    func mySavedSearches() async throws -> [SavedSearch] {
+        try await request("saved-searches")
+    }
+
+    func createSavedSearch(name: String? = nil, specialty: String? = nil,
+                           city: String? = nil, state: String? = nil,
+                           q: String? = nil) async throws -> SavedSearch {
+        struct Body: Encodable {
+            let name: String?
+            let specialty: String?
+            let city: String?
+            let state: String?
+            let q: String?
+        }
+        return try await request("saved-searches", method: "POST",
+                                 body: Body(name: name, specialty: specialty, city: city, state: state, q: q))
+    }
+
+    func deleteSavedSearch(id: String) async throws {
+        try await requestNoContent("saved-searches/\(id)", method: "DELETE")
+    }
+
     // Appointments
     func myAppointments() async throws -> [Appointment] {
         try await request("appointments")

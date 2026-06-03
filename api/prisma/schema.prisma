@@ -32,6 +32,7 @@ enum ActivityType {
   MESSAGE
   APPOINTMENT
   REVIEW
+  SAVED_SEARCH
 }
 
 model User {
@@ -62,6 +63,7 @@ model User {
   appointments     Appointment[]  @relation("ClientAppointments")
   activities       Activity[]
   reviews          Review[]
+  savedSearches    SavedSearch[]
 }
 
 model DeviceToken {
@@ -140,6 +142,27 @@ model Favorite {
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@unique([userId, businessId])
+  @@index([userId])
+}
+
+// A homeowner's stored search criteria. When a new contractor appears that
+// matches the criteria, the owner gets an alert (push + activity feed). Each
+// non-null field narrows the match; an all-null search would match everything,
+// so creation requires at least one criterion.
+model SavedSearch {
+  id             String   @id @default(cuid())
+  userId         String
+  name           String?  // optional user-given label, e.g. "Kitchen remodelers near me"
+  specialty      String?
+  city           String?
+  state          String?
+  q              String?  // free-text company-name match
+  lastNotifiedAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([userId])
 }
 

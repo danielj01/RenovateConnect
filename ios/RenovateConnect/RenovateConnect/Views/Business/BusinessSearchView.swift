@@ -1,11 +1,21 @@
 import SwiftUI
 
 struct BusinessSearchView: View {
+    @EnvironmentObject private var auth: AuthStore
     @State private var query = ""
     @State private var selectedSpecialty: String? = nil
     @State private var businesses: [Business] = []
     @State private var isLoading = false
     @State private var error: String?
+    @State private var showSavedSearches = false
+    @State private var saveState: SaveState = .idle
+
+    /// Tracks the inline "save this search" button across taps so the homeowner
+    /// gets feedback without a disruptive alert.
+    private enum SaveState { case idle, saving, saved }
+
+    private var isClient: Bool { auth.currentUser?.role == .client }
+    private var hasActiveFilter: Bool { selectedSpecialty != nil || !query.isEmpty }
 
     private let specialties: [(String, String)] = [
         ("Kitchen", "fork.knife"), ("Bathroom", "shower"),
@@ -42,6 +52,13 @@ struct BusinessSearchView: View {
                             }
                         }
                         .padding(.horizontal, 16).padding(.vertical, 14)
+                    }
+
+                    // Save the current filters so new matching contractors trigger an alert.
+                    if isClient && hasActiveFilter {
+                        saveSearchButton
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 6)
                     }
 
                     if isLoading {
@@ -108,13 +125,69 @@ struct BusinessSearchView: View {
             .background(Color(.systemGroupedBackground))
             .searchable(text: $query, prompt: "Search contractors…")
             .onSubmit(of: .search) { Task { await search() } }
-            .onChange(of: query) { if query.isEmpty { Task { await search() } } }
-            .onChange(of: selectedSpecialty) { Task { await search() } }
+            .onChange(of: query) {
+                saveState = .idle
+                if query.isEmpty { Task { await search() } }
+            }
+            .onChange(of: selectedSpecialty) {
+                saveState = .idle
+                Task { await search() }
+            }
             .navigationTitle("Explore")
             .toolbar {
+                if isClient {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            showSavedSearches = true
+                        } label: {
+                            Image(systemName: "bookmark")
+                        }
+                        .accessibilityLabel("Saved searches")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) { ActivityBellButton() }
             }
+            .sheet(isPresented: $showSavedSearches) {
+                SavedSearchesView { applied in
+                    selectedSpecialty = applied.specialty
+                    query = applied.q ?? ""
+                    saveState = .idle
+                    Task { await search() }
+                }
+            }
             .task { await search() }
+        }
+    }
+
+    // MARK: - Save current search
+
+    @ViewBuilder
+    private var saveSearchButton: some View {
+        Button {
+            Task { await saveCurrentSearch() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: saveState == .saved ? "bell.badge.fill" : "bell.badge")
+                Text(saveState == .saved ? "Alert saved" : "Save & alert me on new matches")
+                    .font(.subheadline.weight(.medium))
+                if saveState == .saving { ProgressView().controlSize(.small) }
+            }
+            .foregroundStyle(saveState == .saved ? .secondary : Theme.primary)
+        }
+        .buttonStyle(.plain)
+        .disabled(saveState != .idle)
+    }
+
+    private func saveCurrentSearch() async {
+        saveState = .saving
+        do {
+            _ = try await APIService.shared.createSavedSearch(
+                specialty: selectedSpecialty,
+                q: query.isEmpty ? nil : query
+            )
+            saveState = .saved
+        } catch {
+            saveState = .idle
         }
     }
 

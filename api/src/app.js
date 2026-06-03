@@ -17,6 +17,7 @@ const favoriteRoutes = require('./routes/favorites');
 const appointmentRoutes = require('./routes/appointments');
 const activityRoutes = require('./routes/activities');
 const reviewRoutes = require('./routes/reviews');
+const savedSearchRoutes = require('./routes/savedSearches');
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use('/favorites', favoriteRoutes);
 app.use('/appointments', appointmentRoutes);
 app.use('/activities', activityRoutes);
 app.use('/reviews', reviewRoutes);
+app.use('/saved-searches', savedSearchRoutes);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 

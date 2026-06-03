@@ -13,6 +13,7 @@ async function resetDb() {
   await db.estimation.deleteMany();
   await db.deviceToken.deleteMany();
   await db.favorite.deleteMany();
+  await db.savedSearch.deleteMany();
   await db.business.deleteMany();
   await db.user.deleteMany();
 }
