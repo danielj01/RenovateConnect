@@ -9,6 +9,10 @@ struct User: Codable, Identifiable {
     let avatarUrl: String?
     let business: Business?
     var pushEnabled: Bool?
+    var notifyLeads: Bool?
+    var notifyMessages: Bool?
+    var notifyAppointments: Bool?
+    var notifyReviews: Bool?
 }
 
 enum UserRole: String, Codable {

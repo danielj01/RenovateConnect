@@ -40,6 +40,7 @@ router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) =
       const client = await db.user.findUnique({ where: { id: req.user.id }, select: { name: true } });
       const body = `${client?.name || 'A homeowner'} requested a time with you.`;
       sendPush(business.userId, {
+        type: 'APPOINTMENT',
         title: 'New appointment request 📅',
         body,
         data: { type: 'appointment', appointmentId: appointment.id },
@@ -113,6 +114,7 @@ router.patch('/:id', authMiddleware, async (req, res, next) => {
         : (await db.user.findUnique({ where: { id: req.user.id }, select: { name: true } }))?.name || 'The homeowner';
       const body = `${actor} ${verb} the appointment.`;
       sendPush(recipientId, {
+        type: 'APPOINTMENT',
         title: 'Appointment update',
         body,
         data: { type: 'appointment', appointmentId: updated.id },

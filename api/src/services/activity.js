@@ -1,4 +1,5 @@
 const db = require('./db');
+const { allowsType } = require('./notificationPrefs');
 
 // Records a durable in-app activity-feed entry for a recipient. Written next to
 // every `sendPush` so users have a persistent "what happened while I was away"
@@ -10,6 +11,8 @@ const db = require('./db');
 async function recordActivity(userId, { type, title, body, data } = {}) {
   if (!userId) return null;
   try {
+    // Respect the recipient's per-type notification preference.
+    if (!(await allowsType(userId, type))) return null;
     return await db.activity.create({
       data: { userId, type, title, body, data: data ?? undefined },
     });

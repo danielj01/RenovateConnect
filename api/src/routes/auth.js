@@ -121,8 +121,8 @@ router.get('/me', authMiddleware, async (req, res, next) => {
     const user = await db.user.findUnique({
       where: { id: req.user.id },
       include: { business: true },
-      omit: { passwordHash: true },
     });
+    if (user) delete user.passwordHash;
     res.json(user);
   } catch (err) {
     next(err);
@@ -133,6 +133,10 @@ const updateMeSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().nullable().optional(),
   pushEnabled: z.boolean().optional(),
+  notifyLeads: z.boolean().optional(),
+  notifyMessages: z.boolean().optional(),
+  notifyAppointments: z.boolean().optional(),
+  notifyReviews: z.boolean().optional(),
 });
 
 // PATCH /me — update the current user's editable profile fields / preferences.

@@ -89,6 +89,25 @@ final class APIService {
         try await request("auth/me", method: "PATCH", body: ["pushEnabled": pushEnabled])
     }
 
+    /// Update per-category notification preferences. Only non-nil fields are
+    /// sent, so a single toggle PATCHes just that category.
+    func updateNotificationPrefs(notifyLeads: Bool? = nil,
+                                 notifyMessages: Bool? = nil,
+                                 notifyAppointments: Bool? = nil,
+                                 notifyReviews: Bool? = nil) async throws -> User {
+        struct Body: Encodable {
+            let notifyLeads: Bool?
+            let notifyMessages: Bool?
+            let notifyAppointments: Bool?
+            let notifyReviews: Bool?
+        }
+        return try await request("auth/me", method: "PATCH",
+                                 body: Body(notifyLeads: notifyLeads,
+                                            notifyMessages: notifyMessages,
+                                            notifyAppointments: notifyAppointments,
+                                            notifyReviews: notifyReviews))
+    }
+
     func appleSignIn(identityToken: String, givenName: String?, familyName: String?, email: String?) async throws -> AuthResponse {
         struct Body: Encodable {
             let identityToken: String

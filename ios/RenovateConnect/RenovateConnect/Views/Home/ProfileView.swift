@@ -164,6 +164,27 @@ struct ProfileView: View {
                                         .padding(16)
                                     }
                                 }
+
+                                Divider().padding(.horizontal, 16)
+
+                                NavigationLink {
+                                    NotificationSettingsView()
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "slider.horizontal.3")
+                                            .foregroundStyle(Theme.primary).frame(width: 28)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Notification Preferences").font(.subheadline)
+                                            Text("Choose which categories notify you")
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption2).foregroundStyle(.secondary)
+                                    }
+                                    .padding(16)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 16)

@@ -81,6 +81,16 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    /// Persist a single per-category notification preference and reflect it locally.
+    func setNotificationPref(leads: Bool? = nil, messages: Bool? = nil,
+                             appointments: Bool? = nil, reviews: Bool? = nil) async {
+        if let updated = try? await APIService.shared.updateNotificationPrefs(
+            notifyLeads: leads, notifyMessages: messages,
+            notifyAppointments: appointments, notifyReviews: reviews) {
+            currentUser = updated
+        }
+    }
+
     func loadMe() async {
         do {
             currentUser = try await APIService.shared.me()

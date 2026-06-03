@@ -129,6 +129,7 @@ router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) =
         const client = await db.user.findUnique({ where: { id: req.user.id }, select: { name: true } });
         const body = `${client?.name || 'A homeowner'} is interested in your services.`;
         sendPush(business.userId, {
+          type: 'LEAD',
           title: 'New lead 🎉',
           body,
           data: { type: 'lead', conversationId: conversation.id },
@@ -223,6 +224,7 @@ router.post('/:id/messages', authMiddleware, async (req, res, next) => {
         title = business?.companyName || 'New message';
       }
       sendPush(recipientId, {
+        type: 'MESSAGE',
         title,
         body,
         data: { type: 'message', conversationId: conv.id },

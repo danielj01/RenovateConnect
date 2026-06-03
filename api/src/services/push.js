@@ -1,6 +1,7 @@
 const http2 = require('http2');
 const jwt = require('jsonwebtoken');
 const db = require('./db');
+const { allowsType } = require('./notificationPrefs');
 
 // APNs (Apple Push Notification service) over HTTP/2 with token-based auth.
 // We sign a provider JWT with the .p8 key (ES256) and reuse it for ~50 min.
@@ -114,7 +115,8 @@ function isDeadToken({ status, reason }) {
 
 // --- Public API -----------------------------------------------------------
 // Send a notification to every device registered to a user. Looks up the
-// user's respect for push (`pushEnabled`) and prunes tokens Apple rejects.
+// user's master push switch (`pushEnabled`) plus the per-type opt-out (when the
+// caller tags the notification with a `type`) and prunes tokens Apple rejects.
 async function sendPush(userId, notification) {
   if (!isConfigured()) {
     warnOnce();
@@ -126,6 +128,11 @@ async function sendPush(userId, notification) {
     select: { pushEnabled: true },
   });
   if (!user || user.pushEnabled === false) return { skipped: true };
+
+  // Per-category opt-out (gates push the same way it gates the activity feed).
+  if (notification?.type && !(await allowsType(userId, notification.type))) {
+    return { skipped: true };
+  }
 
   const tokens = await db.deviceToken.findMany({ where: { userId } });
   if (tokens.length === 0) return { sent: 0 };

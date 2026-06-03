@@ -45,8 +45,13 @@ model User {
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
-  // Push notifications
-  pushEnabled  Boolean   @default(true)
+  // Notifications: master push switch plus per-type opt-outs (gate both push
+  // delivery and the in-app activity feed).
+  pushEnabled        Boolean @default(true)
+  notifyLeads        Boolean @default(true)
+  notifyMessages     Boolean @default(true)
+  notifyAppointments Boolean @default(true)
+  notifyReviews      Boolean @default(true)
 
   business     Business?
   sentMessages     Message[]   @relation("SentMessages")
