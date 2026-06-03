@@ -1,7 +1,150 @@
 import SwiftUI
 import PhotosUI
 
+// MARK: - Estimate tab (intro → form)
+
+/// The Estimate tab opens on a value-prop landing that explains the AI cost
+/// estimator and how it works, then leads into the photo/details form.
 struct EstimationView: View {
+    var body: some View {
+        NavigationStack {
+            EstimatorIntroView()
+        }
+    }
+}
+
+// MARK: - Intro / value-prop landing
+
+private struct EstimatorIntroView: View {
+    // Outcome-first "how it works" — each step sells the benefit, not the spec.
+    private let steps: [(icon: String, title: String, detail: String)] = [
+        ("photo.badge.plus", "Add a few photos",
+         "Snap or upload up to 5 photos of the space you want to renovate."),
+        ("sparkles", "AI sizes up the work",
+         "It reads materials, dimensions, and condition to scope the project."),
+        ("list.bullet.rectangle.portrait", "Get an itemized range",
+         "A line-by-line breakdown with a low–high total, in seconds."),
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 22) {
+                hero
+                perks
+                howItWorks
+                cta
+                disclaimer
+            }
+            .padding(20)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Cost Estimator")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var hero: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                Circle().fill(.white.opacity(0.18)).frame(width: 84, height: 84)
+                Image(systemName: "camera.viewfinder")
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            VStack(spacing: 6) {
+                Text("What will it cost?")
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
+                    .foregroundStyle(.white)
+                Text("Get a ballpark renovation estimate from a few photos — before you call a single contractor.")
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.92))
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28).padding(.horizontal, 20)
+        .background(
+            ZStack {
+                Theme.gradient
+                Circle().fill(.white.opacity(0.08)).frame(width: 200, height: 200).offset(x: -110, y: -70)
+                Circle().fill(.white.opacity(0.06)).frame(width: 150, height: 150).offset(x: 120, y: 60)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: Theme.primary.opacity(0.30), radius: 16, y: 8)
+    }
+
+    private var perks: some View {
+        HStack(spacing: 10) {
+            perk("bolt.fill", "~30 seconds")
+            perk("gift.fill", "Free")
+            perk("checkmark.seal.fill", "No commitment")
+        }
+    }
+
+    private func perk(_ icon: String, _ text: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon).font(.caption2).foregroundStyle(Theme.primary)
+            Text(text).font(.caption.weight(.semibold)).foregroundStyle(.primary)
+        }
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .frame(maxWidth: .infinity)
+        .background(Theme.primaryLight)
+        .clipShape(Capsule())
+    }
+
+    private var howItWorks: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("How it works").font(.headline)
+            ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
+                HStack(alignment: .top, spacing: 14) {
+                    ZStack {
+                        Circle().fill(Theme.primaryLight).frame(width: 40, height: 40)
+                        Image(systemName: step.icon)
+                            .foregroundStyle(Theme.primary)
+                            .font(.system(size: 17, weight: .semibold))
+                    }
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(step.title).font(.subheadline.weight(.semibold))
+                        Text(step.detail).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .shadow(color: Theme.cardShadow, radius: 12, y: 4)
+    }
+
+    private var cta: some View {
+        NavigationLink {
+            EstimatorFormView()
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "wand.and.stars")
+                Text("Start your estimate").font(.headline)
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity).frame(height: 54)
+            .background(Theme.gradient)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .shadow(color: Theme.primary.opacity(0.35), radius: 12, y: 6)
+        }
+    }
+
+    private var disclaimer: some View {
+        Text("Estimates are AI-generated guidance, not a formal quote. Final pricing comes from a contractor.")
+            .font(.caption2).foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 8)
+    }
+}
+
+// MARK: - Estimator form
+
+private struct EstimatorFormView: View {
     @EnvironmentObject private var notifications: NotificationManager
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
@@ -14,7 +157,6 @@ struct EstimationView: View {
     let roomTypes = ["Kitchen", "Bathroom", "Living Room", "Bedroom", "Basement", "Garage", "Exterior", "Other"]
 
     var body: some View {
-        NavigationStack {
             Form {
                 Section("Photos (up to 5)") {
                     PhotosPicker(selection: $selectedItems, maxSelectionCount: 5, matching: .images) {
@@ -65,11 +207,11 @@ struct EstimationView: View {
                     .disabled(selectedImages.isEmpty || isLoading)
                 }
             }
-            .navigationTitle("Cost Estimator")
+            .navigationTitle("New Estimate")
+            .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $estimation) { est in
                 EstimationResultView(estimation: est)
             }
-        }
     }
 
     private func loadImages() {
