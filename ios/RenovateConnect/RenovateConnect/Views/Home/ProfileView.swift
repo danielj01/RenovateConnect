@@ -100,32 +100,42 @@ struct ProfileView: View {
 
                         // Business card if applicable
                         if let biz = user.business {
-                            RCCard {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    Label("Your Business", systemImage: "building.2.fill")
-                                        .font(.headline)
-                                        .foregroundStyle(Theme.primary)
-
-                                    HStack(spacing: 14) {
-                                        InitialsAvatar(name: biz.companyName, size: 48)
-                                            .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(biz.companyName).font(.subheadline.bold())
-                                            HStack(spacing: 3) {
-                                                Image(systemName: "mappin.circle.fill")
-                                                    .foregroundStyle(Theme.primary.opacity(0.8)).font(.caption2)
-                                                Text("\(biz.city), \(biz.state)")
-                                                    .font(.caption).foregroundStyle(.secondary)
-                                            }
-                                            StarRating(rating: biz.averageRating, count: biz.reviewCount)
+                            NavigationLink {
+                                BusinessDetailView(businessId: biz.id)
+                            } label: {
+                                RCCard {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        HStack {
+                                            Label("Your Business", systemImage: "building.2.fill")
+                                                .font(.headline)
+                                                .foregroundStyle(Theme.primary)
+                                            Spacer()
+                                            Image(systemName: "chevron.right")
+                                                .font(.caption2).foregroundStyle(.secondary)
                                         }
-                                        Spacer()
-                                        if biz.isPromoted { FeaturedBadge() }
+
+                                        HStack(spacing: 14) {
+                                            InitialsAvatar(name: biz.companyName, size: 48)
+                                                .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                                            VStack(alignment: .leading, spacing: 4) {
+                                                Text(biz.companyName).font(.subheadline.bold())
+                                                HStack(spacing: 3) {
+                                                    Image(systemName: "mappin.circle.fill")
+                                                        .foregroundStyle(Theme.primary.opacity(0.8)).font(.caption2)
+                                                    Text("\(biz.city), \(biz.state)")
+                                                        .font(.caption).foregroundStyle(.secondary)
+                                                }
+                                                StarRating(rating: biz.averageRating, count: biz.reviewCount)
+                                            }
+                                            Spacer()
+                                            if biz.isPromoted { FeaturedBadge() }
+                                        }
                                     }
+                                    .padding(16)
                                 }
-                                .padding(16)
                             }
+                            .buttonStyle(.plain)
                             .padding(.horizontal, 16)
                         }
 

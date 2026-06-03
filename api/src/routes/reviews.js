@@ -3,6 +3,7 @@ const { z } = require('zod');
 const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { recordActivity } = require('../services/activity');
+const { sendPush } = require('../services/push');
 
 // Keep the business's denormalized rating/count in sync after any change.
 async function recomputeAggregate(businessId) {
@@ -103,6 +104,71 @@ router.patch('/:id', authMiddleware, async (req, res, next) => {
       },
     });
     await recomputeAggregate(review.businessId);
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// PUT /reviews/:id/response — the reviewed business publicly replies (or edits
+// its reply). Owner-only (or admin). Notifies the review's author.
+router.put('/:id/response', authMiddleware, requireRole('BUSINESS', 'ADMIN'), async (req, res, next) => {
+  try {
+    const { response } = z.object({
+      response: z.string().min(1).max(2000),
+    }).parse(req.body);
+
+    const review = await db.review.findUnique({ where: { id: req.params.id } });
+    if (!review) return res.status(404).json({ error: 'Review not found' });
+
+    const business = await db.business.findUnique({ where: { id: review.businessId } });
+    if (!business || (business.userId !== req.user.id && req.user.role !== 'ADMIN')) {
+      return res.status(403).json({ error: 'Not your business' });
+    }
+
+    const updated = await db.review.update({
+      where: { id: req.params.id },
+      data: { response, respondedAt: new Date() },
+    });
+
+    // Let the homeowner know the business replied (best-effort).
+    if (review.authorId) {
+      const title = `${business.companyName} responded to your review`;
+      await recordActivity(review.authorId, {
+        type: 'REVIEW',
+        title,
+        body: response.slice(0, 140),
+        data: { businessId: business.id },
+      });
+      sendPush(review.authorId, {
+        type: 'REVIEW',
+        title,
+        body: response.slice(0, 140),
+        data: { type: 'review', businessId: business.id },
+      }).catch(console.error);
+    }
+
+    res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /reviews/:id/response — the business removes its reply. Owner-only.
+router.delete('/:id/response', authMiddleware, requireRole('BUSINESS', 'ADMIN'), async (req, res, next) => {
+  try {
+    const review = await db.review.findUnique({ where: { id: req.params.id } });
+    if (!review) return res.status(404).json({ error: 'Review not found' });
+
+    const business = await db.business.findUnique({ where: { id: review.businessId } });
+    if (!business || (business.userId !== req.user.id && req.user.role !== 'ADMIN')) {
+      return res.status(403).json({ error: 'Not your business' });
+    }
+
+    const updated = await db.review.update({
+      where: { id: req.params.id },
+      data: { response: null, respondedAt: null },
+    });
     res.json(updated);
   } catch (err) {
     next(err);

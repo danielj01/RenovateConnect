@@ -7,6 +7,7 @@ struct BusinessDetailView: View {
     @State private var showContact = false
     @State private var showBooking = false
     @State private var showReview = false
+    @State private var respondingTo: Review?
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var favorites: FavoritesStore
 
@@ -52,6 +53,9 @@ struct BusinessDetailView: View {
                             await load()
                         }
                     }
+                }
+                .sheet(item: $respondingTo) { review in
+                    ReviewResponseSheet(review: review) { await load() }
                 }
             }
         }
@@ -247,6 +251,7 @@ struct BusinessDetailView: View {
     private func reviewsSection(_ biz: Business) -> some View {
         let reviews = biz.reviews ?? []
         let isClient = auth.currentUser?.role == .client
+        let isOwner = auth.myBusinessId == biz.id
 
         if !reviews.isEmpty || isClient {
             VStack(alignment: .leading, spacing: 10) {
@@ -277,7 +282,12 @@ struct BusinessDetailView: View {
                 } else {
                     ForEach(reviews) { review in
                         RCCard {
-                            ReviewCard(review: review)
+                            ReviewCard(
+                                review: review,
+                                companyName: biz.companyName,
+                                isOwner: isOwner,
+                                onRespond: isOwner ? { respondingTo = review } : nil
+                            )
                         }
                     }
                 }
@@ -362,6 +372,9 @@ struct StatCell: View {
 
 struct ReviewCard: View {
     let review: Review
+    var companyName: String? = nil
+    var isOwner: Bool = false
+    var onRespond: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -385,6 +398,34 @@ struct ReviewCard: View {
             }
             if let body = review.body {
                 Text(body).font(.subheadline).foregroundStyle(.secondary).lineSpacing(3)
+            }
+
+            // Public reply from the business.
+            if review.hasResponse {
+                VStack(alignment: .leading, spacing: 4) {
+                    Label("Response from \(companyName ?? "the business")",
+                          systemImage: "arrowshape.turn.up.left.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.primary)
+                    Text(review.response ?? "")
+                        .font(.subheadline).foregroundStyle(.secondary).lineSpacing(3)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Theme.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 10))
+            }
+
+            // Owner-only respond / edit affordance.
+            if isOwner, let onRespond {
+                Button {
+                    onRespond()
+                } label: {
+                    Label(review.hasResponse ? "Edit response" : "Respond",
+                          systemImage: review.hasResponse ? "pencil" : "arrowshape.turn.up.left")
+                        .font(.caption.weight(.semibold))
+                }
+                .tint(Theme.primary)
+                .padding(.top, 2)
             }
         }
         .padding(16)

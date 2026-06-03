@@ -54,8 +54,12 @@ struct Review: Codable, Identifiable {
     let body: String?
     let verified: Bool?
     let createdAt: String
+    // Public reply from the reviewed business, if any.
+    var response: String?
+    var respondedAt: String?
 
     var isVerified: Bool { verified ?? false }
+    var hasResponse: Bool { !(response ?? "").isEmpty }
 }
 
 struct Conversation: Codable, Identifiable, Hashable {

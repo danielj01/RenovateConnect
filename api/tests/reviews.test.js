@@ -224,3 +224,97 @@ describe('Reviews', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('Review responses', () => {
+  // Post a review by a client and return its id.
+  async function postReview(clientToken, businessId, rating = 4, body = 'Good') {
+    const res = await request(app).post('/reviews').set('Authorization', `Bearer ${clientToken}`)
+      .send({ businessId, rating, body });
+    return res.body;
+  }
+
+  test('the owning business can respond, and the response appears on detail', async () => {
+    const { token: clientToken, user: client } = await createClient();
+    const { business, token: bizToken } = await createBusiness();
+    const review = await postReview(clientToken, business.id);
+
+    const res = await request(app)
+      .put(`/reviews/${review.id}/response`)
+      .set('Authorization', `Bearer ${bizToken}`)
+      .send({ response: 'Thanks for the kind words!' });
+    expect(res.status).toBe(200);
+    expect(res.body.response).toBe('Thanks for the kind words!');
+    expect(res.body.respondedAt).toBeTruthy();
+
+    // Visible on the public business detail.
+    const detail = await request(app).get(`/businesses/${business.id}`)
+      .set('Authorization', `Bearer ${clientToken}`);
+    expect(detail.body.reviews[0].response).toBe('Thanks for the kind words!');
+
+    // The author got notified.
+    const acts = await db.activity.findMany({ where: { userId: client.id, type: 'REVIEW' } });
+    expect(acts).toHaveLength(1);
+  });
+
+  test('a different business cannot respond to a review', async () => {
+    const { token: clientToken } = await createClient();
+    const { business } = await createBusiness();
+    const { token: otherToken } = await createBusiness({ email: 'other@test.com' });
+    const review = await postReview(clientToken, business.id);
+
+    const res = await request(app)
+      .put(`/reviews/${review.id}/response`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .send({ response: 'Not my business' });
+    expect(res.status).toBe(403);
+  });
+
+  test('clients cannot respond to reviews', async () => {
+    const { token: clientToken } = await createClient();
+    const { business } = await createBusiness();
+    const review = await postReview(clientToken, business.id);
+
+    const res = await request(app)
+      .put(`/reviews/${review.id}/response`)
+      .set('Authorization', `Bearer ${clientToken}`)
+      .send({ response: 'I am the author, not the business' });
+    expect(res.status).toBe(403);
+  });
+
+  test('an empty response is rejected', async () => {
+    const { token: clientToken } = await createClient();
+    const { business, token: bizToken } = await createBusiness();
+    const review = await postReview(clientToken, business.id);
+
+    const res = await request(app)
+      .put(`/reviews/${review.id}/response`)
+      .set('Authorization', `Bearer ${bizToken}`)
+      .send({ response: '' });
+    // zod parse throws -> error handler (codebase convention)
+    expect(res.status).toBe(500);
+  });
+
+  test('the business can delete its response', async () => {
+    const { token: clientToken } = await createClient();
+    const { business, token: bizToken } = await createBusiness();
+    const review = await postReview(clientToken, business.id);
+    await request(app).put(`/reviews/${review.id}/response`).set('Authorization', `Bearer ${bizToken}`)
+      .send({ response: 'Will remove this' }).expect(200);
+
+    const res = await request(app)
+      .delete(`/reviews/${review.id}/response`)
+      .set('Authorization', `Bearer ${bizToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.response).toBeNull();
+    expect(res.body.respondedAt).toBeNull();
+  });
+
+  test('responding to a missing review returns 404', async () => {
+    const { token: bizToken } = await createBusiness();
+    const res = await request(app)
+      .put('/reviews/nope/response')
+      .set('Authorization', `Bearer ${bizToken}`)
+      .send({ response: 'ghost' });
+    expect(res.status).toBe(404);
+  });
+});

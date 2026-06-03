@@ -291,6 +291,9 @@ model Review {
   rating        Int
   body          String?
   verified      Boolean  @default(false)
+  // Public reply from the reviewed business (one per review).
+  response      String?
+  respondedAt   DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt @default(now())
 

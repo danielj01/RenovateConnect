@@ -374,6 +374,19 @@ final class APIService {
         try await requestNoContent("reviews/\(id)", method: "DELETE")
     }
 
+    /// Business owner: publicly reply to (or edit the reply on) one of its reviews.
+    @discardableResult
+    func respondToReview(id: String, response: String) async throws -> Review {
+        struct Body: Encodable { let response: String }
+        return try await request("reviews/\(id)/response", method: "PUT", body: Body(response: response))
+    }
+
+    /// Business owner: remove its reply from a review.
+    @discardableResult
+    func deleteReviewResponse(id: String) async throws -> Review {
+        try await request("reviews/\(id)/response", method: "DELETE")
+    }
+
     // AI Chat
     func chat(message: String, history: [[String: String]]) async throws -> (reply: String, mentioned: [BusinessRef]) {
         struct Body: Encodable { let message: String; let history: [[String: String]] }
