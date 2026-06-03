@@ -227,6 +227,12 @@ final class APIService {
         try await request("conversations/\(conversationId)/messages")
     }
 
+    /// Fetch a single conversation including both participants' read timestamps,
+    /// so the thread view can show whether the other party has seen your message.
+    func getConversation(id: String) async throws -> Conversation {
+        try await request("conversations/\(id)")
+    }
+
     func sendMessage(conversationId: String, body: String) async throws -> ChatMessage {
         try await request("conversations/\(conversationId)/messages", method: "POST", body: ["body": body])
     }

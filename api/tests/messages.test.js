@@ -137,3 +137,45 @@ describe('Conversation read state', () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe('Single conversation (read receipts)', () => {
+  test('returns both participants read timestamps and unread count', async () => {
+    const { business, token: bizToken } = await createBusiness();
+    const { user: client, token: clientToken } = await createClient();
+    const conv = await seedConversation(business, client);
+    await sendMessageAs(conv.id, client.id, 'Seen yet?');
+
+    // Before the business reads, businessLastReadAt is null and the business
+    // sees the message as unread.
+    let res = await request(app).get(`/conversations/${conv.id}`).set('Authorization', `Bearer ${bizToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.businessLastReadAt).toBeNull();
+    expect(res.body.unreadCount).toBe(1);
+
+    // The client (sender) marks read on open, then sees their own read stamp.
+    await request(app).post(`/conversations/${conv.id}/read`).set('Authorization', `Bearer ${clientToken}`);
+
+    // After the business opens it, businessLastReadAt is set — the sender can
+    // now treat their message as "seen".
+    await request(app).post(`/conversations/${conv.id}/read`).set('Authorization', `Bearer ${bizToken}`);
+    res = await request(app).get(`/conversations/${conv.id}`).set('Authorization', `Bearer ${clientToken}`);
+    expect(res.body.businessLastReadAt).toBeTruthy();
+    expect(res.body.clientLastReadAt).toBeTruthy();
+  });
+
+  test('non-members cannot fetch a conversation', async () => {
+    const { business } = await createBusiness();
+    const { user: client } = await createClient();
+    const conv = await seedConversation(business, client);
+
+    const { token: outsiderToken } = await createBusiness({ email: 'nosy@test.com' });
+    const res = await request(app).get(`/conversations/${conv.id}`).set('Authorization', `Bearer ${outsiderToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  test('missing conversation returns 404', async () => {
+    const { token } = await createClient();
+    const res = await request(app).get('/conversations/nope').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+  });
+});

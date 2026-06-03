@@ -92,6 +92,39 @@ router.get('/unread', authMiddleware, async (req, res, next) => {
   }
 });
 
+// GET /conversations/:id — a single conversation with both participants' read
+// timestamps, so the thread view can show whether the other party has seen your
+// latest message. Declared after '/unread' so that literal route still wins.
+router.get('/:id', authMiddleware, async (req, res, next) => {
+  try {
+    const conv = await db.conversation.findUnique({
+      where: { id: req.params.id },
+      include: {
+        business: { select: { id: true, companyName: true, logoUrl: true, city: true } },
+        messages: { orderBy: { createdAt: 'desc' }, take: 1 },
+      },
+    });
+    if (!conv) return res.status(404).json({ error: 'Not found' });
+
+    const business = await db.business.findUnique({ where: { id: conv.businessId } });
+    if (!isMember(conv, business?.userId, req.user)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const lastRead = lastReadFor(conv, req.user);
+    const unreadCount = await db.message.count({
+      where: {
+        conversationId: conv.id,
+        senderId: { not: req.user.id },
+        ...(lastRead ? { createdAt: { gt: lastRead } } : {}),
+      },
+    });
+    res.json({ ...conv, unreadCount });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // POST /conversations — start a conversation (client → business); creates a Lead on first contact
 router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
   try {

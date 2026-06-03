@@ -66,6 +66,11 @@ struct Conversation: Codable, Identifiable, Hashable {
     let messages: [ChatMessage]?
     var unreadCount: Int?
 
+    // Read receipts: when each participant last opened the thread. Used to show
+    // a "Seen" indicator under the sender's latest message.
+    var clientLastReadAt: String?
+    var businessLastReadAt: String?
+
     var hasUnread: Bool { (unreadCount ?? 0) > 0 }
 
     // Identity-based conformance so the type can drive `navigationDestination(item:)`
