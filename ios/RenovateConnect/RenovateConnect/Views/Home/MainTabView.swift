@@ -8,6 +8,9 @@ struct MainTabView: View {
     @StateObject private var chat = ChatStore()
     @StateObject private var router = TabRouter()
 
+    // First-run welcome flow; flipped true once the user finishes or skips.
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+
     // Messages sits at index 3 in both the client and business tab bars.
     private let messagesTab = TabRouter.messages
 
@@ -47,6 +50,11 @@ struct MainTabView: View {
             PushPrimingSheet()
                 .environmentObject(notifications)
                 .presentationDetents([.large])
+        }
+        .fullScreenCover(isPresented: .constant(!hasCompletedOnboarding && auth.currentUser != nil)) {
+            OnboardingView(role: auth.currentUser?.role ?? .client) {
+                hasCompletedOnboarding = true
+            }
         }
     }
 

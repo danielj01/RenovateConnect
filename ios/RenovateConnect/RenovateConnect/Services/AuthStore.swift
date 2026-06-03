@@ -66,6 +66,8 @@ final class AuthStore: ObservableObject {
         // Drop locally-persisted AI chat history so the next account on this
         // device doesn't inherit the previous user's conversation.
         UserDefaults.standard.removeObject(forKey: "aiChatHistory")
+        // Re-show the welcome flow for whoever signs in next (role may differ).
+        UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
         currentUser = nil
     }
 
