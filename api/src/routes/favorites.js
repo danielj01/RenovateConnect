@@ -20,7 +20,9 @@ async function buildDigest(userId) {
     include: {
       business: {
         include: {
-          portfolio: { orderBy: { createdAt: 'desc' } },
+          // Digest only surfaces admin-approved projects so homeowners aren't
+          // notified about pending submissions.
+          portfolio: { where: { approvalStatus: 'APPROVED' }, orderBy: { createdAt: 'desc' } },
           reviews: { orderBy: { createdAt: 'desc' } },
         },
       },

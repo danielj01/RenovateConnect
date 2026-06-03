@@ -3,6 +3,8 @@ const { z } = require('zod');
 const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { notifyMatchingSearches } = require('../services/savedSearch');
+const upload = require('../middleware/upload');
+const { uploadImage } = require('../services/storage');
 
 const profileSchema = z.object({
   companyName: z.string().min(1),
@@ -23,7 +25,9 @@ router.get('/', async (req, res, next) => {
     const { specialty, city, state, q, page = '1', limit = '20' } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const where = {};
+    // Public search shows only admin-approved listings. Pending/rejected
+    // businesses are visible only to their owner (via /dashboard) and admins.
+    const where = { approvalStatus: 'APPROVED' };
     if (city) where.city = { contains: city, mode: 'insensitive' };
     if (state) where.state = state.toUpperCase();
     if (specialty) where.specialties = { has: specialty };
@@ -38,9 +42,13 @@ router.get('/', async (req, res, next) => {
         orderBy: [{ isPromoted: 'desc' }, { averageRating: 'desc' }],
         include: {
           reviews: { take: 3, orderBy: { createdAt: 'desc' } },
-          // One hero project (featured first) so list cards can render real
-          // project imagery rather than a bare logo.
-          portfolio: { take: 1, orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }] },
+          // One hero project (featured first, approved only) so list cards can
+          // render real project imagery rather than a bare logo.
+          portfolio: {
+            where: { approvalStatus: 'APPROVED' },
+            take: 1,
+            orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }],
+          },
         },
       }),
       db.business.count({ where }),
@@ -102,26 +110,47 @@ router.get('/dashboard', authMiddleware, requireRole('BUSINESS', 'ADMIN'), async
   }
 });
 
-// Public: single business (also records a profile view)
+// Public: single business (also records a profile view).
+// Approval gate: PENDING/REJECTED listings are visible only to their owner
+// (so they can preview + see status) and to admins (for review).
 router.get('/:id', async (req, res, next) => {
   try {
+    // Optional auth parse — used both for the approval gate and to skip the
+    // owner's own profile view.
+    let viewerId = null;
+    let viewerRole = null;
+    const header = req.headers.authorization;
+    if (header?.startsWith('Bearer ')) {
+      try {
+        const payload = require('jsonwebtoken').verify(header.slice(7), process.env.JWT_SECRET);
+        viewerId = payload.id;
+        viewerRole = payload.role;
+      } catch { /* ignore */ }
+    }
+
     const business = await db.business.findUnique({
       where: { id: req.params.id },
       include: {
         reviews: { orderBy: { createdAt: 'desc' } },
+        // Public viewers only see approved portfolio projects; the owner and
+        // admins see everything (including their own pending/rejected items).
         portfolio: { orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }] },
         hours: { orderBy: { dayOfWeek: 'asc' } },
       },
     });
     if (!business) return res.status(404).json({ error: 'Not found' });
 
-    // Count a view unless the owner is looking at their own profile (fire-and-forget).
-    let viewerId = null;
-    const header = req.headers.authorization;
-    if (header?.startsWith('Bearer ')) {
-      try { viewerId = require('jsonwebtoken').verify(header.slice(7), process.env.JWT_SECRET).id; } catch { /* ignore */ }
+    const isOwner = viewerId === business.userId;
+    const isAdmin = viewerRole === 'ADMIN';
+    if (business.approvalStatus !== 'APPROVED' && !isOwner && !isAdmin) {
+      return res.status(404).json({ error: 'Not found' });
     }
-    if (viewerId !== business.userId) {
+    if (!isOwner && !isAdmin) {
+      business.portfolio = business.portfolio.filter((p) => p.approvalStatus === 'APPROVED');
+    }
+
+    // Count a view unless the owner is looking at their own profile (fire-and-forget).
+    if (!isOwner) {
       db.business.update({ where: { id: business.id }, data: { profileViews: { increment: 1 } } }).catch(() => {});
     }
 
@@ -275,11 +304,31 @@ async function requireBusinessOwner(req, res) {
   return business;
 }
 
-// Public: list a business's portfolio projects
+// Public: list a business's portfolio projects. Public viewers see only
+// approved projects; the owner and admins see everything (so the owner can
+// preview pending submissions in the portfolio manager).
 router.get('/:id/portfolio', async (req, res, next) => {
   try {
+    let viewerId = null;
+    let viewerRole = null;
+    const header = req.headers.authorization;
+    if (header?.startsWith('Bearer ')) {
+      try {
+        const payload = require('jsonwebtoken').verify(header.slice(7), process.env.JWT_SECRET);
+        viewerId = payload.id;
+        viewerRole = payload.role;
+      } catch { /* ignore */ }
+    }
+    const business = await db.business.findUnique({ where: { id: req.params.id } });
+    if (!business) return res.status(404).json({ error: 'Not found' });
+    const isOwner = viewerId === business.userId;
+    const isAdmin = viewerRole === 'ADMIN';
+
+    const where = { businessId: req.params.id };
+    if (!isOwner && !isAdmin) where.approvalStatus = 'APPROVED';
+
     const projects = await db.portfolioProject.findMany({
-      where: { businessId: req.params.id },
+      where,
       orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }],
     });
     res.json(projects);
@@ -329,5 +378,65 @@ router.delete('/:id/portfolio/:projectId', authMiddleware, requireRole('BUSINESS
     next(err);
   }
 });
+
+// Owner: upload one or more photos for a portfolio project. Files arrive as
+// multipart form-data under the field name "images" (matches estimations.js).
+// Each is pushed to S3 and the resulting URLs are appended to imageUrls so
+// the existing array is preserved; clients can then PUT to reorder or remove.
+router.post(
+  '/:id/portfolio/:projectId/images',
+  authMiddleware,
+  requireRole('BUSINESS', 'ADMIN'),
+  upload.array('images', 10),
+  async (req, res, next) => {
+    try {
+      const business = await requireBusinessOwner(req, res);
+      if (!business) return;
+      const existing = await db.portfolioProject.findUnique({ where: { id: req.params.projectId } });
+      if (!existing || existing.businessId !== business.id) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      if (!req.files?.length) return res.status(400).json({ error: 'No images uploaded' });
+
+      const urls = await Promise.all(req.files.map((f) => uploadImage(f.buffer, f.mimetype)));
+      const project = await db.portfolioProject.update({
+        where: { id: existing.id },
+        data: { imageUrls: [...existing.imageUrls, ...urls] },
+      });
+      res.json(project);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Owner: remove a single image from a portfolio project by its URL. Sending
+// the URL (rather than an index) keeps deletes idempotent and resilient to
+// concurrent reorders. We don't delete the S3 object here — it'll fall out
+// of the bucket lifecycle policy. Returns the updated project.
+router.delete(
+  '/:id/portfolio/:projectId/images',
+  authMiddleware,
+  requireRole('BUSINESS', 'ADMIN'),
+  async (req, res, next) => {
+    try {
+      const business = await requireBusinessOwner(req, res);
+      if (!business) return;
+      const { url } = z.object({ url: z.string().min(1) }).parse(req.body);
+      const existing = await db.portfolioProject.findUnique({ where: { id: req.params.projectId } });
+      if (!existing || existing.businessId !== business.id) {
+        return res.status(404).json({ error: 'Not found' });
+      }
+      const remaining = existing.imageUrls.filter((u) => u !== url);
+      const project = await db.portfolioProject.update({
+        where: { id: existing.id },
+        data: { imageUrls: remaining },
+      });
+      res.json(project);
+    } catch (err) {
+      next(err);
+    }
+  }
+);
 
 module.exports = router;

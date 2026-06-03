@@ -57,8 +57,8 @@ describe('Portfolio', () => {
 
   test('public can list projects, featured first', async () => {
     const { business } = await createBusiness();
-    await db.portfolioProject.create({ data: { businessId: business.id, title: 'Old', featured: false } });
-    await db.portfolioProject.create({ data: { businessId: business.id, title: 'Star', featured: true } });
+    await db.portfolioProject.create({ data: { businessId: business.id, title: 'Old', featured: false, approvalStatus: 'APPROVED' } });
+    await db.portfolioProject.create({ data: { businessId: business.id, title: 'Star', featured: true, approvalStatus: 'APPROVED' } });
 
     const res = await request(app).get(`/businesses/${business.id}/portfolio`);
     expect(res.status).toBe(200);
@@ -87,7 +87,7 @@ describe('Portfolio', () => {
 
   test('portfolio is embedded in the public business detail', async () => {
     const { business } = await createBusiness();
-    await db.portfolioProject.create({ data: { businessId: business.id, title: 'Showcase' } });
+    await db.portfolioProject.create({ data: { businessId: business.id, title: 'Showcase', approvalStatus: 'APPROVED' } });
     const res = await request(app).get(`/businesses/${business.id}`);
     expect(res.status).toBe(200);
     expect(res.body.portfolio).toHaveLength(1);

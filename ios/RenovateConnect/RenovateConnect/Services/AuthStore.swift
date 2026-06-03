@@ -109,6 +109,7 @@ final class AuthStore: ObservableObject {
     }
 
     var isBusiness: Bool { currentUser?.role == .business }
+    var isAdmin: Bool { currentUser?.role == .admin }
     var myBusinessId: String? { currentUser?.business?.id }
 
     /// Persist the push-notification preference and reflect it locally.

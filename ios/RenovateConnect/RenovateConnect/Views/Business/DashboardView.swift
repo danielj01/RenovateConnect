@@ -14,6 +14,15 @@ struct DashboardView: View {
                 VStack(spacing: 20) {
                     header
 
+                    // Surfaces the admin approval status. PENDING/REJECTED listings
+                    // are hidden from public search, so we tell the owner why.
+                    if let status = auth.currentUser?.business?.approvalStatus, status != .approved {
+                        ApprovalStatusBanner(
+                            status: status,
+                            reason: auth.currentUser?.business?.rejectionReason
+                        )
+                    }
+
                     if isLoading {
                         ProgressView().padding(.top, 60)
                     } else if let stats {
@@ -172,6 +181,56 @@ struct MetricCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
         }
+    }
+}
+
+// MARK: - Approval status banner
+
+/// Inline banner shown on the dashboard while a listing is awaiting admin
+/// approval or has been rejected. Tells the owner that homeowners can't see
+/// them in search yet, and surfaces the admin's rejection reason if any.
+struct ApprovalStatusBanner: View {
+    let status: ApprovalStatus
+    let reason: String?
+
+    private var tint: Color {
+        status == .rejected ? .orange : .blue
+    }
+
+    private var headline: String {
+        switch status {
+        case .pending: return "Awaiting admin review"
+        case .rejected: return "Needs changes before going live"
+        case .approved: return "Live"
+        }
+    }
+
+    private var body1: String {
+        switch status {
+        case .pending: return "Your listing is in the review queue. Homeowners won't see it in search until an admin approves it."
+        case .rejected: return reason ?? "An admin asked for changes. Update your profile and it'll go back into the review queue."
+        case .approved: return ""
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: status.systemImage)
+                .font(.title3).foregroundStyle(tint)
+                .frame(width: 36, height: 36)
+                .background(tint.opacity(0.15)).clipShape(Circle())
+            VStack(alignment: .leading, spacing: 4) {
+                Text(headline).font(.subheadline.weight(.semibold))
+                Text(body1).font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+        }
+        .padding(14)
+        .background(tint.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14).stroke(tint.opacity(0.25), lineWidth: 1)
+        )
     }
 }
 

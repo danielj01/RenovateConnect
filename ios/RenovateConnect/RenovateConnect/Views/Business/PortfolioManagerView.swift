@@ -1,4 +1,5 @@
 import SwiftUI
+import PhotosUI
 
 struct PortfolioManagerView: View {
     @EnvironmentObject private var auth: AuthStore
@@ -132,9 +133,12 @@ struct PortfolioCard: View {
                 .clipped()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
+                    HStack(spacing: 6) {
                         Text(project.title).font(.headline)
                         Spacer()
+                        if let s = project.approvalStatus, s != .approved {
+                            ProjectApprovalChip(status: s)
+                        }
                         if project.featured { FeaturedBadge() }
                     }
                     if let desc = project.description, !desc.isEmpty {
@@ -158,6 +162,24 @@ struct PortfolioCard: View {
     }
 }
 
+/// Small status chip surfaced on portfolio cards when an admin hasn't yet
+/// approved (or has rejected) a project. The card is still tappable so the
+/// owner can edit and resubmit.
+struct ProjectApprovalChip: View {
+    let status: ApprovalStatus
+
+    private var tint: Color { status == .rejected ? .orange : .blue }
+
+    var body: some View {
+        Label(status.label, systemImage: status.systemImage)
+            .font(.system(size: 10, weight: .semibold))
+            .padding(.horizontal, 8).padding(.vertical, 4)
+            .background(tint.opacity(0.15))
+            .foregroundStyle(tint)
+            .clipShape(Capsule())
+    }
+}
+
 // MARK: - Create / edit project
 
 /// One sheet for both adding and editing a portfolio project. Pass `project: nil`
@@ -178,6 +200,13 @@ struct PortfolioEditorSheet: View {
     @State private var isSaving = false
     @State private var error: String?
 
+    // Image editing state. `imageUrls` mirrors the project's photos so the
+    // owner can delete in place; `picker` drives the PhotosPicker; `uploading`
+    // shows a spinner during the multipart upload.
+    @State private var imageUrls: [String]
+    @State private var picker: [PhotosPickerItem] = []
+    @State private var uploading = false
+
     private var isEditing: Bool { project != nil }
 
     init(businessId: String, project: PortfolioProject?, onSave: @escaping (PortfolioProject) -> Void) {
@@ -190,6 +219,7 @@ struct PortfolioEditorSheet: View {
         _costMin = State(initialValue: project?.costMin.map { "\($0)" } ?? "")
         _costMax = State(initialValue: project?.costMax.map { "\($0)" } ?? "")
         _weeks = State(initialValue: project?.durationWeeks.map { "\($0)" } ?? "")
+        _imageUrls = State(initialValue: project?.imageUrls ?? [])
     }
 
     var body: some View {
@@ -215,6 +245,22 @@ struct PortfolioEditorSheet: View {
                         Text("weeks").foregroundStyle(.secondary)
                     }
                 }
+                if isEditing {
+                    photosSection
+                }
+                if let project, let s = project.approvalStatus, s != .approved {
+                    Section {
+                        Label(s.label, systemImage: s.systemImage)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(s == .rejected ? .orange : .blue)
+                        if s == .rejected, let r = project.rejectionReason, !r.isEmpty {
+                            Text(r).font(.caption).foregroundStyle(.secondary)
+                        } else if s == .pending {
+                            Text("This project is waiting for an admin to approve it. It won't be visible on your public profile yet.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
                 if let error {
                     Section { Text(error).foregroundStyle(.red).font(.caption) }
                 }
@@ -231,6 +277,96 @@ struct PortfolioEditorSheet: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Photos editor
+
+    /// Grid of existing photos with per-photo delete + a PhotosPicker for
+    /// adding more. Only shown when editing — new projects need to be created
+    /// first so we have a projectId to upload against.
+    private var photosSection: some View {
+        Section("Photos") {
+            if !imageUrls.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(imageUrls, id: \.self) { url in
+                            ZStack(alignment: .topTrailing) {
+                                AsyncImage(url: URL(string: url)) { img in
+                                    img.resizable().scaledToFill()
+                                } placeholder: {
+                                    Color(.systemGray5)
+                                }
+                                .frame(width: 96, height: 96)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+
+                                Button {
+                                    Task { await deleteImage(url) }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.white, .black.opacity(0.7))
+                                }
+                                .padding(4)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            } else {
+                Text("No photos yet. Add a few before resubmitting — they're the first thing homeowners look at.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            PhotosPicker(selection: $picker, maxSelectionCount: 10, matching: .images) {
+                HStack {
+                    Label(uploading ? "Uploading…" : "Add photos", systemImage: "photo.on.rectangle.angled")
+                    Spacer()
+                    if uploading { ProgressView() }
+                }
+            }
+            .disabled(uploading)
+            .onChange(of: picker) { _, items in
+                guard !items.isEmpty else { return }
+                Task { await uploadPicked(items) }
+            }
+        }
+    }
+
+    /// Convert PhotosPicker items to JPEG `Data`, upload them in one multipart
+    /// POST, and merge the server's updated `imageUrls` into our state. The
+    /// onSave callback is also fired so the list view rebinds in place.
+    private func uploadPicked(_ items: [PhotosPickerItem]) async {
+        guard let project else { return }
+        uploading = true
+        defer { uploading = false; picker = [] }
+
+        var payloads: [Data] = []
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                payloads.append(data)
+            }
+        }
+        guard !payloads.isEmpty else { return }
+        do {
+            let updated = try await APIService.shared.uploadPortfolioImages(
+                businessId: businessId, projectId: project.id, images: payloads)
+            imageUrls = updated.imageUrls
+            onSave(updated)
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
+    private func deleteImage(_ url: String) async {
+        guard let project else { return }
+        do {
+            let updated = try await APIService.shared.deletePortfolioImage(
+                businessId: businessId, projectId: project.id, url: url)
+            imageUrls = updated.imageUrls
+            onSave(updated)
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 

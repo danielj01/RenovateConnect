@@ -196,6 +196,67 @@ final class APIService {
         let _: Empty = try await request("businesses/\(businessId)/portfolio/\(projectId)", method: "DELETE")
     }
 
+    /// Upload one or more JPEG photos to a portfolio project. They're appended
+    /// to the project's `imageUrls` array on the server; the updated project
+    /// is returned so the UI can rebind without a separate fetch.
+    func uploadPortfolioImages(businessId: String, projectId: String, images: [Data]) async throws -> PortfolioProject {
+        let url = base.appendingPathComponent("businesses/\(businessId)/portfolio/\(projectId)/images")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+
+        let boundary = UUID().uuidString
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        func append(_ s: String) { body.append(s.data(using: .utf8)!) }
+        for (i, img) in images.enumerated() {
+            append("--\(boundary)\r\nContent-Disposition: form-data; name=\"images\"; filename=\"img\(i).jpg\"\r\nContent-Type: image/jpeg\r\n\r\n")
+            body.append(img)
+            append("\r\n")
+        }
+        append("--\(boundary)--\r\n")
+        req.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.requestFailed((response as? HTTPURLResponse)?.statusCode ?? 0, "Upload failed")
+        }
+        return try JSONDecoder().decode(PortfolioProject.self, from: data)
+    }
+
+    /// Remove a single image (identified by URL) from a portfolio project.
+    /// Idempotent — removing a URL that isn't on the project is a no-op.
+    func deletePortfolioImage(businessId: String, projectId: String, url: String) async throws -> PortfolioProject {
+        try await request("businesses/\(businessId)/portfolio/\(projectId)/images",
+                          method: "DELETE", body: ["url": url])
+    }
+
+    // Admin approval queue
+    func adminPending() async throws -> AdminPendingQueue {
+        try await request("admin/pending")
+    }
+
+    func adminApproveBusiness(id: String) async throws -> Business {
+        struct Empty: Encodable {}
+        return try await request("admin/businesses/\(id)/approve", method: "POST", body: Empty())
+    }
+
+    func adminRejectBusiness(id: String, reason: String?) async throws -> Business {
+        try await request("admin/businesses/\(id)/reject", method: "POST",
+                          body: ["reason": reason ?? ""])
+    }
+
+    func adminApprovePortfolio(projectId: String) async throws -> PortfolioProject {
+        struct Empty: Encodable {}
+        return try await request("admin/portfolio/\(projectId)/approve", method: "POST", body: Empty())
+    }
+
+    func adminRejectPortfolio(projectId: String, reason: String?) async throws -> PortfolioProject {
+        try await request("admin/portfolio/\(projectId)/reject", method: "POST",
+                          body: ["reason": reason ?? ""])
+    }
+
     // Estimations
     func createEstimation(images: [Data], roomType: String?, description: String?) async throws -> Estimation {
         let url = base.appendingPathComponent("estimations")

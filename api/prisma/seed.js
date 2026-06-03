@@ -168,6 +168,20 @@ async function main() {
 
   const pw = await bcrypt.hash('Password123!', 10);
 
+  // Admin account for the approval queue. Idempotent — re-running the seed
+  // won't reset their password or role.
+  await prisma.user.upsert({
+    where: { email: 'admin@renovateconnect.dev' },
+    update: {},
+    create: {
+      email: 'admin@renovateconnect.dev',
+      passwordHash: pw,
+      name: 'Platform Admin',
+      role: 'ADMIN',
+    },
+  });
+  console.log('  🛡️  admin@renovateconnect.dev (Password123!)');
+
   for (const biz of businesses) {
     const { reviews, isPromoted = false, averageRating, portfolio = [], profileViews = 0, ...bizData } = biz;
 
@@ -197,6 +211,10 @@ async function main() {
             promotedUntil: isPromoted ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null,
             averageRating: parseFloat(avgRating.toFixed(1)),
             reviewCount,
+            // Demo data is pre-approved so the seeded marketplace is browsable
+            // out of the box. New (real) signups go through the admin queue.
+            approvalStatus: 'APPROVED',
+            reviewedAt: new Date(),
             reviews: {
               create: reviews.map(r => ({
                 authorName: r.authorName,
@@ -225,7 +243,13 @@ async function main() {
       }
       if (business.portfolio.length === 0 && portfolio.length > 0) {
         await prisma.portfolioProject.createMany({
-          data: portfolio.map(p => ({ ...p, businessId: business.id })),
+          data: portfolio.map(p => ({
+            ...p,
+            businessId: business.id,
+            // Pre-approve demo portfolio so projects show up immediately.
+            approvalStatus: 'APPROVED',
+            reviewedAt: new Date(),
+          })),
         });
       } else if (portfolio.length > 0) {
         // Projects already exist (older seed) — backfill imageUrls on any that

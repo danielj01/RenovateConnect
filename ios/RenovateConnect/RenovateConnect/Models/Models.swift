@@ -21,6 +21,31 @@ enum UserRole: String, Codable {
     case admin = "ADMIN"
 }
 
+/// Admin approval lifecycle for business listings and portfolio projects.
+/// New self-service submissions start `.pending` and are hidden from public
+/// search until an admin approves. `.rejected` carries a reason for the owner.
+enum ApprovalStatus: String, Codable {
+    case pending = "PENDING"
+    case approved = "APPROVED"
+    case rejected = "REJECTED"
+
+    var label: String {
+        switch self {
+        case .pending: return "Pending review"
+        case .approved: return "Approved"
+        case .rejected: return "Needs changes"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .pending: return "clock.badge.questionmark"
+        case .approved: return "checkmark.seal.fill"
+        case .rejected: return "exclamationmark.triangle.fill"
+        }
+    }
+}
+
 struct Business: Codable, Identifiable {
     let id: String
     let companyName: String
@@ -43,6 +68,11 @@ struct Business: Codable, Identifiable {
     var verified: Bool?
     var verifiedAt: String?
     var licenseNumber: String?
+
+    // Admin approval — optional because the backend only includes these for
+    // owners/admins and on dashboard payloads.
+    var approvalStatus: ApprovalStatus?
+    var rejectionReason: String?
 
     var isVerified: Bool { verified ?? false }
 }
@@ -238,6 +268,15 @@ struct PortfolioProject: Codable, Identifiable {
     let durationWeeks: Int?
     let imageUrls: [String]
     let featured: Bool
+
+    // Admin approval — optional because the public API only includes it for
+    // the owner and admins (public viewers get only APPROVED rows back).
+    var approvalStatus: ApprovalStatus?
+    var rejectionReason: String?
+
+    // Business names alongside pending projects in the admin queue. Optional —
+    // only populated by GET /admin/pending; nil elsewhere.
+    var business: AdminPendingBusinessRef?
 
     var costRangeText: String? {
         switch (costMin, costMax) {
@@ -601,6 +640,40 @@ struct BillingSummary: Codable {
         let brand: String
         let last4: String
     }
+}
+
+// MARK: - Admin approval queue
+
+/// Owner contact info embedded with each pending business in the admin queue,
+/// so the admin can reach out before approving/rejecting.
+struct AdminBusinessOwner: Codable {
+    let id: String
+    let name: String
+    let email: String
+}
+
+/// Light-weight business reference attached to pending portfolio projects so
+/// the admin queue can label which contractor a draft belongs to.
+struct AdminPendingBusinessRef: Codable {
+    let id: String
+    let companyName: String
+}
+
+/// What an admin sees in the queue: businesses awaiting first approval and
+/// portfolio projects awaiting first approval, side by side.
+struct AdminPendingQueue: Codable {
+    struct PendingBusiness: Codable, Identifiable {
+        let id: String
+        let companyName: String
+        let description: String
+        let city: String
+        let state: String
+        let createdAt: String
+        let user: AdminBusinessOwner
+        let approvalStatus: ApprovalStatus
+    }
+    let businesses: [PendingBusiness]
+    let projects: [PortfolioProject]
 }
 
 struct LeadsByStatus: Codable {

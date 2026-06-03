@@ -10,7 +10,7 @@ const daysAgo = (n) => new Date(Date.now() - n * 24 * 60 * 60 * 1000);
 
 const makeProject = (businessId, createdAt, extra = {}) =>
   db.portfolioProject.create({
-    data: { businessId, title: 'Project', imageUrls: [], createdAt, ...extra },
+    data: { businessId, title: 'Project', imageUrls: [], createdAt, approvalStatus: 'APPROVED', ...extra },
   });
 
 const makeReview = (businessId, createdAt, extra = {}) =>

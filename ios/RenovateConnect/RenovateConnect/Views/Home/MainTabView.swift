@@ -30,7 +30,9 @@ struct MainTabView: View {
 
     var body: some View {
         Group {
-            if auth.isBusiness {
+            if auth.isAdmin {
+                adminTabs
+            } else if auth.isBusiness {
                 businessTabs
             } else {
                 clientTabs
@@ -130,6 +132,29 @@ struct MainTabView: View {
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.crop.circle.fill") }
                 .tag(4)
+        }
+    }
+
+    // Platform admins: approval queue + browse search to spot-check listings.
+    // Admins also see the search side so they can preview listings as users.
+    private var adminTabs: some View {
+        TabView(selection: $router.selection) {
+            AdminView()
+                .tabItem { Label("Approvals", systemImage: "checkmark.shield.fill") }
+                .tag(0)
+
+            BusinessSearchView()
+                .tabItem { Label("Explore", systemImage: "safari.fill") }
+                .tag(1)
+
+            ConversationsView()
+                .tabItem { Label("Messages", systemImage: "message.fill") }
+                .badge(inbox.unreadCount)
+                .tag(2)
+
+            ProfileView()
+                .tabItem { Label("Profile", systemImage: "person.crop.circle.fill") }
+                .tag(3)
         }
     }
 

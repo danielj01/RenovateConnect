@@ -67,6 +67,10 @@ async function createBusiness(overrides = {}) {
       state: 'TX',
       zipCode: '78701',
       specialties: overrides.specialties || ['Kitchen'],
+      // Most suites assume a public, browsable business; default to APPROVED.
+      // Pass approvalStatus: 'PENDING' (or 'REJECTED') to exercise the queue.
+      approvalStatus: overrides.approvalStatus || 'APPROVED',
+      reviewedAt: new Date(),
     },
   });
   return { user, business, token: tokenFor(user) };
