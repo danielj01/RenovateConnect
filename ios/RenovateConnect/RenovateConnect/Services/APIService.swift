@@ -280,6 +280,22 @@ final class APIService {
         try await requestNoContent("favorites/\(businessId)", method: "DELETE")
     }
 
+    // Favorites digest — "what's new with your saved contractors".
+    func favoritesDigest() async throws -> [FavoritesDigestEntry] {
+        try await request("favorites/digest")
+    }
+
+    func favoritesDigestUnseen() async throws -> FavoritesDigestUnseen {
+        try await request("favorites/digest/unseen")
+    }
+
+    @discardableResult
+    func markFavoritesDigestSeen() async throws -> Bool {
+        struct Resp: Decodable { let seenAt: String }
+        let _: Resp = try await request("favorites/digest/seen", method: "POST")
+        return true
+    }
+
     // Saved searches (alerts on new matching contractors)
     func mySavedSearches() async throws -> [SavedSearch] {
         try await request("saved-searches")

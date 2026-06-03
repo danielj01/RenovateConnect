@@ -62,6 +62,12 @@ model User {
   notifyAppointments Boolean @default(true)
   notifyReviews      Boolean @default(true)
 
+  // Watermark for the "what's new with your saved contractors" digest. New
+  // portfolio projects and reviews on a favorited business are surfaced when
+  // they're created after the later of this timestamp and when the homeowner
+  // saved that business. Advanced when the homeowner views the digest.
+  favoritesDigestSeenAt DateTime?
+
   business     Business?
   sentMessages     Message[]   @relation("SentMessages")
   conversations    Conversation[] @relation("ClientConversations")

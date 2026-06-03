@@ -510,6 +510,68 @@ struct Activity: Codable, Identifiable {
     var isUnread: Bool { readAt == nil }
 }
 
+// MARK: - Favorites digest ("what's new with your saved contractors")
+
+struct DigestProject: Codable, Identifiable {
+    let id: String
+    let title: String
+    let category: String?
+    let imageUrls: [String]
+    let createdAt: String
+}
+
+struct DigestReview: Codable, Identifiable {
+    let id: String
+    let rating: Int
+    let body: String?
+    let authorName: String
+    let createdAt: String
+}
+
+/// One saved contractor's slice of the digest: what's appeared since the
+/// homeowner last looked. `business` is a compact header summary.
+struct FavoritesDigestEntry: Codable, Identifiable {
+    struct Business: Codable {
+        let id: String
+        let companyName: String
+        let logoUrl: String?
+        let city: String
+        let state: String
+        let averageRating: Double
+        let reviewCount: Int
+        let isPromoted: Bool
+    }
+
+    let business: Business
+    let since: String
+    let newProjectCount: Int
+    let newReviewCount: Int
+    let newProjects: [DigestProject]
+    let newReviews: [DigestReview]
+    let latestAt: String?
+    let hasUpdates: Bool
+
+    var id: String { business.id }
+
+    /// "2 new projects · 1 new review" — empty when nothing is new.
+    var headline: String {
+        var parts: [String] = []
+        if newProjectCount > 0 {
+            parts.append("\(newProjectCount) new project\(newProjectCount == 1 ? "" : "s")")
+        }
+        if newReviewCount > 0 {
+            parts.append("\(newReviewCount) new review\(newReviewCount == 1 ? "" : "s")")
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// Badge counts for the favorites digest entry point.
+struct FavoritesDigestUnseen: Codable {
+    let businesses: Int
+    let items: Int
+}
+
 struct DashboardStats: Codable {
     let profileViews: Int
     let averageRating: Double

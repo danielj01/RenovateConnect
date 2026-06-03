@@ -38,10 +38,12 @@ struct MyProjectsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await favorites.refresh()
+            await favorites.refreshDigestBadge()
             await loadEstimates()
         }
         .refreshable {
             await favorites.refresh()
+            await favorites.refreshDigestBadge()
             await loadEstimates()
         }
     }
@@ -67,6 +69,7 @@ struct MyProjectsView: View {
             .padding(.top, 60)
         } else {
             LazyVStack(spacing: 12) {
+                digestBanner
                 ForEach(favorites.businesses) { biz in
                     NavigationLink(destination: BusinessDetailView(businessId: biz.id)) {
                         BusinessListCard(business: biz)
@@ -78,6 +81,39 @@ struct MyProjectsView: View {
             .padding(.top, 4)
             .padding(.bottom, 40)
         }
+    }
+
+    /// Entry point to the "what's new with your saved pros" digest, with an
+    /// unread badge. Shown above the saved list so updates are the first thing
+    /// a returning homeowner sees.
+    @ViewBuilder
+    private var digestBanner: some View {
+        NavigationLink(destination: FavoritesDigestView()) {
+            RCCard {
+                HStack(spacing: 12) {
+                    ZStack(alignment: .topTrailing) {
+                        Image(systemName: "sparkles")
+                            .foregroundStyle(Theme.primary)
+                            .frame(width: 28)
+                        if favorites.digestUnseen > 0 {
+                            Circle().fill(Color.red).frame(width: 8, height: 8).offset(x: 6, y: -4)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Updates from saved pros").font(.subheadline).foregroundStyle(.primary)
+                        Text(favorites.digestUnseen > 0
+                             ? "\(favorites.digestUnseen) new update\(favorites.digestUnseen == 1 ? "" : "s")"
+                             : "New projects & reviews show up here")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                }
+                .padding(16)
+            }
+            .padding(.horizontal, 16)
+        }
+        .buttonStyle(.plain)
     }
 
     // MARK: - Past estimates

@@ -10,12 +10,36 @@ final class FavoritesStore: ObservableObject {
     @Published private(set) var businesses: [Business] = []
     @Published private(set) var savedIds: Set<String> = []
 
+    /// "What's new with your saved contractors" digest + a badge count of the
+    /// total new items across all saved businesses.
+    @Published private(set) var digest: [FavoritesDigestEntry] = []
+    @Published private(set) var digestUnseen = 0
+
     func isSaved(_ businessId: String) -> Bool { savedIds.contains(businessId) }
 
     func refresh() async {
         guard let saved = try? await APIService.shared.myFavorites() else { return }
         businesses = saved
         savedIds = Set(saved.map(\.id))
+    }
+
+    /// Pull the full digest and refresh the badge count in one pass.
+    func refreshDigest() async {
+        digest = (try? await APIService.shared.favoritesDigest()) ?? []
+        digestUnseen = (try? await APIService.shared.favoritesDigestUnseen())?.items ?? 0
+    }
+
+    /// Cheap badge-only refresh for the entry point (no full payload).
+    func refreshDigestBadge() async {
+        digestUnseen = (try? await APIService.shared.favoritesDigestUnseen())?.items ?? 0
+    }
+
+    /// Mark everything currently in the digest as seen and clear it locally.
+    func markDigestSeen() async {
+        guard digestUnseen > 0 || !digest.isEmpty else { return }
+        try? await APIService.shared.markFavoritesDigestSeen()
+        digest = []
+        digestUnseen = 0
     }
 
     /// Flip the saved state for a business. Updates the UI first, then calls the
@@ -46,5 +70,7 @@ final class FavoritesStore: ObservableObject {
     func clear() {
         businesses = []
         savedIds = []
+        digest = []
+        digestUnseen = 0
     }
 }

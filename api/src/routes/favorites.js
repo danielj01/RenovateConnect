@@ -1,9 +1,42 @@
 const router = require('express').Router();
 const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
+const { digestSince, summarizeBusiness } = require('../services/favoritesDigest');
 
 // All favorites endpoints are for homeowners curating their saved contractors.
 router.use(authMiddleware, requireRole('CLIENT'));
+
+// Load the signed-in homeowner's favorites with each business's portfolio and
+// reviews, then fold them into per-business "what's new" digest entries. Shared
+// by GET /favorites/digest and GET /favorites/digest/unseen.
+async function buildDigest(userId) {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { favoritesDigestSeenAt: true },
+  });
+  const favorites = await db.favorite.findMany({
+    where: { userId },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      business: {
+        include: {
+          portfolio: { orderBy: { createdAt: 'desc' } },
+          reviews: { orderBy: { createdAt: 'desc' } },
+        },
+      },
+    },
+  });
+
+  return favorites.map((f) => {
+    const { portfolio, reviews, ...business } = f.business;
+    return summarizeBusiness({
+      business,
+      projects: portfolio,
+      reviews,
+      since: digestSince(f.createdAt, user?.favoritesDigestSeenAt),
+    });
+  });
+}
 
 // GET /favorites — the signed-in homeowner's saved contractors.
 // Returns the businesses themselves (with the same shape as search results)
@@ -20,6 +53,47 @@ router.get('/', async (req, res, next) => {
       },
     });
     res.json(favorites.map((f) => f.business));
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /favorites/digest — "what's new with your saved contractors": only the
+// businesses that have new portfolio projects or reviews since the homeowner
+// last viewed, newest activity first.
+router.get('/digest', async (req, res, next) => {
+  try {
+    const entries = (await buildDigest(req.user.id))
+      .filter((e) => e.hasUpdates)
+      .sort((a, b) => new Date(b.latestAt) - new Date(a.latestAt));
+    res.json(entries);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /favorites/digest/unseen — counts for the badge: how many businesses have
+// updates and the total number of new items across all of them.
+router.get('/digest/unseen', async (req, res, next) => {
+  try {
+    const entries = (await buildDigest(req.user.id)).filter((e) => e.hasUpdates);
+    const items = entries.reduce((sum, e) => sum + e.newProjectCount + e.newReviewCount, 0);
+    res.json({ businesses: entries.length, items });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /favorites/digest/seen — advance the watermark so everything currently
+// in the digest is considered read.
+router.post('/digest/seen', async (req, res, next) => {
+  try {
+    const seenAt = new Date();
+    await db.user.update({
+      where: { id: req.user.id },
+      data: { favoritesDigestSeenAt: seenAt },
+    });
+    res.json({ seenAt: seenAt.toISOString() });
   } catch (err) {
     next(err);
   }
