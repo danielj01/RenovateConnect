@@ -4,6 +4,7 @@ const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { sendPush } = require('../services/push');
 const { recordActivity } = require('../services/activity');
+const { checkAvailability, availabilityMessage } = require('../services/availability');
 
 // Include shapes shared across responses so both parties see who/what is booked.
 const appointmentInclude = {
@@ -23,6 +24,14 @@ router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) =
 
     const business = await db.business.findUnique({ where: { id: businessId } });
     if (!business) return res.status(404).json({ error: 'Not found' });
+
+    // Reject slots that fall outside the contractor's published hours. Skipped
+    // automatically when the business hasn't configured any hours.
+    const hours = await db.businessHours.findMany({ where: { businessId } });
+    const avail = checkAvailability(hours, scheduledAt, durationMin || 60);
+    if (!avail.ok) {
+      return res.status(422).json({ error: availabilityMessage(avail.reason) });
+    }
 
     const appointment = await db.appointment.create({
       data: {

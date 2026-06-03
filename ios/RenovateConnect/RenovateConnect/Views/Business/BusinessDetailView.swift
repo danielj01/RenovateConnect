@@ -7,6 +7,7 @@ struct BusinessDetailView: View {
     @State private var showContact = false
     @State private var showBooking = false
     @State private var showReview = false
+    @State private var showHoursEditor = false
     @State private var respondingTo: Review?
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var favorites: FavoritesStore
@@ -56,6 +57,13 @@ struct BusinessDetailView: View {
                 }
                 .sheet(item: $respondingTo) { review in
                     ReviewResponseSheet(review: review) { await load() }
+                }
+                .sheet(isPresented: $showHoursEditor) {
+                    if let biz = business {
+                        BusinessHoursEditorView(businessId: biz.id, existing: biz.hours ?? []) {
+                            await load()
+                        }
+                    }
                 }
             }
         }
@@ -205,6 +213,9 @@ struct BusinessDetailView: View {
                 }
             }
 
+            // Business hours
+            hoursSection(biz)
+
             // Portfolio
             if let projects = biz.portfolio, !projects.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
@@ -295,6 +306,81 @@ struct BusinessDetailView: View {
         }
     }
 
+    // MARK: - Business hours
+
+    @ViewBuilder
+    private func hoursSection(_ biz: Business) -> some View {
+        let hours = biz.hours ?? []
+        let isOwner = auth.myBusinessId == biz.id
+
+        // Show the card when hours exist, or when the owner can add them.
+        if !hours.isEmpty || isOwner {
+            RCCard {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Label("Hours", systemImage: "clock.fill")
+                            .font(.headline)
+                            .foregroundStyle(Theme.primary)
+                        Spacer()
+                        if hours.isEmpty {
+                            if isOwner {
+                                Button("Set hours") { showHoursEditor = true }
+                                    .font(.subheadline.weight(.semibold))
+                                    .tint(Theme.primary)
+                            }
+                        } else {
+                            OpenStatusPill(isOpen: Self.isOpenNow(hours))
+                        }
+                    }
+
+                    if hours.isEmpty {
+                        Text("No hours posted yet.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    } else {
+                        let todayIdx = Self.currentWeekday()
+                        ForEach(hours.sorted { $0.dayOfWeek < $1.dayOfWeek }, id: \.dayOfWeek) { row in
+                            HStack {
+                                Text(row.dayName)
+                                    .font(.subheadline.weight(row.dayOfWeek == todayIdx ? .bold : .regular))
+                                Spacer()
+                                Text(row.rangeText)
+                                    .font(.subheadline)
+                                    .foregroundStyle(row.closed ? .secondary : .primary)
+                            }
+                        }
+
+                        if isOwner {
+                            Button {
+                                showHoursEditor = true
+                            } label: {
+                                Label("Edit hours", systemImage: "pencil")
+                                    .font(.subheadline.weight(.semibold))
+                            }
+                            .tint(Theme.primary)
+                            .padding(.top, 2)
+                        }
+                    }
+                }
+                .padding(16)
+            }
+        }
+    }
+
+    /// Local-time weekday index (0 = Sunday … 6 = Saturday) matching dayOfWeek.
+    static func currentWeekday() -> Int {
+        Calendar.current.component(.weekday, from: Date()) - 1
+    }
+
+    /// Whether the business is open at the current local time per its hours.
+    static func isOpenNow(_ hours: [BusinessHours]) -> Bool {
+        let now = Date()
+        let cal = Calendar.current
+        let weekday = cal.component(.weekday, from: now) - 1
+        guard let row = hours.first(where: { $0.dayOfWeek == weekday }), !row.closed else { return false }
+        let minutes = cal.component(.hour, from: now) * 60 + cal.component(.minute, from: now)
+        return minutes >= row.openMinute && minutes < row.closeMinute
+    }
+
     // MARK: - Contact button
 
     @ViewBuilder
@@ -367,6 +453,24 @@ struct StatCell: View {
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
+    }
+}
+
+/// A small "Open now" / "Closed" status indicator for a business's hours.
+struct OpenStatusPill: View {
+    let isOpen: Bool
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle()
+                .fill(isOpen ? Color.green : Color.secondary)
+                .frame(width: 7, height: 7)
+            Text(isOpen ? "Open now" : "Closed")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isOpen ? Color.green : Color.secondary)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background((isOpen ? Color.green : Color.secondary).opacity(0.12), in: Capsule())
     }
 }
 

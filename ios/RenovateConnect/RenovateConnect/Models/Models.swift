@@ -37,6 +37,7 @@ struct Business: Codable, Identifiable {
     let reviews: [Review]?
     var profileViews: Int?
     var portfolio: [PortfolioProject]?
+    var hours: [BusinessHours]?
 
     // Trust signals
     var verified: Bool?
@@ -44,6 +45,47 @@ struct Business: Codable, Identifiable {
     var licenseNumber: String?
 
     var isVerified: Bool { verified ?? false }
+}
+
+/// A contractor's recurring open hours for one weekday. Times are minutes from
+/// midnight (e.g. 540 = 9:00 AM). `closed` overrides the time fields.
+struct BusinessHours: Codable, Identifiable {
+    let id: String?
+    let dayOfWeek: Int        // 0 = Sunday … 6 = Saturday
+    let openMinute: Int
+    let closeMinute: Int
+    let closed: Bool
+
+    // Identity for SwiftUI lists even before the row has a server id (editor rows).
+    var listId: Int { dayOfWeek }
+
+    static let weekdayNames = ["Sunday", "Monday", "Tuesday", "Wednesday",
+                              "Thursday", "Friday", "Saturday"]
+    static let weekdayShort = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+    var dayName: String { Self.weekdayNames[safe: dayOfWeek] ?? "Day \(dayOfWeek)" }
+    var dayShort: String { Self.weekdayShort[safe: dayOfWeek] ?? "?" }
+
+    /// "9:00 AM – 5:00 PM", or "Closed".
+    var rangeText: String {
+        guard !closed else { return "Closed" }
+        return "\(Self.formatMinute(openMinute)) – \(Self.formatMinute(closeMinute))"
+    }
+
+    static func formatMinute(_ minute: Int) -> String {
+        let h24 = minute / 60
+        let m = minute % 60
+        let period = h24 >= 12 ? "PM" : "AM"
+        var h = h24 % 12
+        if h == 0 { h = 12 }
+        return m == 0 ? "\(h) \(period)" : String(format: "%d:%02d %@", h, m, period)
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        indices.contains(index) ? self[index] : nil
+    }
 }
 
 struct Review: Codable, Identifiable {

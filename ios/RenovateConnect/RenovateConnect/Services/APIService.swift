@@ -324,6 +324,28 @@ final class APIService {
         try await request("appointments/\(id)", method: "PATCH", body: ["status": status.rawValue])
     }
 
+    // Business hours (weekly recurring open hours)
+    func businessHours(businessId: String) async throws -> [BusinessHours] {
+        try await request("businesses/\(businessId)/hours")
+    }
+
+    /// Owner: replace the full week of hours. Send `closed: true` for days off.
+    @discardableResult
+    func updateBusinessHours(businessId: String, hours: [BusinessHours]) async throws -> [BusinessHours] {
+        struct Day: Encodable {
+            let dayOfWeek: Int
+            let openMinute: Int
+            let closeMinute: Int
+            let closed: Bool
+        }
+        struct Body: Encodable { let hours: [Day] }
+        let body = Body(hours: hours.map {
+            Day(dayOfWeek: $0.dayOfWeek, openMinute: $0.openMinute,
+                closeMinute: $0.closeMinute, closed: $0.closed)
+        })
+        return try await request("businesses/\(businessId)/hours", method: "PUT", body: body)
+    }
+
     // Activity feed
     func myActivities() async throws -> [Activity] {
         try await request("activities")

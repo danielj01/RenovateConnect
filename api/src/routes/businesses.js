@@ -95,6 +95,7 @@ router.get('/:id', async (req, res, next) => {
       include: {
         reviews: { orderBy: { createdAt: 'desc' } },
         portfolio: { orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }] },
+        hours: { orderBy: { dayOfWeek: 'asc' } },
       },
     });
     if (!business) return res.status(404).json({ error: 'Not found' });
@@ -157,6 +158,75 @@ router.patch('/:id/verify', authMiddleware, requireRole('ADMIN'), async (req, re
       data: { verified, verifiedAt: verified ? new Date() : null },
     });
     res.json(updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Business hours (weekly recurring open hours)
+// ---------------------------------------------------------------------------
+
+const hoursDaySchema = z.object({
+  dayOfWeek: z.number().int().min(0).max(6),
+  openMinute: z.number().int().min(0).max(1439),
+  closeMinute: z.number().int().min(1).max(1440),
+  closed: z.boolean().optional(),
+}).refine((d) => d.closed === true || d.closeMinute > d.openMinute, {
+  message: 'closeMinute must be after openMinute',
+});
+
+const hoursSchema = z.object({
+  hours: z.array(hoursDaySchema).max(7),
+});
+
+// Public: a business's weekly hours, ordered Sunday→Saturday.
+router.get('/:id/hours', async (req, res, next) => {
+  try {
+    const hours = await db.businessHours.findMany({
+      where: { businessId: req.params.id },
+      orderBy: { dayOfWeek: 'asc' },
+    });
+    res.json(hours);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Owner: replace the full week of hours in one shot. Sending a day omits it
+// (treated as unknown); send `closed: true` to mark a day off explicitly.
+// Duplicate weekdays are rejected so the unique constraint never surprises us.
+router.put('/:id/hours', authMiddleware, requireRole('BUSINESS', 'ADMIN'), async (req, res, next) => {
+  try {
+    const business = await requireBusinessOwner(req, res);
+    if (!business) return;
+    const { hours } = hoursSchema.parse(req.body);
+
+    const days = hours.map((h) => h.dayOfWeek);
+    if (new Set(days).size !== days.length) {
+      return res.status(422).json({ error: 'Duplicate weekday in hours' });
+    }
+
+    const saved = await db.$transaction(async (tx) => {
+      await tx.businessHours.deleteMany({ where: { businessId: business.id } });
+      if (hours.length) {
+        await tx.businessHours.createMany({
+          data: hours.map((h) => ({
+            businessId: business.id,
+            dayOfWeek: h.dayOfWeek,
+            openMinute: h.openMinute,
+            closeMinute: h.closeMinute,
+            closed: h.closed ?? false,
+          })),
+        });
+      }
+      return tx.businessHours.findMany({
+        where: { businessId: business.id },
+        orderBy: { dayOfWeek: 'asc' },
+      });
+    });
+
+    res.json(saved);
   } catch (err) {
     next(err);
   }

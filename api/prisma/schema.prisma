@@ -129,6 +129,29 @@ model Business {
   portfolio       PortfolioProject[]
   favoritedBy     Favorite[]
   appointments    Appointment[]
+  hours           BusinessHours[]
+}
+
+// One row per weekday describing a contractor's recurring open hours. Times are
+// stored as minutes from midnight (e.g. 540 = 09:00, 1020 = 17:00) and are
+// interpreted in the appointment's wall-clock terms. A `closed` day means the
+// business takes no bookings that weekday regardless of the time fields. A
+// business with no rows at all is treated as "hours not set" — appointment
+// requests are accepted without an availability check (backwards compatible).
+model BusinessHours {
+  id          String   @id @default(cuid())
+  businessId  String
+  dayOfWeek   Int      // 0 = Sunday … 6 = Saturday
+  openMinute  Int      @default(540)
+  closeMinute Int      @default(1020)
+  closed      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, dayOfWeek])
+  @@index([businessId])
 }
 
 // A homeowner saving a contractor to revisit later ("My Projects" hub).
