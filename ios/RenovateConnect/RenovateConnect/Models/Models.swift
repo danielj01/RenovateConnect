@@ -573,6 +573,7 @@ struct FavoritesDigestUnseen: Codable {
 }
 
 struct DashboardStats: Codable {
+    let searchImpressions: Int
     let profileViews: Int
     let averageRating: Double
     let reviewCount: Int

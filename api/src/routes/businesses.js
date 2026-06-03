@@ -46,6 +46,15 @@ router.get('/', async (req, res, next) => {
       db.business.count({ where }),
     ]);
 
+    // Count one search impression for every listing actually shown on this page
+    // (fire-and-forget so it never slows the response).
+    if (businesses.length > 0) {
+      db.business.updateMany({
+        where: { id: { in: businesses.map((b) => b.id) } },
+        data: { searchImpressions: { increment: 1 } },
+      }).catch(() => {});
+    }
+
     res.json({ businesses, total, page: parseInt(page), limit: parseInt(limit) });
   } catch (err) {
     next(err);
@@ -76,6 +85,7 @@ router.get('/dashboard', authMiddleware, requireRole('BUSINESS', 'ADMIN'), async
     const conversionRate = totalLeads ? Math.round((byStatus.CONVERTED / totalLeads) * 100) : 0;
 
     res.json({
+      searchImpressions: business.searchImpressions,
       profileViews: business.profileViews,
       averageRating: business.averageRating,
       reviewCount: business.reviewCount,

@@ -126,7 +126,10 @@ model Business {
   verified        Boolean   @default(false)
   verifiedAt      DateTime?
 
-  // Analytics
+  // Analytics — two distinct, real metrics:
+  //   searchImpressions: times this listing appeared in a search-results page
+  //   profileViews:      times someone opened the full profile (excludes the owner)
+  searchImpressions Int     @default(0)
   profileViews    Int       @default(0)
 
   // Promoted listing

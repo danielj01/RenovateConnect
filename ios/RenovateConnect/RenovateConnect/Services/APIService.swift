@@ -175,6 +175,22 @@ final class APIService {
                                             costMin: costMin, costMax: costMax, durationWeeks: durationWeeks))
     }
 
+    func updatePortfolioProject(businessId: String, projectId: String,
+                                title: String, description: String?, category: String?,
+                                costMin: Int?, costMax: Int?, durationWeeks: Int?) async throws -> PortfolioProject {
+        struct Body: Encodable {
+            let title: String
+            let description: String?
+            let category: String?
+            let costMin: Int?
+            let costMax: Int?
+            let durationWeeks: Int?
+        }
+        return try await request("businesses/\(businessId)/portfolio/\(projectId)", method: "PUT",
+                                 body: Body(title: title, description: description, category: category,
+                                            costMin: costMin, costMax: costMax, durationWeeks: durationWeeks))
+    }
+
     func deletePortfolioProject(businessId: String, projectId: String) async throws {
         struct Empty: Decodable {}
         let _: Empty = try await request("businesses/\(businessId)/portfolio/\(projectId)", method: "DELETE")

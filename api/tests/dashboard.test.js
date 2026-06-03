@@ -85,3 +85,35 @@ describe('Profile view tracking', () => {
     expect(b.profileViews).toBe(0);
   });
 });
+
+describe('Search impression tracking', () => {
+  test('appearing in a search results page increments searchImpressions', async () => {
+    const { business } = await createBusiness();
+
+    await request(app).get('/businesses').expect(200);
+
+    // Fire-and-forget increment; poll briefly.
+    let impressions = 0;
+    for (let i = 0; i < 20 && impressions === 0; i++) {
+      const b = await db.business.findUnique({ where: { id: business.id } });
+      impressions = b.searchImpressions;
+      if (impressions === 0) await new Promise(r => setTimeout(r, 25));
+    }
+    expect(impressions).toBe(1);
+  });
+
+  test('a business filtered OUT of results is not counted', async () => {
+    const { business } = await createBusiness(); // specialties: ['Kitchen']
+    await request(app).get('/businesses?specialty=Roofing').expect(200);
+    await new Promise(r => setTimeout(r, 150));
+    const b = await db.business.findUnique({ where: { id: business.id } });
+    expect(b.searchImpressions).toBe(0);
+  });
+
+  test('dashboard reports searchImpressions', async () => {
+    const { business, token } = await createBusiness();
+    await db.business.update({ where: { id: business.id }, data: { searchImpressions: 7 } });
+    const res = await request(app).get('/businesses/dashboard').set('Authorization', `Bearer ${token}`);
+    expect(res.body.searchImpressions).toBe(7);
+  });
+});

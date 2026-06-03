@@ -22,7 +22,6 @@ const businesses = [
     logoUrl: logo('1628745277862-bc0b2d68c50c'),
     isPromoted: true,
     averageRating: 4.9,
-    profileViews: 1284,
     portfolio: [
       { title: 'Lincoln Park Chef\'s Kitchen', category: 'Kitchen', description: 'Full gut remodel with custom walnut cabinetry, quartz waterfall island, and a pro-grade appliance package.', costMin: 62000, costMax: 78000, durationWeeks: 7, featured: true, imageUrls: [photo('1628745277862-bc0b2d68c50c'), photo('1682888813913-e13f18692019')] },
       { title: 'Spa Master Bath', category: 'Bathroom', description: 'Curbless walk-in shower, heated floors, and a freestanding soaking tub.', costMin: 34000, costMax: 45000, durationWeeks: 5, imageUrls: [photo('1584622650111-993a426fbf0a'), photo('1507652313519-d4e9174996dd')] },
@@ -46,7 +45,6 @@ const businesses = [
     logoUrl: logo('1592506119503-c0b18879bd5a'),
     isPromoted: true,
     averageRating: 4.7,
-    profileViews: 947,
     portfolio: [
       { title: 'West Loop Whole-Floor Remodel', category: 'Kitchen', description: 'New hardwood throughout, repainted interior, and a modern backsplash refresh.', costMin: 40000, costMax: 55000, durationWeeks: 6, featured: true, imageUrls: [photo('1665507279638-5b48073c637b'), photo('1631048498692-af6262577031')] },
       { title: '10-Day Bathroom Refresh', category: 'Bathroom', description: 'Fast-turnaround guest bath remodel with new vanity, tile, and fixtures.', costMin: 12000, costMax: 18000, durationWeeks: 2, imageUrls: [photo('1629079447777-1e605162dc8d'), photo('1521783593447-5702b9bfd267')] },
@@ -70,7 +68,6 @@ const businesses = [
     website: 'https://elitekb.dev',
     logoUrl: logo('1639405069836-f82aa6dcb900'),
     averageRating: 4.8,
-    profileViews: 612,
     portfolio: [
       { title: 'Naperville Showcase Kitchen', category: 'Kitchen', description: 'Designer layout with a 10-ft island, brass fixtures, and integrated paneled appliances.', costMin: 70000, costMax: 95000, durationWeeks: 9, featured: true, imageUrls: [photo('1601760561441-16420502c7e0'), photo('1665507279644-67d8ed143a84')] },
       { title: 'Hers & His Master Bath', category: 'Bathroom', description: 'Double vanity, marble wet room, and custom built-in storage.', costMin: 38000, costMax: 52000, durationWeeks: 6, imageUrls: [photo('1587527901949-ab0341697c1e'), photo('1696987007764-7f8b85dd3033')] },
@@ -212,7 +209,9 @@ async function main() {
       },
     });
 
-    // Idempotently backfill profileViews + portfolio (upsert above skips updates).
+    // Idempotently reset analytics + backfill portfolio (upsert above skips
+    // updates). profileViews/searchImpressions accrue from real activity now, so
+    // we clear any leftover demo numbers back to 0 on (re)seed.
     const business = await prisma.business.findUnique({
       where: { userId: user.id },
       include: { portfolio: true },

@@ -5,6 +5,7 @@ struct PortfolioManagerView: View {
     @State private var projects: [PortfolioProject] = []
     @State private var isLoading = true
     @State private var showAdd = false
+    @State private var editing: PortfolioProject?
 
     var body: some View {
         NavigationStack {
@@ -31,8 +32,13 @@ struct PortfolioManagerView: View {
             .task { await load() }
             .refreshable { await load() }
             .sheet(isPresented: $showAdd) {
-                AddPortfolioSheet(businessId: auth.myBusinessId ?? "") { new in
-                    projects.insert(new, at: 0)
+                PortfolioEditorSheet(businessId: auth.myBusinessId ?? "", project: nil) { saved in
+                    projects.insert(saved, at: 0)
+                }
+            }
+            .sheet(item: $editing) { project in
+                PortfolioEditorSheet(businessId: auth.myBusinessId ?? "", project: project) { saved in
+                    if let i = projects.firstIndex(where: { $0.id == saved.id }) { projects[i] = saved }
                 }
             }
         }
@@ -42,12 +48,16 @@ struct PortfolioManagerView: View {
         ScrollView {
             VStack(spacing: 14) {
                 ForEach(projects) { project in
-                    PortfolioCard(project: project)
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                Task { await delete(project) }
-                            } label: { Label("Delete", systemImage: "trash") }
-                        }
+                    Button { editing = project } label: {
+                        PortfolioCard(project: project)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button { editing = project } label: { Label("Edit", systemImage: "pencil") }
+                        Button(role: .destructive) {
+                            Task { await delete(project) }
+                        } label: { Label("Delete", systemImage: "trash") }
+                    }
                 }
             }
             .padding(.horizontal, 20)
@@ -148,20 +158,39 @@ struct PortfolioCard: View {
     }
 }
 
-// MARK: - Add project
+// MARK: - Create / edit project
 
-struct AddPortfolioSheet: View {
+/// One sheet for both adding and editing a portfolio project. Pass `project: nil`
+/// to create, or an existing project to edit it. `onSave` receives the created
+/// or updated project so the list can update in place.
+struct PortfolioEditorSheet: View {
     let businessId: String
-    let onCreate: (PortfolioProject) -> Void
+    let project: PortfolioProject?
+    let onSave: (PortfolioProject) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
-    @State private var description = ""
-    @State private var category = ""
-    @State private var costMin = ""
-    @State private var costMax = ""
-    @State private var weeks = ""
+    @State private var title: String
+    @State private var description: String
+    @State private var category: String
+    @State private var costMin: String
+    @State private var costMax: String
+    @State private var weeks: String
     @State private var isSaving = false
+    @State private var error: String?
+
+    private var isEditing: Bool { project != nil }
+
+    init(businessId: String, project: PortfolioProject?, onSave: @escaping (PortfolioProject) -> Void) {
+        self.businessId = businessId
+        self.project = project
+        self.onSave = onSave
+        _title = State(initialValue: project?.title ?? "")
+        _description = State(initialValue: project?.description ?? "")
+        _category = State(initialValue: project?.category ?? "")
+        _costMin = State(initialValue: project?.costMin.map { "\($0)" } ?? "")
+        _costMax = State(initialValue: project?.costMax.map { "\($0)" } ?? "")
+        _weeks = State(initialValue: project?.durationWeeks.map { "\($0)" } ?? "")
+    }
 
     var body: some View {
         NavigationStack {
@@ -186,15 +215,18 @@ struct AddPortfolioSheet: View {
                         Text("weeks").foregroundStyle(.secondary)
                     }
                 }
+                if let error {
+                    Section { Text(error).foregroundStyle(.red).font(.caption) }
+                }
             }
-            .navigationTitle("New Project")
+            .navigationTitle(isEditing ? "Edit Project" : "New Project")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     if isSaving { ProgressView() }
                     else {
-                        Button("Add") { Task { await save() } }
+                        Button(isEditing ? "Save" : "Add") { Task { await save() } }
                             .bold().disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
                 }
@@ -204,18 +236,30 @@ struct AddPortfolioSheet: View {
 
     private func save() async {
         isSaving = true
+        error = nil
         defer { isSaving = false }
-        if let project = try? await APIService.shared.createPortfolioProject(
-            businessId: businessId,
-            title: title,
-            description: description.isEmpty ? nil : description,
-            category: category.isEmpty ? nil : category,
-            costMin: Int(costMin.filter(\.isNumber)),
-            costMax: Int(costMax.filter(\.isNumber)),
-            durationWeeks: Int(weeks.filter(\.isNumber))
-        ) {
-            onCreate(project)
+        let desc = description.isEmpty ? nil : description
+        let cat = category.isEmpty ? nil : category
+        let lo = Int(costMin.filter(\.isNumber))
+        let hi = Int(costMax.filter(\.isNumber))
+        let wk = Int(weeks.filter(\.isNumber))
+        do {
+            let saved: PortfolioProject
+            if let project {
+                saved = try await APIService.shared.updatePortfolioProject(
+                    businessId: businessId, projectId: project.id,
+                    title: title, description: desc, category: cat,
+                    costMin: lo, costMax: hi, durationWeeks: wk)
+            } else {
+                saved = try await APIService.shared.createPortfolioProject(
+                    businessId: businessId,
+                    title: title, description: desc, category: cat,
+                    costMin: lo, costMax: hi, durationWeeks: wk)
+            }
+            onSave(saved)
             dismiss()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 }

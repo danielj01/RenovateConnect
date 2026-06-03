@@ -170,6 +170,8 @@ struct LeadDetailSheet: View {
     @State private var notes: String
     @State private var valueText: String
     @State private var isSaving = false
+    @State private var loadingThread = false
+    @State private var thread: Conversation?
 
     init(lead: Lead, onSave: @escaping (Lead) -> Void) {
         self.lead = lead
@@ -190,6 +192,18 @@ struct LeadDetailSheet: View {
                     if let phone = lead.conversation?.client?.phone, !phone.isEmpty {
                         LabeledContent("Phone", value: phone)
                     }
+                    LabeledContent("Received", value: Self.receivedText(lead.createdAt))
+
+                    Button {
+                        Task { await openThread() }
+                    } label: {
+                        HStack {
+                            Label("Message client", systemImage: "bubble.left.and.bubble.right.fill")
+                            Spacer()
+                            if loadingThread { ProgressView() }
+                        }
+                    }
+                    .disabled(lead.conversation == nil || loadingThread)
                 }
 
                 Section("Status") {
@@ -214,6 +228,9 @@ struct LeadDetailSheet: View {
             }
             .navigationTitle("Lead")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $thread) { conv in
+                MessagingView(conversation: conv)
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -224,6 +241,28 @@ struct LeadDetailSheet: View {
                 }
             }
         }
+    }
+
+    // Load the full conversation (MessagingView needs the object, not just an id)
+    // then push the chat thread.
+    private func openThread() async {
+        guard let id = lead.conversation?.id else { return }
+        loadingThread = true
+        defer { loadingThread = false }
+        thread = try? await APIService.shared.getConversation(id: id)
+    }
+
+    // "Today" / "Yesterday" / a medium date from the lead's ISO createdAt.
+    private static func receivedText(_ iso: String) -> String {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = parser.date(from: iso) ?? ISO8601DateFormatter().date(from: iso)
+        guard let date else { return "—" }
+        if Calendar.current.isDateInToday(date) { return "Today" }
+        if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
+        let out = DateFormatter()
+        out.dateStyle = .medium
+        return out.string(from: date)
     }
 
     private func save() async {

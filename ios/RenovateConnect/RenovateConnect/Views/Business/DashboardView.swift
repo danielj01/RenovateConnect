@@ -56,6 +56,7 @@ struct DashboardView: View {
 
     private func metricsGrid(_ s: DashboardStats) -> some View {
         LazyVGrid(columns: columns, spacing: 14) {
+            MetricCard(title: "Impressions", value: "\(s.searchImpressions)", icon: "magnifyingglass", tint: .teal)
             MetricCard(title: "Profile Views", value: "\(s.profileViews)", icon: "eye.fill", tint: .blue)
             MetricCard(title: "Total Leads", value: "\(s.totalLeads)", icon: "person.2.fill", tint: Theme.primary)
             MetricCard(title: "Conversion", value: "\(s.conversionRate)%", icon: "chart.line.uptrend.xyaxis", tint: .green)
