@@ -29,6 +29,9 @@ ios/**/*.xcarchive
 *.swp
 *.swo
 
+# AI assistant tooling (local-only)
+.claude/
+
 # Logs
 *.log
 npm-debug.log*
