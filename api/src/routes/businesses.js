@@ -36,7 +36,12 @@ router.get('/', async (req, res, next) => {
         take: parseInt(limit),
         // Promoted businesses first, then by rating
         orderBy: [{ isPromoted: 'desc' }, { averageRating: 'desc' }],
-        include: { reviews: { take: 3, orderBy: { createdAt: 'desc' } } },
+        include: {
+          reviews: { take: 3, orderBy: { createdAt: 'desc' } },
+          // One hero project (featured first) so list cards can render real
+          // project imagery rather than a bare logo.
+          portfolio: { take: 1, orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }] },
+        },
       }),
       db.business.count({ where }),
     ]);

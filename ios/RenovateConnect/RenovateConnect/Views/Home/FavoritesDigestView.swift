@@ -53,8 +53,8 @@ private struct DigestEntryCard: View {
                 // Header → tap through to the contractor's profile.
                 NavigationLink(destination: BusinessDetailView(businessId: entry.business.id)) {
                     HStack(spacing: 12) {
-                        InitialsAvatar(name: entry.business.companyName, size: 44)
-                            .clipShape(RoundedRectangle(cornerRadius: 11))
+                        BusinessAvatar(name: entry.business.companyName, logoUrl: entry.business.logoUrl,
+                                       size: 44, cornerRadius: 11)
 
                         VStack(alignment: .leading, spacing: 3) {
                             HStack(spacing: 6) {

@@ -68,6 +68,40 @@ struct InitialsAvatar: View {
     }
 }
 
+/// A contractor logo that renders the remote `logoUrl` when present and falls
+/// back to colored initials while loading or when no logo exists. Centralizes
+/// the AsyncImage/placeholder dance so every card shows logos consistently.
+struct BusinessAvatar: View {
+    let name: String
+    let logoUrl: String?
+    let size: CGFloat
+    var cornerRadius: CGFloat = 12
+
+    var body: some View {
+        Group {
+            if let logoUrl, !logoUrl.isEmpty, let url = URL(string: logoUrl) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .empty:
+                        ZStack {
+                            Theme.avatarColor(for: name).opacity(0.5)
+                            ProgressView().tint(.white)
+                        }
+                    default:
+                        InitialsAvatar(name: name, size: size)
+                    }
+                }
+            } else {
+                InitialsAvatar(name: name, size: size)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+    }
+}
+
 struct StarRating: View {
     let rating: Double
     let count: Int

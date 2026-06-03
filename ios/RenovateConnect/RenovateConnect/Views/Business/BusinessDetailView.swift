@@ -99,8 +99,8 @@ struct BusinessDetailView: View {
                 .frame(height: 220)
 
             VStack(alignment: .leading, spacing: 10) {
-                InitialsAvatar(name: biz.companyName, size: 72)
-                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                BusinessAvatar(name: biz.companyName, logoUrl: biz.logoUrl,
+                               size: 72, cornerRadius: 18)
                     .overlay(
                         RoundedRectangle(cornerRadius: 18)
                             .stroke(.white.opacity(0.4), lineWidth: 2)
@@ -584,8 +584,8 @@ struct ContactBusinessSheet: View {
 
                     // Business header card
                     HStack(spacing: 14) {
-                        InitialsAvatar(name: business.companyName, size: 52)
-                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                        BusinessAvatar(name: business.companyName, logoUrl: business.logoUrl,
+                                       size: 52, cornerRadius: 12)
                         VStack(alignment: .leading, spacing: 3) {
                             Text(business.companyName).font(.headline)
                             HStack(spacing: 3) {

@@ -219,48 +219,98 @@ struct BusinessSearchView: View {
 struct FeaturedBusinessCard: View {
     let business: Business
 
-    var body: some View {
-        RCCard {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .top) {
-                    InitialsAvatar(name: business.companyName, size: 46)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                    Spacer()
-                    FeaturedBadge()
-                }
+    private static let cardWidth: CGFloat = 230
+    private static let heroHeight: CGFloat = 132
 
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 4) {
-                        Text(business.companyName)
-                            .font(.subheadline.bold())
-                            .foregroundStyle(.primary)
-                            .lineLimit(2)
-                        if business.isVerified {
-                            Image(systemName: "checkmark.seal.fill")
-                                .font(.caption2)
-                                .foregroundStyle(VerifiedBadge.trust)
-                                .accessibilityLabel("Verified")
+    // Prefer a real project photo for the hero; fall back to the logo, then a
+    // brand gradient so the card never looks broken while data loads.
+    private var heroImageUrl: String? {
+        business.portfolio?.first(where: { !$0.imageUrls.isEmpty })?.imageUrls.first
+            ?? business.logoUrl
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            hero
+            details
+        }
+        .frame(width: Self.cardWidth, alignment: .leading)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .shadow(color: Theme.cardShadow, radius: 14, x: 0, y: 5)
+    }
+
+    private var hero: some View {
+        ZStack(alignment: .topLeading) {
+            Group {
+                if let heroImageUrl, let url = URL(string: heroImageUrl) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case .success(let image): image.resizable().scaledToFill()
+                        case .empty: Theme.primaryLight.overlay(ProgressView())
+                        default: brandGradient
                         }
                     }
-
-                    HStack(spacing: 3) {
-                        Image(systemName: "mappin.circle.fill")
-                            .foregroundStyle(Theme.primary.opacity(0.8))
-                            .font(.caption2)
-                        Text("\(business.city), \(business.state)")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
+                } else {
+                    brandGradient
                 }
+            }
+            .frame(width: Self.cardWidth, height: Self.heroHeight)
+            .clipped()
 
+            // Keep the Featured badge legible over any photo.
+            LinearGradient(colors: [.black.opacity(0.28), .clear],
+                           startPoint: .top, endPoint: .center)
+                .frame(width: Self.cardWidth, height: Self.heroHeight)
+                .allowsHitTesting(false)
+
+            FeaturedBadge().padding(10)
+        }
+    }
+
+    private var brandGradient: some View {
+        LinearGradient(colors: [Theme.primary, Theme.primaryDark],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+            .overlay(
+                Image(systemName: "building.2.fill")
+                    .font(.system(size: 34, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+            )
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 5) {
+                Text(business.companyName)
+                    .font(.subheadline.bold())
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                if business.isVerified {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.caption2)
+                        .foregroundStyle(VerifiedBadge.trust)
+                        .accessibilityLabel("Verified")
+                }
+            }
+
+            HStack(spacing: 3) {
+                Image(systemName: "mappin.circle.fill")
+                    .foregroundStyle(Theme.primary.opacity(0.8))
+                    .font(.caption2)
+                Text("\(business.city), \(business.state)")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            HStack {
                 StarRating(rating: business.averageRating, count: business.reviewCount)
-
+                Spacer()
                 if let spec = business.specialties.first {
                     SpecialtyTag(text: spec)
                 }
             }
-            .padding(14)
-            .frame(width: 185, alignment: .leading)
         }
+        .padding(12)
     }
 }
 
@@ -275,8 +325,8 @@ struct BusinessListCard: View {
         RCCard {
             VStack(spacing: 0) {
                 HStack(spacing: 14) {
-                    InitialsAvatar(name: business.companyName, size: 58)
-                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                    BusinessAvatar(name: business.companyName, logoUrl: business.logoUrl,
+                                   size: 58, cornerRadius: 14)
 
                     VStack(alignment: .leading, spacing: 5) {
                         HStack(alignment: .top) {

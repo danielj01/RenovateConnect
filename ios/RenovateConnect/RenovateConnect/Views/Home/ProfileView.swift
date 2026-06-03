@@ -141,8 +141,8 @@ struct ProfileView: View {
                                         }
 
                                         HStack(spacing: 14) {
-                                            InitialsAvatar(name: biz.companyName, size: 48)
-                                                .clipShape(RoundedRectangle(cornerRadius: 12))
+                                            BusinessAvatar(name: biz.companyName, logoUrl: biz.logoUrl,
+                                                           size: 48, cornerRadius: 12)
 
                                             VStack(alignment: .leading, spacing: 4) {
                                                 Text(biz.companyName).font(.subheadline.bold())

@@ -228,6 +228,19 @@ async function main() {
         await prisma.portfolioProject.createMany({
           data: portfolio.map(p => ({ ...p, businessId: business.id })),
         });
+      } else if (portfolio.length > 0) {
+        // Projects already exist (older seed) — backfill imageUrls on any that
+        // are missing them so cards can show real photos by title match.
+        for (const existing of business.portfolio) {
+          if (existing.imageUrls.length > 0) continue;
+          const match = portfolio.find(p => p.title === existing.title);
+          if (match?.imageUrls?.length) {
+            await prisma.portfolioProject.update({
+              where: { id: existing.id },
+              data: { imageUrls: match.imageUrls },
+            });
+          }
+        }
       }
     }
 
