@@ -93,26 +93,36 @@ struct NotificationCenterView: View {
         .onDisappear { Task { await activity.markAllRead() } }
     }
 
+    // Route each row off the server-computed `link` ({ screen, id }) instead of
+    // sniffing the raw id keys in `data`. Conversations hand off to the Messages
+    // tab; appointments/quotes/business push their own screens in this stack.
     @ViewBuilder
     private func row(for item: Activity) -> some View {
-        if let conversationId = item.data?.conversationId {
-            Button { openConversation(conversationId) } label: {
+        switch item.link?.screen {
+        case .conversation:
+            Button { openConversation(item.link!.id) } label: {
                 ActivityRow(item: item)
             }
             .buttonStyle(.plain)
-        } else if item.data?.appointmentId != nil {
+        case .appointment:
             NavigationLink {
                 AppointmentsView()
             } label: {
                 ActivityRow(item: item)
             }
-        } else if let businessId = item.data?.businessId {
+        case .quote:
             NavigationLink {
-                BusinessDetailView(businessId: businessId)
+                QuotesView()
             } label: {
                 ActivityRow(item: item)
             }
-        } else {
+        case .business:
+            NavigationLink {
+                BusinessDetailView(businessId: item.link!.id)
+            } label: {
+                ActivityRow(item: item)
+            }
+        case .other, .none:
             ActivityRow(item: item)
         }
     }

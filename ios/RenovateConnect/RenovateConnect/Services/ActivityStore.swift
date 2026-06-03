@@ -34,7 +34,8 @@ final class ActivityStore: ObservableObject {
         unreadCount = 0
         activities = activities.map {
             Activity(id: $0.id, type: $0.type, title: $0.title, body: $0.body,
-                     data: $0.data, readAt: $0.readAt ?? ISO8601DateFormatter().string(from: Date()),
+                     data: $0.data, link: $0.link,
+                     readAt: $0.readAt ?? ISO8601DateFormatter().string(from: Date()),
                      createdAt: $0.createdAt)
         }
     }

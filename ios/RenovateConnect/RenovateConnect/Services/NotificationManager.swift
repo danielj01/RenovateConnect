@@ -17,6 +17,10 @@ final class NotificationManager: NSObject, ObservableObject {
     /// Set when a push referencing a conversation is tapped (incl. cold start).
     /// The view tree observes this to switch tabs and open the thread, then clears it.
     @Published var pendingConversationId: String?
+    /// Set when any push (or in-app activity) is tapped — a normalized
+    /// destination the view tree routes on (conversation/appointment/quote/
+    /// business), then clears. Cold-start safe: the manager outlives launch.
+    @Published var pendingDeepLink: DeepLink?
 
     private let askedKey = "hasAskedPushPermission"
     private let tokenKey = "apnsDeviceToken"

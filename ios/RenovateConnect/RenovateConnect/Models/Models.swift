@@ -451,7 +451,50 @@ enum ActivityType: String, Codable {
 struct ActivityData: Codable {
     let conversationId: String?
     let appointmentId: String?
+    let quoteId: String?
     let businessId: String?
+}
+
+/// Normalized deep-link descriptor the API computes for each activity (and
+/// attaches to push payloads). Mirrors the backend `deepLinkFor` result: a
+/// single { screen, id } the client routes on directly, instead of sniffing the
+/// optional id keys inside `data`.
+struct DeepLink: Codable, Equatable, Identifiable {
+    enum Screen: String, Codable {
+        case conversation, appointment, quote, business
+        // Forward-compat: unknown server screens decode to `.other`.
+        case other
+
+        init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = Screen(rawValue: raw) ?? .other
+        }
+    }
+
+    let screen: Screen
+    let id: String
+
+    /// Build a link from a raw push `userInfo` blob, using the same key
+    /// priority as the backend (`conversationId` → `quoteId` → `appointmentId`
+    /// → `businessId`). Returns nil when nothing actionable is present.
+    init?(userInfo: [AnyHashable: Any]) {
+        if let id = userInfo["conversationId"] as? String {
+            self.screen = .conversation; self.id = id
+        } else if let id = userInfo["quoteId"] as? String {
+            self.screen = .quote; self.id = id
+        } else if let id = userInfo["appointmentId"] as? String {
+            self.screen = .appointment; self.id = id
+        } else if let id = userInfo["businessId"] as? String {
+            self.screen = .business; self.id = id
+        } else {
+            return nil
+        }
+    }
+
+    init(screen: Screen, id: String) {
+        self.screen = screen
+        self.id = id
+    }
 }
 
 struct Activity: Codable, Identifiable {
@@ -460,6 +503,7 @@ struct Activity: Codable, Identifiable {
     let title: String
     let body: String
     let data: ActivityData?
+    let link: DeepLink?
     let readAt: String?
     let createdAt: String
 

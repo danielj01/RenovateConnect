@@ -1,6 +1,6 @@
 const request = require('supertest');
 const app = require('../src/app');
-const { db, resetDb, createClient, createBusiness } = require('./helpers');
+const { db, resetDb, createClient, createBusiness, tokenFor } = require('./helpers');
 
 beforeEach(resetDb);
 afterAll(async () => { await db.$disconnect(); });
@@ -122,6 +122,60 @@ describe('Activity feed', () => {
 
     const bizUnread = await request(app).get('/activities/unread').set('Authorization', `Bearer ${bizToken}`);
     expect(bizUnread.body.count).toBe(1);
+  });
+
+  test('feed entries carry a normalized deep-link', async () => {
+    const { token: clientToken } = await createClient();
+    const { token: bizToken, user: owner } = await createBusiness();
+    const business = await db.business.findFirst({ where: { userId: owner.id } });
+
+    // A conversation lead (business) and an appointment request (business).
+    const conv = await request(app).post('/conversations').set('Authorization', `Bearer ${clientToken}`)
+      .send({ businessId: business.id, message: 'Hi' });
+    const appt = await request(app).post('/appointments').set('Authorization', `Bearer ${clientToken}`)
+      .send({ businessId: business.id, scheduledAt: future() });
+
+    const res = await request(app).get('/activities').set('Authorization', `Bearer ${bizToken}`);
+    const lead = res.body.find((a) => a.type === 'LEAD');
+    const apptAct = res.body.find((a) => a.type === 'APPOINTMENT');
+
+    expect(lead.link).toEqual({ screen: 'conversation', id: conv.body.id });
+    expect(apptAct.link).toEqual({ screen: 'appointment', id: appt.body.id });
+  });
+
+  test('a quote-request lead deep-links to the quote', async () => {
+    const { token: clientToken } = await createClient();
+    const { token: bizToken, business } = await createBusiness();
+
+    const quote = await request(app).post('/quotes').set('Authorization', `Bearer ${clientToken}`)
+      .send({ businessId: business.id, description: 'Kitchen' });
+
+    const res = await request(app).get('/activities').set('Authorization', `Bearer ${bizToken}`);
+    const lead = res.body.find((a) => a.type === 'LEAD');
+    expect(lead.link).toEqual({ screen: 'quote', id: quote.body.id });
+  });
+
+  test('a saved-search match deep-links to the business', async () => {
+    const { token: clientToken } = await createClient();
+    // Save a search, then create a matching business through the API route
+    // (that's the path that fires the new-contractor alert).
+    await request(app).post('/saved-searches').set('Authorization', `Bearer ${clientToken}`)
+      .send({ specialty: 'Kitchen' }).expect(201);
+
+    const owner = await db.user.create({
+      data: { email: `match_${Date.now()}@biz.com`, passwordHash: 'x', name: 'Owner', role: 'BUSINESS' },
+    });
+    const created = await request(app).post('/businesses')
+      .set('Authorization', `Bearer ${tokenFor(owner)}`)
+      .send({
+        companyName: 'Bright Kitchens', description: 'We remodel kitchens.',
+        city: 'Austin', state: 'TX', zipCode: '78701', specialties: ['Kitchen'],
+      });
+    expect(created.status).toBe(201);
+
+    const res = await request(app).get('/activities').set('Authorization', `Bearer ${clientToken}`);
+    const match = res.body.find((a) => a.type === 'SAVED_SEARCH');
+    expect(match.link).toEqual({ screen: 'business', id: created.body.id });
   });
 
   test('requires authentication', async () => {

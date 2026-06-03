@@ -35,17 +35,18 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         [.banner, .badge, .sound]
     }
 
-    // Deep link on tap — stash the conversation id on the (always-alive) manager
-    // so the SwiftUI tree can switch tabs and open the thread, even on cold start.
+    // Deep link on tap — resolve the payload to a normalized destination and
+    // stash it on the (always-alive) manager so the SwiftUI tree can route,
+    // even on cold start. Falls back to the conversation-only path so older
+    // payloads (and the Messages tab handoff) keep working.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
         let info = response.notification.request.content.userInfo
-        if let conversationId = info["conversationId"] as? String {
-            await MainActor.run {
-                NotificationManager.shared.pendingConversationId = conversationId
-            }
+        guard let link = DeepLink(userInfo: info) else { return }
+        await MainActor.run {
+            NotificationManager.shared.pendingDeepLink = link
         }
     }
 }

@@ -12,6 +12,10 @@ struct MainTabView: View {
     // First-run welcome flow; flipped true once the user finishes or skips.
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
+    // A tapped push/activity that targets a pushable screen (appointment/quote/
+    // business) is presented as a sheet; conversations route via the tab bar.
+    @State private var deepLinkSheet: DeepLink?
+
     // Messages sits at index 3 in both the client and business tab bars.
     private let messagesTab = TabRouter.messages
 
@@ -42,12 +46,27 @@ struct MainTabView: View {
             activity.startPolling()
             // Homeowners can save contractors — preload their list for heart state.
             if !auth.isBusiness { await favorites.refresh() }
-            // Cold start from a tapped push: jump straight to Messages.
+            // Cold start from a tapped push: jump straight to Messages…
             if notifications.pendingConversationId != nil { router.selection = messagesTab }
+            // …or route whatever normalized deep link launch left pending.
+            routeDeepLink(notifications.pendingDeepLink)
         }
         .onDisappear { inbox.stopPolling(); activity.stopPolling() }
         .onChange(of: notifications.pendingConversationId) { _, newValue in
             if newValue != nil { router.selection = messagesTab }
+        }
+        .onChange(of: notifications.pendingDeepLink) { _, link in
+            routeDeepLink(link)
+        }
+        .sheet(item: $deepLinkSheet) { link in
+            NavigationStack { deepLinkDestination(link) }
+                .environmentObject(inbox)
+                .environmentObject(favorites)
+                .environmentObject(chat)
+                .environmentObject(router)
+                .environmentObject(activity)
+                .environmentObject(notifications)
+                .environmentObject(auth)
         }
         .sheet(isPresented: $notifications.showPriming) {
             PushPrimingSheet()
@@ -58,6 +77,33 @@ struct MainTabView: View {
             OnboardingView(role: auth.currentUser?.role ?? .client) {
                 hasCompletedOnboarding = true
             }
+        }
+    }
+
+    /// Route a normalized deep link: conversations hand off to the Messages tab
+    /// (ConversationsView opens the thread); everything else is presented as a
+    /// sheet. Clears the pending link so re-taps re-fire.
+    private func routeDeepLink(_ link: DeepLink?) {
+        guard let link else { return }
+        switch link.screen {
+        case .conversation:
+            notifications.pendingConversationId = link.id
+            router.selection = messagesTab
+        case .appointment, .quote, .business:
+            deepLinkSheet = link
+        case .other:
+            break
+        }
+        notifications.pendingDeepLink = nil
+    }
+
+    @ViewBuilder
+    private func deepLinkDestination(_ link: DeepLink) -> some View {
+        switch link.screen {
+        case .business:     BusinessDetailView(businessId: link.id)
+        case .appointment:  AppointmentsView()
+        case .quote:        QuotesView()
+        case .conversation, .other: EmptyView()
         }
     }
 

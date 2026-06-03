@@ -1,8 +1,11 @@
 const router = require('express').Router();
 const db = require('../services/db');
 const { authMiddleware } = require('../middleware/auth');
+const { deepLinkFor } = require('../services/deepLink');
 
-// GET /activities — the current user's in-app feed, newest first.
+// GET /activities — the current user's in-app feed, newest first. Each entry
+// carries a normalized `link` ({ screen, id }) so the client can route on tap
+// without inspecting the raw id keys inside `data`.
 router.get('/', authMiddleware, async (req, res, next) => {
   try {
     const activities = await db.activity.findMany({
@@ -10,7 +13,7 @@ router.get('/', authMiddleware, async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
-    res.json(activities);
+    res.json(activities.map((a) => ({ ...a, link: deepLinkFor(a.type, a.data) })));
   } catch (err) {
     next(err);
   }
