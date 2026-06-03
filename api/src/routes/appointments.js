@@ -3,6 +3,7 @@ const { z } = require('zod');
 const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { sendPush } = require('../services/push');
+const { recordActivity } = require('../services/activity');
 
 // Include shapes shared across responses so both parties see who/what is booked.
 const appointmentInclude = {
@@ -37,11 +38,18 @@ router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) =
     // Notify the business owner of the request — fire and forget.
     if (business.userId) {
       const client = await db.user.findUnique({ where: { id: req.user.id }, select: { name: true } });
+      const body = `${client?.name || 'A homeowner'} requested a time with you.`;
       sendPush(business.userId, {
         title: 'New appointment request 📅',
-        body: `${client?.name || 'A homeowner'} requested a time with you.`,
+        body,
         data: { type: 'appointment', appointmentId: appointment.id },
       }).catch(console.error);
+      await recordActivity(business.userId, {
+        type: 'APPOINTMENT',
+        title: 'New appointment request',
+        body,
+        data: { appointmentId: appointment.id },
+      });
     }
 
     res.status(201).json(appointment);
@@ -103,11 +111,18 @@ router.patch('/:id', authMiddleware, async (req, res, next) => {
       const actor = isOwner
         ? (appointment.business.companyName || 'The contractor')
         : (await db.user.findUnique({ where: { id: req.user.id }, select: { name: true } }))?.name || 'The homeowner';
+      const body = `${actor} ${verb} the appointment.`;
       sendPush(recipientId, {
         title: 'Appointment update',
-        body: `${actor} ${verb} the appointment.`,
+        body,
         data: { type: 'appointment', appointmentId: updated.id },
       }).catch(console.error);
+      await recordActivity(recipientId, {
+        type: 'APPOINTMENT',
+        title: 'Appointment update',
+        body,
+        data: { appointmentId: updated.id },
+      });
     }
 
     res.json(updated);

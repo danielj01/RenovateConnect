@@ -7,6 +7,7 @@ struct MainTabView: View {
     @StateObject private var favorites = FavoritesStore()
     @StateObject private var chat = ChatStore()
     @StateObject private var router = TabRouter()
+    @StateObject private var activity = ActivityStore()
 
     // First-run welcome flow; flipped true once the user finishes or skips.
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
@@ -35,14 +36,16 @@ struct MainTabView: View {
         .environmentObject(favorites)
         .environmentObject(chat)
         .environmentObject(router)
+        .environmentObject(activity)
         .task {
             inbox.startPolling()
+            activity.startPolling()
             // Homeowners can save contractors — preload their list for heart state.
             if !auth.isBusiness { await favorites.refresh() }
             // Cold start from a tapped push: jump straight to Messages.
             if notifications.pendingConversationId != nil { router.selection = messagesTab }
         }
-        .onDisappear { inbox.stopPolling() }
+        .onDisappear { inbox.stopPolling(); activity.stopPolling() }
         .onChange(of: notifications.pendingConversationId) { _, newValue in
             if newValue != nil { router.selection = messagesTab }
         }

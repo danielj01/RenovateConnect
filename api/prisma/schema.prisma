@@ -27,6 +27,12 @@ enum AppointmentStatus {
   CANCELLED
 }
 
+enum ActivityType {
+  LEAD
+  MESSAGE
+  APPOINTMENT
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -48,6 +54,7 @@ model User {
   deviceTokens     DeviceToken[]
   favorites        Favorite[]
   appointments     Appointment[]  @relation("ClientAppointments")
+  activities       Activity[]
 }
 
 model DeviceToken {
@@ -175,6 +182,24 @@ model Lead {
 
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   business       Business     @relation(fields: [businessId], references: [id])
+}
+
+// An in-app activity-feed entry for a recipient. Written alongside every push
+// (new lead, message, appointment request/update) so users have a durable
+// "what happened while I was away" inbox, not just ephemeral notifications.
+model Activity {
+  id        String       @id @default(cuid())
+  userId    String
+  type      ActivityType
+  title     String
+  body      String
+  data      Json?        // deep-link payload, e.g. { conversationId } or { appointmentId }
+  readAt    DateTime?
+  createdAt DateTime     @default(now())
+
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // A homeowner requesting a time with a contractor. The business confirms or

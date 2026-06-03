@@ -4,6 +4,7 @@ const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { createLeadCharge } = require('../services/stripe');
 const { sendPush } = require('../services/push');
+const { recordActivity } = require('../services/activity');
 
 // The timestamp a participant last opened a conversation. CLIENT and BUSINESS
 // each track their own "last read" so unread counts are per-viewer.
@@ -126,11 +127,18 @@ router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) =
       // Notify the business owner of a new lead — fire and forget.
       if (business?.userId) {
         const client = await db.user.findUnique({ where: { id: req.user.id }, select: { name: true } });
+        const body = `${client?.name || 'A homeowner'} is interested in your services.`;
         sendPush(business.userId, {
           title: 'New lead 🎉',
-          body: `${client?.name || 'A homeowner'} is interested in your services.`,
+          body,
           data: { type: 'lead', conversationId: conversation.id },
         }).catch(console.error);
+        await recordActivity(business.userId, {
+          type: 'LEAD',
+          title: 'New lead',
+          body,
+          data: { conversationId: conversation.id },
+        });
       }
     }
 
@@ -219,6 +227,12 @@ router.post('/:id/messages', authMiddleware, async (req, res, next) => {
         body,
         data: { type: 'message', conversationId: conv.id },
       }).catch(console.error);
+      await recordActivity(recipientId, {
+        type: 'MESSAGE',
+        title: `New message from ${title}`,
+        body,
+        data: { conversationId: conv.id },
+      });
     }
 
     res.status(201).json(message);

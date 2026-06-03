@@ -111,6 +111,9 @@ struct BusinessSearchView: View {
             .onChange(of: query) { if query.isEmpty { Task { await search() } } }
             .onChange(of: selectedSpecialty) { Task { await search() } }
             .navigationTitle("Explore")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { ActivityBellButton() }
+            }
             .task { await search() }
         }
     }

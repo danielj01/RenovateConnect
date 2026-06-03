@@ -276,6 +276,24 @@ final class APIService {
         try await request("appointments/\(id)", method: "PATCH", body: ["status": status.rawValue])
     }
 
+    // Activity feed
+    func myActivities() async throws -> [Activity] {
+        try await request("activities")
+    }
+
+    func activitiesUnreadCount() async throws -> Int {
+        struct Resp: Decodable { let count: Int }
+        let resp: Resp = try await request("activities/unread")
+        return resp.count
+    }
+
+    @discardableResult
+    func markActivitiesRead() async throws -> Int {
+        struct Resp: Decodable { let updated: Int }
+        let resp: Resp = try await request("activities/read", method: "POST")
+        return resp.updated
+    }
+
     // AI Chat
     func chat(message: String, history: [[String: String]]) async throws -> (reply: String, mentioned: [BusinessRef]) {
         struct Body: Encodable { let message: String; let history: [[String: String]] }

@@ -259,6 +259,48 @@ struct AppointmentClient: Codable {
     let avatarUrl: String?
 }
 
+// MARK: - Activity feed
+
+enum ActivityType: String, Codable {
+    case lead = "LEAD"
+    case message = "MESSAGE"
+    case appointment = "APPOINTMENT"
+    // Future-proof: unknown server types decode to `.other` rather than failing.
+    case other
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = ActivityType(rawValue: raw) ?? .other
+    }
+
+    var systemImage: String {
+        switch self {
+        case .lead: return "person.2.fill"
+        case .message: return "message.fill"
+        case .appointment: return "calendar"
+        case .other: return "bell.fill"
+        }
+    }
+}
+
+/// Deep-link payload attached to an activity (whichever key applies).
+struct ActivityData: Codable {
+    let conversationId: String?
+    let appointmentId: String?
+}
+
+struct Activity: Codable, Identifiable {
+    let id: String
+    let type: ActivityType
+    let title: String
+    let body: String
+    let data: ActivityData?
+    let readAt: String?
+    let createdAt: String
+
+    var isUnread: Bool { readAt == nil }
+}
+
 struct DashboardStats: Codable {
     let profileViews: Int
     let averageRating: Double

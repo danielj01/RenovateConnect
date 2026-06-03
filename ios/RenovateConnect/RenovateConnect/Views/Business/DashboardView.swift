@@ -30,6 +30,9 @@ struct DashboardView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Dashboard")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { ActivityBellButton() }
+            }
             .task { await load() }
             .refreshable { await load() }
         }
