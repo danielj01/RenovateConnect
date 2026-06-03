@@ -101,7 +101,7 @@ struct LoginView: View {
                             InputField(icon: "envelope", placeholder: "Email", text: $email)
                                 .textContentType(.emailAddress)
                                 .keyboardType(.emailAddress)
-                                .autocapitalization(.none)
+                                .textInputAutocapitalization(.never)
 
                             InputField(icon: "lock", placeholder: "Password", text: $password, isSecure: true)
                                 .textContentType(.password)

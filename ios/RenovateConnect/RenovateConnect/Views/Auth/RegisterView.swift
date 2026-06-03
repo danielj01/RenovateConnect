@@ -13,7 +13,7 @@ struct RegisterView: View {
             Form {
                 Section("Your details") {
                     TextField("Full name", text: $name)
-                    TextField("Email", text: $email).keyboardType(.emailAddress).autocapitalization(.none)
+                    TextField("Email", text: $email).keyboardType(.emailAddress).textInputAutocapitalization(.never)
                     SecureField("Password (8+ chars)", text: $password)
                 }
                 Section("I am a…") {
