@@ -51,13 +51,13 @@ describe('Quote requests — creation', () => {
     expect(acts[0].data.quoteId).toBeTruthy();
   });
 
-  test('description is required (validation → 500)', async () => {
+  test('description is required (validation → 400)', async () => {
     const { token } = await createClient();
     const { business } = await createBusiness();
     const res = await request(app).post('/quotes')
       .set('Authorization', `Bearer ${token}`)
       .send({ businessId: business.id, description: '' });
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
   });
 
   test('a request against a non-existent business returns 404', async () => {

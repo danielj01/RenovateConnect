@@ -131,22 +131,21 @@ describe('Business hours — CRUD', () => {
     expect(res.status).toBe(422);
   });
 
-  // Zod validation errors surface as 500 by the codebase convention (the global
-  // handler only maps err.status, and ZodError has none).
-  test('closeMinute must be after openMinute (validation → 500)', async () => {
+  // Zod validation failures are mapped to a 400 by the global error handler.
+  test('closeMinute must be after openMinute (validation → 400)', async () => {
     const { token, business } = await createBusiness();
     const res = await request(app).put(`/businesses/${business.id}/hours`)
       .set('Authorization', `Bearer ${token}`)
       .send({ hours: [{ dayOfWeek: 1, openMinute: 1020, closeMinute: 540 }] });
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
   });
 
-  test('out-of-range minutes are rejected (validation → 500)', async () => {
+  test('out-of-range minutes are rejected (validation → 400)', async () => {
     const { token, business } = await createBusiness();
     const res = await request(app).put(`/businesses/${business.id}/hours`)
       .set('Authorization', `Bearer ${token}`)
       .send({ hours: [{ dayOfWeek: 1, openMinute: -1, closeMinute: 99999 }] });
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
   });
 
   test('business detail embeds hours', async () => {

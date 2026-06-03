@@ -52,6 +52,16 @@ app.use('/quotes', quoteRoutes);
 app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.use((err, _req, res, _next) => {
+  // Zod validation failures are client errors — surface a readable 400 instead
+  // of dumping the raw issues array as a 500.
+  if (err && err.name === 'ZodError') {
+    const issue = Array.isArray(err.issues) ? err.issues[0] : undefined;
+    const field = issue && Array.isArray(issue.path) ? issue.path.join('.') : '';
+    const message = issue
+      ? (field ? `${issue.message} (${field})` : issue.message)
+      : 'Invalid request';
+    return res.status(400).json({ error: message });
+  }
   console.error(err);
   const status = err.status || 500;
   res.status(status).json({ error: err.message || 'Internal server error' });

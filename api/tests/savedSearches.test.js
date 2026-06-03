@@ -27,7 +27,7 @@ describe('Saved searches — CRUD', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ name: 'Empty' });
     // zod refine throws -> error handler (codebase convention)
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
   });
 
   test('create, list, and delete a saved search', async () => {

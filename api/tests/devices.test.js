@@ -43,7 +43,7 @@ describe('Device token registration', () => {
   test('rejects registration without a token field', async () => {
     const { token } = await createClient();
     const res = await request(app).post('/devices').set('Authorization', `Bearer ${token}`).send({});
-    expect(res.status).toBe(500); // zod parse error → error handler
+    expect(res.status).toBe(400); // zod validation -> 400
   });
 
   test('requires authentication', async () => {

@@ -52,7 +52,7 @@ describe('Portfolio', () => {
       .post(`/businesses/${business.id}/portfolio`)
       .set('Authorization', `Bearer ${token}`)
       .send({ category: 'Kitchen' });
-    expect(res.status).toBe(500); // zod parse throws -> error handler
+    expect(res.status).toBe(400); // zod validation -> 400
   });
 
   test('public can list projects, featured first', async () => {

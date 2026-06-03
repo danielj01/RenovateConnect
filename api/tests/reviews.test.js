@@ -106,7 +106,7 @@ describe('Reviews', () => {
       .post('/reviews')
       .set('Authorization', `Bearer ${token}`)
       .send({ businessId: business.id, rating: 6 });
-    expect(res.status).toBe(500); // zod parse throws -> error handler (codebase convention)
+    expect(res.status).toBe(400); // zod validation -> 400
   });
 
   test('a business owner cannot post reviews', async () => {
@@ -291,7 +291,7 @@ describe('Review responses', () => {
       .set('Authorization', `Bearer ${bizToken}`)
       .send({ response: '' });
     // zod parse throws -> error handler (codebase convention)
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(400);
   });
 
   test('the business can delete its response', async () => {

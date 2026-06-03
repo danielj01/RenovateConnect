@@ -95,6 +95,6 @@ describe('Business verification (trust badge)', () => {
     const { token } = await createAdmin();
     const res = await request(app).patch(`/businesses/${business.id}/verify`)
       .set('Authorization', `Bearer ${token}`).send({});
-    expect(res.status).toBe(500); // zod parse error → error handler
+    expect(res.status).toBe(400); // zod validation -> 400
   });
 });

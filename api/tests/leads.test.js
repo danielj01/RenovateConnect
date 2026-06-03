@@ -76,7 +76,7 @@ describe('Leads CRM', () => {
       .patch(`/leads/${lead.id}`)
       .set('Authorization', `Bearer ${token}`)
       .send({ status: 'BOGUS' });
-    expect(res.status).toBe(500); // zod throws
+    expect(res.status).toBe(400); // zod validation -> 400
   });
 
   test('clients are forbidden from the leads API', async () => {

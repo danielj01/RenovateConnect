@@ -17,6 +17,7 @@ final class AuthStore: ObservableObject {
 
     func login(email: String, password: String) async {
         isLoading = true
+        error = nil
         defer { isLoading = false }
         do {
             let resp = try await APIService.shared.login(email: email, password: password)
@@ -24,12 +25,13 @@ final class AuthStore: ObservableObject {
             currentUser = resp.user
             await loadMe() // hydrate full profile (includes linked business)
         } catch {
-            self.error = error.localizedDescription
+            self.error = Self.signInMessage(for: error)
         }
     }
 
     func register(email: String, password: String, name: String, role: UserRole) async {
         isLoading = true
+        error = nil
         defer { isLoading = false }
         do {
             let resp = try await APIService.shared.register(email: email, password: password, name: name, role: role)
@@ -37,7 +39,7 @@ final class AuthStore: ObservableObject {
             currentUser = resp.user
             await loadMe()
         } catch {
-            self.error = error.localizedDescription
+            self.error = Self.registerMessage(for: error)
         }
     }
 
@@ -55,7 +57,42 @@ final class AuthStore: ObservableObject {
             UserDefaults.standard.set(resp.token, forKey: "authToken")
             currentUser = resp.user
         } catch {
-            self.error = error.localizedDescription
+            self.error = "We couldn't sign you in with Apple. Please try again."
+        }
+    }
+
+    // MARK: - Friendly error messages
+
+    /// Turn a raw API error into a short, human sign-in message. We deliberately
+    /// don't reveal whether it was the email or the password that was wrong.
+    private static func signInMessage(for error: Error) -> String {
+        switch error {
+        case APIError.unauthorized:
+            return "Incorrect email or password. Please try again."
+        case APIError.requestFailed(let code, _):
+            switch code {
+            case 400: return "Please enter a valid email address and password."
+            case 401: return "Incorrect email or password. Please try again."
+            case 429: return "Too many attempts. Please wait a moment and try again."
+            default:  return "We couldn't sign you in. Please try again."
+            }
+        default:
+            return "We couldn't sign you in. Please check your connection and try again."
+        }
+    }
+
+    /// Account-creation errors. The server now returns readable 400 validation
+    /// messages (e.g. password length), so we surface those directly.
+    private static func registerMessage(for error: Error) -> String {
+        switch error {
+        case APIError.requestFailed(let code, let message):
+            switch code {
+            case 409: return "That email is already in use. Try signing in instead."
+            case 400: return message
+            default:  return "We couldn't create your account. Please try again."
+            }
+        default:
+            return "We couldn't create your account. Please check your connection and try again."
         }
     }
 
