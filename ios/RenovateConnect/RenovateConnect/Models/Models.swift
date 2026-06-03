@@ -213,6 +213,52 @@ struct LeadClient: Codable {
     let phone: String?
 }
 
+// MARK: - Appointments
+
+enum AppointmentStatus: String, Codable, CaseIterable, Identifiable {
+    case requested = "REQUESTED"
+    case confirmed = "CONFIRMED"
+    case declined = "DECLINED"
+    case cancelled = "CANCELLED"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .requested: return "Requested"
+        case .confirmed: return "Confirmed"
+        case .declined: return "Declined"
+        case .cancelled: return "Cancelled"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .requested: return "clock"
+        case .confirmed: return "checkmark.circle.fill"
+        case .declined: return "xmark.circle.fill"
+        case .cancelled: return "slash.circle.fill"
+        }
+    }
+}
+
+struct Appointment: Codable, Identifiable {
+    let id: String
+    let scheduledAt: String
+    let durationMin: Int
+    let note: String?
+    var status: AppointmentStatus
+    let createdAt: String
+    let business: BusinessSummary?
+    let client: AppointmentClient?
+}
+
+struct AppointmentClient: Codable {
+    let id: String
+    let name: String
+    let avatarUrl: String?
+}
+
 struct DashboardStats: Codable {
     let profileViews: Int
     let averageRating: Double

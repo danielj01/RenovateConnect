@@ -255,6 +255,27 @@ final class APIService {
         try await requestNoContent("favorites/\(businessId)", method: "DELETE")
     }
 
+    // Appointments
+    func myAppointments() async throws -> [Appointment] {
+        try await request("appointments")
+    }
+
+    func requestAppointment(businessId: String, scheduledAt: Date, durationMin: Int? = nil, note: String? = nil) async throws -> Appointment {
+        struct Body: Encodable {
+            let businessId: String
+            let scheduledAt: String
+            let durationMin: Int?
+            let note: String?
+        }
+        let iso = ISO8601DateFormatter().string(from: scheduledAt)
+        return try await request("appointments", method: "POST",
+                                 body: Body(businessId: businessId, scheduledAt: iso, durationMin: durationMin, note: note))
+    }
+
+    func updateAppointment(id: String, status: AppointmentStatus) async throws -> Appointment {
+        try await request("appointments/\(id)", method: "PATCH", body: ["status": status.rawValue])
+    }
+
     // AI Chat
     func chat(message: String, history: [[String: String]]) async throws -> (reply: String, mentioned: [BusinessRef]) {
         struct Body: Encodable { let message: String; let history: [[String: String]] }

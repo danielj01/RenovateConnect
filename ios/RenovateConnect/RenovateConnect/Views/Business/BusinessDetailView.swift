@@ -5,6 +5,7 @@ struct BusinessDetailView: View {
     @State private var business: Business?
     @State private var isLoading = true
     @State private var showContact = false
+    @State private var showBooking = false
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var favorites: FavoritesStore
 
@@ -30,6 +31,11 @@ struct BusinessDetailView: View {
                     if let biz = business {
                         ContactBusinessSheet(business: biz)
                             .environmentObject(auth)
+                    }
+                }
+                .sheet(isPresented: $showBooking) {
+                    if let biz = business {
+                        BookAppointmentSheet(business: biz)
                     }
                 }
             }
@@ -237,7 +243,7 @@ struct BusinessDetailView: View {
 
     @ViewBuilder
     private func contactButton(_ biz: Business) -> some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 10) {
             Divider()
             Button {
                 showContact = true
@@ -251,7 +257,20 @@ struct BusinessDetailView: View {
             .tint(Theme.primary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 20)
-            .padding(.vertical, 12)
+
+            Button {
+                showBooking = true
+            } label: {
+                Label("Request an appointment", systemImage: "calendar.badge.plus")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+            }
+            .buttonStyle(.bordered)
+            .tint(Theme.primary)
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
         }
         .background(.ultraThinMaterial)
     }

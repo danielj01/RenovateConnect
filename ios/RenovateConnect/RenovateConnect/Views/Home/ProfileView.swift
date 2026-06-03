@@ -72,6 +72,32 @@ struct ProfileView: View {
                             .padding(.horizontal, 16)
                         }
 
+                        // Appointments hub — both roles: homeowners track requests,
+                        // contractors manage incoming bookings.
+                        NavigationLink {
+                            AppointmentsView()
+                        } label: {
+                            RCCard {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "calendar")
+                                        .foregroundStyle(Theme.primary).frame(width: 28)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Appointments").font(.subheadline).foregroundStyle(.primary)
+                                        Text(user.role == .client
+                                             ? "Times you've requested with contractors"
+                                             : "Requests from homeowners")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                .padding(16)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
+
                         // Business card if applicable
                         if let biz = user.business {
                             RCCard {

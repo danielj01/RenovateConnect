@@ -14,6 +14,7 @@ const advertisingRoutes = require('./routes/advertising');
 const webhookRoutes = require('./routes/webhooks');
 const deviceRoutes = require('./routes/devices');
 const favoriteRoutes = require('./routes/favorites');
+const appointmentRoutes = require('./routes/appointments');
 
 const app = express();
 
@@ -38,6 +39,7 @@ app.use('/leads', leadRoutes);
 app.use('/advertising', advertisingRoutes);
 app.use('/devices', deviceRoutes);
 app.use('/favorites', favoriteRoutes);
+app.use('/appointments', appointmentRoutes);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 

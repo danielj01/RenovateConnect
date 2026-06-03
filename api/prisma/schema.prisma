@@ -20,6 +20,13 @@ enum LeadStatus {
   CLOSED
 }
 
+enum AppointmentStatus {
+  REQUESTED
+  CONFIRMED
+  DECLINED
+  CANCELLED
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -40,6 +47,7 @@ model User {
   estimations      Estimation[]
   deviceTokens     DeviceToken[]
   favorites        Favorite[]
+  appointments     Appointment[]  @relation("ClientAppointments")
 }
 
 model DeviceToken {
@@ -104,6 +112,7 @@ model Business {
   reviews         Review[]
   portfolio       PortfolioProject[]
   favoritedBy     Favorite[]
+  appointments    Appointment[]
 }
 
 // A homeowner saving a contractor to revisit later ("My Projects" hub).
@@ -166,6 +175,26 @@ model Lead {
 
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   business       Business     @relation(fields: [businessId], references: [id])
+}
+
+// A homeowner requesting a time with a contractor. The business confirms or
+// declines; either party can cancel. Status drives both sides' appointment lists.
+model Appointment {
+  id          String            @id @default(cuid())
+  clientId    String
+  businessId  String
+  scheduledAt DateTime
+  durationMin Int               @default(60)
+  note        String?
+  status      AppointmentStatus @default(REQUESTED)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  client      User              @relation("ClientAppointments", fields: [clientId], references: [id], onDelete: Cascade)
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([businessId])
 }
 
 model PortfolioProject {
