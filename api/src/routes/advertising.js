@@ -1,9 +1,12 @@
 const router = require('express').Router();
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const db = require('../services/db');
-const { createOrRetrieveCustomer, createPromotedSubscription, cancelSubscription } = require('../services/stripe');
+const { createOrRetrieveCustomer, createSubscriptionCheckoutSession, cancelSubscription } = require('../services/stripe');
 
-// POST /advertising/subscribe — business subscribes to promoted listing
+// POST /advertising/subscribe — start hosted Checkout for the promoted listing.
+// Returns a Stripe-hosted URL the app opens in a web auth session; Stripe
+// collects the card and starts the subscription, and the webhook flips
+// isPromoted once the first invoice is paid.
 router.post('/subscribe', authMiddleware, requireRole('BUSINESS'), async (req, res, next) => {
   try {
     const user = await db.user.findUnique({ where: { id: req.user.id } });
@@ -11,19 +14,19 @@ router.post('/subscribe', authMiddleware, requireRole('BUSINESS'), async (req, r
     if (!business) return res.status(404).json({ error: 'No business profile found' });
     if (business.isPromoted) return res.status(409).json({ error: 'Already subscribed' });
 
-    const customer = await createOrRetrieveCustomer(user.email, user.name);
-    const subscription = await createPromotedSubscription(customer.id);
+    // Reuse an existing Stripe customer so cards/leads stay on one record.
+    let customerId = business.stripeCustomerId;
+    if (!customerId) {
+      const customer = await createOrRetrieveCustomer(user.email, user.name);
+      customerId = customer.id;
+      await db.business.update({
+        where: { id: business.id },
+        data: { stripeCustomerId: customerId },
+      });
+    }
 
-    // Store Stripe IDs; isPromoted flips when webhook confirms payment
-    await db.business.update({
-      where: { id: business.id },
-      data: { stripeCustomerId: customer.id, stripeSubId: subscription.id },
-    });
-
-    res.json({
-      subscriptionId: subscription.id,
-      clientSecret: subscription.latest_invoice?.payment_intent?.client_secret,
-    });
+    const session = await createSubscriptionCheckoutSession(customerId);
+    res.json({ url: session.url });
   } catch (err) {
     next(err);
   }

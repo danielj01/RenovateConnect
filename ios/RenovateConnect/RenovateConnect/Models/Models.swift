@@ -585,6 +585,23 @@ struct DashboardStats: Codable {
     let wonValue: Int
 }
 
+// Billing dashboard payload — the business's saved card, promoted-plan state,
+// and this month's accrued (not-yet-invoiced) lead fees. Mirrors GET /billing/summary.
+struct BillingSummary: Codable {
+    let isPromoted: Bool
+    let promotedUntil: String?
+    let card: CardInfo?
+    let hasPaymentMethod: Bool
+    let leadFeeCents: Int
+    let unbilledLeads: Int
+    let unbilledAmountCents: Int
+
+    struct CardInfo: Codable {
+        let brand: String
+        let last4: String
+    }
+}
+
 struct LeadsByStatus: Codable {
     let NEW: Int
     let CONTACTED: Int

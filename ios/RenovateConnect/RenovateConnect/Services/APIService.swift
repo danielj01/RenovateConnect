@@ -468,6 +468,35 @@ final class APIService {
         try await request("reviews/\(id)/response", method: "DELETE")
     }
 
+    // MARK: - Billing
+
+    /// What the business owes and how it'll be paid (card + accrued lead fees).
+    func billingSummary() async throws -> BillingSummary {
+        try await request("billing/summary")
+    }
+
+    /// Start a hosted Stripe Checkout (setup mode) to save a card on file.
+    /// Returns the Stripe-hosted URL to open in a web session.
+    func billingSetupCardURL() async throws -> URL {
+        struct Resp: Decodable { let url: String }
+        let resp: Resp = try await request("billing/setup-card", method: "POST")
+        guard let url = URL(string: resp.url) else { throw APIError.invalidURL }
+        return url
+    }
+
+    /// Start hosted Checkout (subscription mode) for the promoted-listing plan.
+    func promotedCheckoutURL() async throws -> URL {
+        struct Resp: Decodable { let url: String }
+        let resp: Resp = try await request("advertising/subscribe", method: "POST")
+        guard let url = URL(string: resp.url) else { throw APIError.invalidURL }
+        return url
+    }
+
+    /// Cancel the promoted-listing subscription.
+    func cancelPromoted() async throws {
+        try await requestNoContent("advertising/subscribe", method: "DELETE")
+    }
+
     // AI Chat
     func chat(message: String, history: [[String: String]]) async throws -> (reply: String, mentioned: [BusinessRef]) {
         struct Body: Encodable { let message: String; let history: [[String: String]] }

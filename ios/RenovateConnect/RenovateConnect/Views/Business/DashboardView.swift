@@ -96,23 +96,31 @@ struct DashboardView: View {
     }
 
     private func promoCard(_ s: DashboardStats) -> some View {
-        RCCard {
-            HStack(spacing: 14) {
-                Image(systemName: s.isPromoted ? "bolt.fill" : "bolt.slash.fill")
-                    .font(.title2)
-                    .foregroundStyle(s.isPromoted ? Theme.gold : .secondary)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(s.isPromoted ? "Promoted listing active" : "Not promoted")
-                        .font(.subheadline.weight(.semibold))
-                    Text(s.isPromoted
-                         ? "You appear at the top of search results."
-                         : "Get promoted to appear first in search.")
-                        .font(.caption).foregroundStyle(.secondary)
+        NavigationLink {
+            BillingView()
+        } label: {
+            RCCard {
+                HStack(spacing: 14) {
+                    Image(systemName: s.isPromoted ? "bolt.fill" : "bolt.slash.fill")
+                        .font(.title2)
+                        .foregroundStyle(s.isPromoted ? Theme.gold : .secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(s.isPromoted ? "Promoted listing active" : "Billing & promotion")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(s.isPromoted
+                             ? "You appear at the top of search results."
+                             : "Add a card, view lead fees, and get promoted.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
                 }
-                Spacer()
+                .padding(18)
             }
-            .padding(18)
         }
+        .buttonStyle(.plain)
     }
 
     private func color(for status: LeadStatus) -> Color {

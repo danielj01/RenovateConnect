@@ -2,7 +2,6 @@ const router = require('express').Router();
 const { z } = require('zod');
 const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
-const { createLeadCharge } = require('../services/stripe');
 const { sendPush } = require('../services/push');
 const { recordActivity } = require('../services/activity');
 
@@ -152,11 +151,9 @@ router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) =
 
     if (isFirstContact) {
       const business = await db.business.findUnique({ where: { id: businessId } });
+      // Record the lead as unbilled. Lead fees are charged in one monthly invoice
+      // by services/billing.js#runMonthlyBilling, not inline here.
       await db.lead.create({ data: { conversationId: conversation.id, businessId } });
-      // Queue lead charge — fire and forget; failures should be caught by Stripe retry logic
-      if (business?.stripeCustomerId) {
-        createLeadCharge(business.stripeCustomerId, business.companyName).catch(console.error);
-      }
       // Notify the business owner of a new lead — fire and forget.
       if (business?.userId) {
         const client = await db.user.findUnique({ where: { id: req.user.id }, select: { name: true } });
