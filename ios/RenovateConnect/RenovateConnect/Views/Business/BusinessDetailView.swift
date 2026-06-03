@@ -6,8 +6,15 @@ struct BusinessDetailView: View {
     @State private var isLoading = true
     @State private var showContact = false
     @State private var showBooking = false
+    @State private var showReview = false
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var favorites: FavoritesStore
+
+    /// The current homeowner's own review of this business, if any.
+    private var myReview: Review? {
+        guard let uid = auth.currentUser?.id else { return nil }
+        return business?.reviews?.first { $0.authorId == uid }
+    }
 
     var body: some View {
         Group {
@@ -36,6 +43,14 @@ struct BusinessDetailView: View {
                 .sheet(isPresented: $showBooking) {
                     if let biz = business {
                         BookAppointmentSheet(business: biz)
+                    }
+                }
+                .sheet(isPresented: $showReview) {
+                    if let biz = business {
+                        WriteReviewSheet(businessId: biz.id, businessName: biz.companyName,
+                                         existing: myReview) {
+                            await load()
+                        }
                     }
                 }
             }
@@ -217,13 +232,49 @@ struct BusinessDetailView: View {
             }
 
             // Reviews
-            if let reviews = biz.reviews, !reviews.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
+            reviewsSection(biz)
+
+            Spacer(minLength: 90)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 20)
+        .background(Color(.systemGroupedBackground))
+    }
+
+    // MARK: - Reviews
+
+    @ViewBuilder
+    private func reviewsSection(_ biz: Business) -> some View {
+        let reviews = biz.reviews ?? []
+        let isClient = auth.currentUser?.role == .client
+
+        if !reviews.isEmpty || isClient {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
                     Label("Reviews", systemImage: "star.bubble.fill")
                         .font(.headline)
                         .foregroundStyle(Theme.primary)
-                        .padding(.horizontal, 16)
+                    Spacer()
+                    if isClient {
+                        Button {
+                            showReview = true
+                        } label: {
+                            Label(myReview == nil ? "Write a review" : "Edit your review",
+                                  systemImage: myReview == nil ? "square.and.pencil" : "pencil")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .tint(Theme.primary)
+                    }
+                }
+                .padding(.horizontal, 16)
 
+                if reviews.isEmpty {
+                    Text("No reviews yet. Be the first to share your experience.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                } else {
                     ForEach(reviews) { review in
                         RCCard {
                             ReviewCard(review: review)
@@ -231,12 +282,7 @@ struct BusinessDetailView: View {
                     }
                 }
             }
-
-            Spacer(minLength: 90)
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 20)
-        .background(Color(.systemGroupedBackground))
     }
 
     // MARK: - Contact button
@@ -321,6 +367,13 @@ struct ReviewCard: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(review.authorName).font(.subheadline.bold())
+                if review.isVerified {
+                    Label("Verified", systemImage: "checkmark.seal.fill")
+                        .labelStyle(.titleAndIcon)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(VerifiedBadge.trust)
+                        .accessibilityLabel("Verified booking")
+                }
                 Spacer()
                 HStack(spacing: 2) {
                     ForEach(1...5, id: \.self) { i in

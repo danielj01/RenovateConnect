@@ -7,6 +7,7 @@ struct ActivityBellButton: View {
     @EnvironmentObject private var router: TabRouter
     @EnvironmentObject private var notifications: NotificationManager
     @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var favorites: FavoritesStore
     @State private var showCenter = false
 
     var body: some View {
@@ -34,6 +35,7 @@ struct ActivityBellButton: View {
                 .environmentObject(router)
                 .environmentObject(notifications)
                 .environmentObject(auth)
+                .environmentObject(favorites)
         }
         .task { await activity.refreshUnread() }
     }
@@ -101,6 +103,12 @@ struct NotificationCenterView: View {
         } else if item.data?.appointmentId != nil {
             NavigationLink {
                 AppointmentsView()
+            } label: {
+                ActivityRow(item: item)
+            }
+        } else if let businessId = item.data?.businessId {
+            NavigationLink {
+                BusinessDetailView(businessId: businessId)
             } label: {
                 ActivityRow(item: item)
             }

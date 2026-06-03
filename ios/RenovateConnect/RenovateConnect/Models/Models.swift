@@ -44,10 +44,14 @@ struct Business: Codable, Identifiable {
 
 struct Review: Codable, Identifiable {
     let id: String
+    let authorId: String?
     let authorName: String
     let rating: Int
     let body: String?
+    let verified: Bool?
     let createdAt: String
+
+    var isVerified: Bool { verified ?? false }
 }
 
 struct Conversation: Codable, Identifiable, Hashable {
@@ -265,6 +269,7 @@ enum ActivityType: String, Codable {
     case lead = "LEAD"
     case message = "MESSAGE"
     case appointment = "APPOINTMENT"
+    case review = "REVIEW"
     // Future-proof: unknown server types decode to `.other` rather than failing.
     case other
 
@@ -278,6 +283,7 @@ enum ActivityType: String, Codable {
         case .lead: return "person.2.fill"
         case .message: return "message.fill"
         case .appointment: return "calendar"
+        case .review: return "star.fill"
         case .other: return "bell.fill"
         }
     }
@@ -287,6 +293,7 @@ enum ActivityType: String, Codable {
 struct ActivityData: Codable {
     let conversationId: String?
     let appointmentId: String?
+    let businessId: String?
 }
 
 struct Activity: Codable, Identifiable {

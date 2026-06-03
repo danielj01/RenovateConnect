@@ -158,25 +158,8 @@ router.patch('/:id/verify', authMiddleware, requireRole('ADMIN'), async (req, re
   }
 });
 
-// Public: add review
-router.post('/:id/reviews', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
-  try {
-    const { rating, body } = z.object({ rating: z.number().int().min(1).max(5), body: z.string().optional() }).parse(req.body);
-    const user = await db.user.findUnique({ where: { id: req.user.id } });
-    await db.review.create({ data: { businessId: req.params.id, rating, body, authorName: user.name } });
-
-    // Recalculate average
-    const agg = await db.review.aggregate({ where: { businessId: req.params.id }, _avg: { rating: true }, _count: true });
-    await db.business.update({
-      where: { id: req.params.id },
-      data: { averageRating: agg._avg.rating ?? 0, reviewCount: agg._count },
-    });
-
-    res.status(201).json({ ok: true });
-  } catch (err) {
-    next(err);
-  }
-});
+// Reviews are handled by routes/reviews.js (POST/PATCH/DELETE /reviews);
+// the business detail response above already includes them for display.
 
 // ---------------------------------------------------------------------------
 // Portfolio (project gallery)

@@ -16,6 +16,7 @@ const deviceRoutes = require('./routes/devices');
 const favoriteRoutes = require('./routes/favorites');
 const appointmentRoutes = require('./routes/appointments');
 const activityRoutes = require('./routes/activities');
+const reviewRoutes = require('./routes/reviews');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/devices', deviceRoutes);
 app.use('/favorites', favoriteRoutes);
 app.use('/appointments', appointmentRoutes);
 app.use('/activities', activityRoutes);
+app.use('/reviews', reviewRoutes);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 

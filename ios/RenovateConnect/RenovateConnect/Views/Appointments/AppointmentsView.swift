@@ -65,6 +65,12 @@ private struct AppointmentCard: View {
     let onUpdate: (AppointmentStatus) async -> Void
 
     @State private var working = false
+    @State private var showReview = false
+
+    // Homeowners can review a contractor once the appointment is confirmed.
+    private var canReview: Bool {
+        !isBusiness && appointment.status == .confirmed && appointment.business != nil
+    }
 
     private var counterpartyName: String {
         isBusiness
@@ -127,8 +133,27 @@ private struct AppointmentCard: View {
                         }
                     }
                 }
+
+                if canReview {
+                    Divider()
+                    Button {
+                        showReview = true
+                    } label: {
+                        Label("Leave a review", systemImage: "star.bubble")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 38)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(Theme.primary)
+                }
             }
             .padding(16)
+        }
+        .sheet(isPresented: $showReview) {
+            if let biz = appointment.business {
+                WriteReviewSheet(businessId: biz.id, businessName: biz.companyName) { }
+            }
         }
     }
 

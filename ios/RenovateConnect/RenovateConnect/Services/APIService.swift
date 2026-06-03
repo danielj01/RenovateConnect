@@ -294,6 +294,38 @@ final class APIService {
         return resp.updated
     }
 
+    // Reviews
+    @discardableResult
+    func submitReview(businessId: String, rating: Int, body: String?) async throws -> Review {
+        struct Body: Encodable {
+            let businessId: String
+            let rating: Int
+            let body: String?
+        }
+        return try await request("reviews", method: "POST",
+                                 body: Body(businessId: businessId, rating: rating, body: body))
+    }
+
+    /// The caller's own reviews, optionally scoped to one business so the UI
+    /// can tell whether they've already reviewed it.
+    func myReviews(businessId: String? = nil) async throws -> [Review] {
+        struct Resp: Decodable { let reviews: [Review] }
+        let path = businessId.map { "reviews/mine?businessId=\($0)" } ?? "reviews/mine"
+        let resp: Resp = try await request(path)
+        return resp.reviews
+    }
+
+    @discardableResult
+    func updateReview(id: String, rating: Int? = nil, body: String? = nil) async throws -> Review {
+        struct Body: Encodable { let rating: Int?; let body: String? }
+        return try await request("reviews/\(id)", method: "PATCH",
+                                 body: Body(rating: rating, body: body))
+    }
+
+    func deleteReview(id: String) async throws {
+        try await requestNoContent("reviews/\(id)", method: "DELETE")
+    }
+
     // AI Chat
     func chat(message: String, history: [[String: String]]) async throws -> (reply: String, mentioned: [BusinessRef]) {
         struct Body: Encodable { let message: String; let history: [[String: String]] }
