@@ -1,28 +1,43 @@
 import SwiftUI
 
 // MARK: - Brand tokens
+// "Indigo & Coral" — a modern indigo primary with a warm coral accent. Amber is
+// reserved for star ratings, and semantic success/info tokens keep status
+// colors consistent across the app.
 enum Theme {
-    static let primary      = Color(red: 0.93, green: 0.40, blue: 0.13)
-    static let primaryDark  = Color(red: 0.72, green: 0.28, blue: 0.06)
-    static let primaryLight = Color(red: 0.99, green: 0.93, blue: 0.87)
-    static let gold         = Color(red: 0.96, green: 0.76, blue: 0.10)
+    static let primary      = Color(red: 0.310, green: 0.275, blue: 0.898) // #4F46E5 indigo
+    static let primaryDark  = Color(red: 0.263, green: 0.220, blue: 0.792) // #4338CA
+    static let primaryLight = Color(red: 0.878, green: 0.906, blue: 1.000) // #E0E7FF tint
 
+    // Warm coral accent for secondary CTAs, highlights, and the Featured badge.
+    static let accent       = Color(red: 0.984, green: 0.443, blue: 0.522) // #FB7185 coral
+    static let accentDark   = Color(red: 0.957, green: 0.247, blue: 0.369) // #F43F5E
+
+    // Amber — used specifically for star ratings (reads as "rating gold").
+    static let gold         = Color(red: 0.961, green: 0.620, blue: 0.043) // #F59E0B amber
+
+    // Semantic status colors.
+    static let success      = Color(red: 0.063, green: 0.725, blue: 0.506) // #10B981 emerald
+    static let info         = Color(red: 0.231, green: 0.510, blue: 0.965) // #3B82F6 blue
+
+    // Hero gradient: indigo → violet.
     static let gradient = LinearGradient(
-        colors: [Color(red: 0.93, green: 0.40, blue: 0.13),
-                 Color(red: 0.72, green: 0.28, blue: 0.06)],
+        colors: [Color(red: 0.310, green: 0.275, blue: 0.898),  // #4F46E5
+                 Color(red: 0.486, green: 0.227, blue: 0.929)], // #7C3AED
         startPoint: .topLeading, endPoint: .bottomTrailing
     )
 
-    static let cardShadow = Color.black.opacity(0.07)
+    static let cardShadow = Color(red: 0.06, green: 0.05, blue: 0.20).opacity(0.10)
 
-    // Deterministic avatar color per business name
+    // Deterministic avatar color per business name — a modern set that
+    // harmonizes with the indigo/coral brand.
     private static let avatarPalette: [Color] = [
-        Color(red: 0.93, green: 0.40, blue: 0.13),
-        Color(red: 0.20, green: 0.55, blue: 0.87),
-        Color(red: 0.17, green: 0.70, blue: 0.48),
-        Color(red: 0.58, green: 0.32, blue: 0.78),
-        Color(red: 0.88, green: 0.24, blue: 0.38),
-        Color(red: 0.10, green: 0.60, blue: 0.60),
+        Color(red: 0.310, green: 0.275, blue: 0.898), // indigo
+        Color(red: 0.984, green: 0.443, blue: 0.522), // coral
+        Color(red: 0.063, green: 0.725, blue: 0.506), // emerald
+        Color(red: 0.486, green: 0.227, blue: 0.929), // violet
+        Color(red: 0.231, green: 0.510, blue: 0.965), // blue
+        Color(red: 0.024, green: 0.616, blue: 0.639), // teal #06A9A3
     ]
 
     static func avatarColor(for name: String) -> Color {
@@ -71,10 +86,10 @@ struct FeaturedBadge: View {
         Label("Featured", systemImage: "bolt.fill")
             .font(.system(size: 10, weight: .bold))
             .padding(.horizontal, 8).padding(.vertical, 3)
-            .background(Theme.gold.opacity(0.18))
-            .foregroundStyle(Color(red: 0.70, green: 0.52, blue: 0.0))
+            .background(Theme.accent.opacity(0.16))
+            .foregroundStyle(Theme.accentDark)
             .clipShape(Capsule())
-            .overlay(Capsule().stroke(Theme.gold.opacity(0.35), lineWidth: 0.5))
+            .overlay(Capsule().stroke(Theme.accent.opacity(0.35), lineWidth: 0.5))
     }
 }
 

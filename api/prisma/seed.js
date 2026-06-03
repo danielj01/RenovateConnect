@@ -4,6 +4,11 @@ const bcrypt = require('bcryptjs');
 
 const prisma = new PrismaClient();
 
+// Test imagery (royalty-free Unsplash CDN). `logo` crops square for avatars;
+// `photo` is a wider crop for portfolio shots.
+const photo = (id) => `https://images.unsplash.com/photo-${id}?w=1000&q=80&auto=format&fit=crop`;
+const logo = (id) => `https://images.unsplash.com/photo-${id}?w=400&h=400&q=80&auto=format&fit=crop`;
+
 const businesses = [
   {
     email: 'peak@renovateconnect.dev',
@@ -14,13 +19,14 @@ const businesses = [
     specialties: ['Kitchen', 'Bathroom', 'Basement'],
     yearsInBusiness: 15,
     website: 'https://peakrenovations.dev',
+    logoUrl: logo('1628745277862-bc0b2d68c50c'),
     isPromoted: true,
     averageRating: 4.9,
     profileViews: 1284,
     portfolio: [
-      { title: 'Lincoln Park Chef\'s Kitchen', category: 'Kitchen', description: 'Full gut remodel with custom walnut cabinetry, quartz waterfall island, and a pro-grade appliance package.', costMin: 62000, costMax: 78000, durationWeeks: 7, featured: true },
-      { title: 'Spa Master Bath', category: 'Bathroom', description: 'Curbless walk-in shower, heated floors, and a freestanding soaking tub.', costMin: 34000, costMax: 45000, durationWeeks: 5 },
-      { title: 'Finished Basement Suite', category: 'Basement', description: 'Added a guest bedroom, full bath, and wet bar with egress window.', costMin: 48000, costMax: 60000, durationWeeks: 8 },
+      { title: 'Lincoln Park Chef\'s Kitchen', category: 'Kitchen', description: 'Full gut remodel with custom walnut cabinetry, quartz waterfall island, and a pro-grade appliance package.', costMin: 62000, costMax: 78000, durationWeeks: 7, featured: true, imageUrls: [photo('1628745277862-bc0b2d68c50c'), photo('1682888813913-e13f18692019')] },
+      { title: 'Spa Master Bath', category: 'Bathroom', description: 'Curbless walk-in shower, heated floors, and a freestanding soaking tub.', costMin: 34000, costMax: 45000, durationWeeks: 5, imageUrls: [photo('1584622650111-993a426fbf0a'), photo('1507652313519-d4e9174996dd')] },
+      { title: 'Finished Basement Suite', category: 'Basement', description: 'Added a guest bedroom, full bath, and wet bar with egress window.', costMin: 48000, costMax: 60000, durationWeeks: 8, imageUrls: [photo('1646592474273-86049d4f3575'), photo('1646592491963-07ff7e7c31f7')] },
     ],
     reviews: [
       { authorName: 'Sarah L.', rating: 5, body: 'Peak transformed our outdated kitchen into a showpiece. Marcus and his team were professional, clean, and finished ahead of schedule. Highly recommend!' },
@@ -37,12 +43,13 @@ const businesses = [
     city: 'Chicago', state: 'IL', zipCode: '60607',
     specialties: ['Kitchen', 'Bathroom', 'Flooring', 'Painting'],
     yearsInBusiness: 12,
+    logoUrl: logo('1592506119503-c0b18879bd5a'),
     isPromoted: true,
     averageRating: 4.7,
     profileViews: 947,
     portfolio: [
-      { title: 'West Loop Whole-Floor Remodel', category: 'Kitchen', description: 'New hardwood throughout, repainted interior, and a modern backsplash refresh.', costMin: 40000, costMax: 55000, durationWeeks: 6, featured: true },
-      { title: '10-Day Bathroom Refresh', category: 'Bathroom', description: 'Fast-turnaround guest bath remodel with new vanity, tile, and fixtures.', costMin: 12000, costMax: 18000, durationWeeks: 2 },
+      { title: 'West Loop Whole-Floor Remodel', category: 'Kitchen', description: 'New hardwood throughout, repainted interior, and a modern backsplash refresh.', costMin: 40000, costMax: 55000, durationWeeks: 6, featured: true, imageUrls: [photo('1665507279638-5b48073c637b'), photo('1631048498692-af6262577031')] },
+      { title: '10-Day Bathroom Refresh', category: 'Bathroom', description: 'Fast-turnaround guest bath remodel with new vanity, tile, and fixtures.', costMin: 12000, costMax: 18000, durationWeeks: 2, imageUrls: [photo('1629079447777-1e605162dc8d'), photo('1521783593447-5702b9bfd267')] },
     ],
     reviews: [
       { authorName: 'Amanda P.', rating: 5, body: 'Metro handled our whole first floor — new hardwood, painted every room, and redid the kitchen backsplash. Seamless experience.' },
@@ -61,11 +68,12 @@ const businesses = [
     specialties: ['Kitchen', 'Bathroom'],
     yearsInBusiness: 8,
     website: 'https://elitekb.dev',
+    logoUrl: logo('1639405069836-f82aa6dcb900'),
     averageRating: 4.8,
     profileViews: 612,
     portfolio: [
-      { title: 'Naperville Showcase Kitchen', category: 'Kitchen', description: 'Designer layout with a 10-ft island, brass fixtures, and integrated paneled appliances.', costMin: 70000, costMax: 95000, durationWeeks: 9, featured: true },
-      { title: 'Hers & His Master Bath', category: 'Bathroom', description: 'Double vanity, marble wet room, and custom built-in storage.', costMin: 38000, costMax: 52000, durationWeeks: 6 },
+      { title: 'Naperville Showcase Kitchen', category: 'Kitchen', description: 'Designer layout with a 10-ft island, brass fixtures, and integrated paneled appliances.', costMin: 70000, costMax: 95000, durationWeeks: 9, featured: true, imageUrls: [photo('1601760561441-16420502c7e0'), photo('1665507279644-67d8ed143a84')] },
+      { title: 'Hers & His Master Bath', category: 'Bathroom', description: 'Double vanity, marble wet room, and custom built-in storage.', costMin: 38000, costMax: 52000, durationWeeks: 6, imageUrls: [photo('1587527901949-ab0341697c1e'), photo('1696987007764-7f8b85dd3033')] },
     ],
     reviews: [
       { authorName: 'Claire W.', rating: 5, body: 'Ryan has a real designer\'s eye. Our kitchen is stunning — the cabinet layout he suggested was so much better than our original plan.' },
@@ -82,6 +90,7 @@ const businesses = [
     city: 'Chicago', state: 'IL', zipCode: '60625',
     specialties: ['Roofing'],
     yearsInBusiness: 20,
+    logoUrl: logo('1587061633437-187ac80e8e7a'),
     averageRating: 4.6,
     reviews: [
       { authorName: 'Robert C.', rating: 5, body: 'ProRoof replaced our 25-year-old roof in two days. Clean, professional, and great price. No debris left behind.' },
@@ -98,6 +107,7 @@ const businesses = [
     city: 'Chicago', state: 'IL', zipCode: '60614',
     specialties: ['Electrical', 'HVAC'],
     yearsInBusiness: 10,
+    logoUrl: logo('1621905251189-08b45d6a269e'),
     averageRating: 4.5,
     reviews: [
       { authorName: 'Dan W.', rating: 5, body: 'Had our 100A panel upgraded to 200A and a Tesla charger installed. Tony\'s team was fast, clean, and passed inspection first try.' },
@@ -114,6 +124,7 @@ const businesses = [
     city: 'Evanston', state: 'IL', zipCode: '60201',
     specialties: ['Plumbing'],
     yearsInBusiness: 7,
+    logoUrl: logo('1542013936693-884638332954'),
     averageRating: 4.7,
     reviews: [
       { authorName: 'Janet H.', rating: 5, body: 'Carlos fixed a hidden slab leak that was destroying our floor. Found it fast, fixed it right, and saved us thousands.' },
@@ -129,6 +140,7 @@ const businesses = [
     city: 'Oak Park', state: 'IL', zipCode: '60302',
     specialties: ['Painting'],
     yearsInBusiness: 5,
+    logoUrl: logo('1600054648630-e10e710825f6'),
     averageRating: 4.9,
     reviews: [
       { authorName: 'Lisa N.', rating: 5, body: 'Elena painted our whole house interior — immaculate work. The trim lines are perfect. We\'ve already referred three neighbors.' },
@@ -144,6 +156,7 @@ const businesses = [
     city: 'Chicago', state: 'IL', zipCode: '60618',
     specialties: ['Flooring'],
     yearsInBusiness: 11,
+    logoUrl: logo('1560185008-b033106af5c3'),
     averageRating: 4.6,
     reviews: [
       { authorName: 'Kevin T.', rating: 5, body: 'James installed hardwood throughout our entire main floor. Looks incredible — perfectly matched to our existing staircase.' },
@@ -182,6 +195,7 @@ async function main() {
             specialties: bizData.specialties,
             yearsInBusiness: bizData.yearsInBusiness,
             website: bizData.website ?? null,
+            logoUrl: bizData.logoUrl ?? null,
             isPromoted,
             promotedUntil: isPromoted ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null,
             averageRating: parseFloat(avgRating.toFixed(1)),
@@ -206,6 +220,9 @@ async function main() {
     if (business) {
       if (business.profileViews !== profileViews) {
         await prisma.business.update({ where: { id: business.id }, data: { profileViews } });
+      }
+      if (!business.logoUrl && bizData.logoUrl) {
+        await prisma.business.update({ where: { id: business.id }, data: { logoUrl: bizData.logoUrl } });
       }
       if (business.portfolio.length === 0 && portfolio.length > 0) {
         await prisma.portfolioProject.createMany({

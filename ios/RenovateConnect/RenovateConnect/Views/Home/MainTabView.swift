@@ -25,7 +25,7 @@ struct MainTabView: View {
         appearance.backgroundColor = UIColor.systemBackground
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
-        UITabBar.appearance().tintColor = UIColor(red: 0.93, green: 0.40, blue: 0.13, alpha: 1)
+        UITabBar.appearance().tintColor = UIColor(red: 0.310, green: 0.275, blue: 0.898, alpha: 1)
     }
 
     var body: some View {

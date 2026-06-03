@@ -203,7 +203,7 @@ private struct QuoteStatusBadge: View {
         switch status {
         case .pending: return Theme.gold
         case .quoted: return Theme.primary
-        case .accepted: return Color(red: 0.17, green: 0.70, blue: 0.48)
+        case .accepted: return Theme.success
         case .declined, .withdrawn: return Color(.systemGray)
         }
     }

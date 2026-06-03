@@ -139,7 +139,7 @@ struct BusinessDetailView: View {
                      label: "Reviews", icon: "bubble.left.fill", iconColor: Theme.primary)
             Divider().frame(height: 40)
             StatCell(value: "\(biz.yearsInBusiness)",
-                     label: "Yrs exp.", icon: "briefcase.fill", iconColor: Color(red: 0.20, green: 0.55, blue: 0.87))
+                     label: "Yrs exp.", icon: "briefcase.fill", iconColor: Theme.info)
         }
         .padding(.vertical, 16)
         .background(.white)
