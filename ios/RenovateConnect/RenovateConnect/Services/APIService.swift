@@ -346,6 +346,49 @@ final class APIService {
         return try await request("businesses/\(businessId)/hours", method: "PUT", body: body)
     }
 
+    // Quote requests (structured project briefs → contractor estimates)
+    func myQuotes() async throws -> [QuoteRequest] {
+        try await request("quotes")
+    }
+
+    func getQuote(id: String) async throws -> QuoteRequest {
+        try await request("quotes/\(id)")
+    }
+
+    func createQuoteRequest(businessId: String, description: String, category: String? = nil,
+                            budgetMin: Int? = nil, budgetMax: Int? = nil,
+                            timeline: String? = nil, imageUrls: [String]? = nil) async throws -> QuoteRequest {
+        struct Body: Encodable {
+            let businessId: String
+            let description: String
+            let category: String?
+            let budgetMin: Int?
+            let budgetMax: Int?
+            let timeline: String?
+            let imageUrls: [String]?
+        }
+        return try await request("quotes", method: "POST",
+                                 body: Body(businessId: businessId, description: description,
+                                            category: category, budgetMin: budgetMin,
+                                            budgetMax: budgetMax, timeline: timeline, imageUrls: imageUrls))
+    }
+
+    /// Drive a quote's lifecycle. Contractors send QUOTED (with prices) or
+    /// DECLINED; homeowners send ACCEPTED or WITHDRAWN.
+    @discardableResult
+    func updateQuote(id: String, status: QuoteStatus, quoteLow: Int? = nil,
+                     quoteHigh: Int? = nil, responseNote: String? = nil) async throws -> QuoteRequest {
+        struct Body: Encodable {
+            let status: String
+            let quoteLow: Int?
+            let quoteHigh: Int?
+            let responseNote: String?
+        }
+        return try await request("quotes/\(id)", method: "PATCH",
+                                 body: Body(status: status.rawValue, quoteLow: quoteLow,
+                                            quoteHigh: quoteHigh, responseNote: responseNote))
+    }
+
     // Activity feed
     func myActivities() async throws -> [Activity] {
         try await request("activities")

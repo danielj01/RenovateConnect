@@ -6,6 +6,7 @@ struct BusinessDetailView: View {
     @State private var isLoading = true
     @State private var showContact = false
     @State private var showBooking = false
+    @State private var showQuote = false
     @State private var showReview = false
     @State private var showHoursEditor = false
     @State private var respondingTo: Review?
@@ -45,6 +46,11 @@ struct BusinessDetailView: View {
                 .sheet(isPresented: $showBooking) {
                     if let biz = business {
                         BookAppointmentSheet(business: biz)
+                    }
+                }
+                .sheet(isPresented: $showQuote) {
+                    if let biz = business {
+                        RequestQuoteSheet(business: biz)
                     }
                 }
                 .sheet(isPresented: $showReview) {
@@ -400,17 +406,31 @@ struct BusinessDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 20)
 
-            Button {
-                showBooking = true
-            } label: {
-                Label("Request an appointment", systemImage: "calendar.badge.plus")
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 44)
+            HStack(spacing: 10) {
+                Button {
+                    showQuote = true
+                } label: {
+                    Label("Get a quote", systemImage: "doc.text.magnifyingglass")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+                .buttonStyle(.bordered)
+                .tint(Theme.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+
+                Button {
+                    showBooking = true
+                } label: {
+                    Label("Appointment", systemImage: "calendar.badge.plus")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                }
+                .buttonStyle(.bordered)
+                .tint(Theme.primary)
+                .clipShape(RoundedRectangle(cornerRadius: 14))
             }
-            .buttonStyle(.bordered)
-            .tint(Theme.primary)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
         }

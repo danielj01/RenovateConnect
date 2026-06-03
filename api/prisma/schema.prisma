@@ -35,6 +35,14 @@ enum ActivityType {
   SAVED_SEARCH
 }
 
+enum QuoteStatus {
+  PENDING    // submitted, awaiting the contractor
+  QUOTED     // the contractor sent a price
+  DECLINED   // the contractor passed
+  ACCEPTED   // the homeowner accepted the quote
+  WITHDRAWN  // the homeowner pulled the request
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -64,6 +72,7 @@ model User {
   activities       Activity[]
   reviews          Review[]
   savedSearches    SavedSearch[]
+  quoteRequests    QuoteRequest[] @relation("ClientQuoteRequests")
 }
 
 model DeviceToken {
@@ -130,6 +139,42 @@ model Business {
   favoritedBy     Favorite[]
   appointments    Appointment[]
   hours           BusinessHours[]
+  quoteRequests   QuoteRequest[]
+}
+
+// A homeowner's structured request for a price estimate on a specific project.
+// Richer than a free-form chat message: it carries scope, budget, timeline and
+// photos, and has a lifecycle (PENDING → QUOTED/DECLINED → ACCEPTED/WITHDRAWN)
+// so both sides can track where the deal stands. The contractor fills in the
+// quote fields when they respond.
+model QuoteRequest {
+  id           String      @id @default(cuid())
+  clientId     String
+  businessId   String
+
+  category     String?     // e.g. "Kitchen", "Bathroom"
+  description  String
+  budgetMin    Int?        // homeowner's budget range, in dollars
+  budgetMax    Int?
+  timeline     String?     // e.g. "Within 1 month", "Flexible"
+  imageUrls    String[]
+
+  status       QuoteStatus @default(PENDING)
+
+  // Contractor's response.
+  quoteLow     Int?
+  quoteHigh    Int?
+  responseNote String?
+  respondedAt  DateTime?
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  client       User        @relation("ClientQuoteRequests", fields: [clientId], references: [id], onDelete: Cascade)
+  business     Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([clientId])
+  @@index([businessId])
 }
 
 // One row per weekday describing a contractor's recurring open hours. Times are

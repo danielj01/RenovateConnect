@@ -345,6 +345,80 @@ struct AppointmentClient: Codable {
     let avatarUrl: String?
 }
 
+// MARK: - Quote requests
+
+enum QuoteStatus: String, Codable, CaseIterable, Identifiable {
+    case pending = "PENDING"
+    case quoted = "QUOTED"
+    case declined = "DECLINED"
+    case accepted = "ACCEPTED"
+    case withdrawn = "WITHDRAWN"
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .pending: return "Pending"
+        case .quoted: return "Quoted"
+        case .declined: return "Declined"
+        case .accepted: return "Accepted"
+        case .withdrawn: return "Withdrawn"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .pending: return "hourglass"
+        case .quoted: return "dollarsign.circle.fill"
+        case .declined: return "xmark.circle.fill"
+        case .accepted: return "checkmark.seal.fill"
+        case .withdrawn: return "slash.circle.fill"
+        }
+    }
+
+    /// Whether this is a settled, terminal state.
+    var isClosed: Bool {
+        self == .accepted || self == .declined || self == .withdrawn
+    }
+}
+
+/// A homeowner's structured project brief sent to a contractor, plus the
+/// contractor's eventual quote.
+struct QuoteRequest: Codable, Identifiable {
+    let id: String
+    let clientId: String
+    let businessId: String
+    let category: String?
+    let description: String
+    let budgetMin: Int?
+    let budgetMax: Int?
+    let timeline: String?
+    let imageUrls: [String]
+    var status: QuoteStatus
+    var quoteLow: Int?
+    var quoteHigh: Int?
+    var responseNote: String?
+    var respondedAt: String?
+    let createdAt: String
+    let business: BusinessSummary?
+    let client: AppointmentClient?
+
+    /// "$20,000 – $35,000", "From $20,000", "Up to $35,000", or nil.
+    var budgetText: String? { Self.rangeText(budgetMin, budgetMax) }
+
+    /// The contractor's quoted range, once provided.
+    var quoteText: String? { Self.rangeText(quoteLow, quoteHigh) }
+
+    static func rangeText(_ lo: Int?, _ hi: Int?) -> String? {
+        switch (lo, hi) {
+        case let (l?, h?): return "$\(l.formatted()) – $\(h.formatted())"
+        case let (l?, nil): return "From $\(l.formatted())"
+        case let (nil, h?): return "Up to $\(h.formatted())"
+        default: return nil
+        }
+    }
+}
+
 // MARK: - Activity feed
 
 enum ActivityType: String, Codable {

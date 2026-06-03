@@ -98,6 +98,32 @@ struct ProfileView: View {
                         .buttonStyle(.plain)
                         .padding(.horizontal, 16)
 
+                        // Quotes hub — both roles: homeowners track estimate
+                        // requests, contractors respond to incoming briefs.
+                        NavigationLink {
+                            QuotesView()
+                        } label: {
+                            RCCard {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "doc.text.magnifyingglass")
+                                        .foregroundStyle(Theme.primary).frame(width: 28)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Quotes").font(.subheadline).foregroundStyle(.primary)
+                                        Text(user.role == .client
+                                             ? "Estimates you've requested"
+                                             : "Project briefs from homeowners")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                .padding(16)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
+
                         // Business card if applicable
                         if let biz = user.business {
                             NavigationLink {
