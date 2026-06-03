@@ -108,7 +108,7 @@ private struct AppointmentCard: View {
                 if !actions.isEmpty {
                     Divider()
                     HStack(spacing: 10) {
-                        ForEach(actions, id: \.status) { action in
+                        ForEach(actions) { action in
                             Button {
                                 Task {
                                     working = true
@@ -133,16 +133,25 @@ private struct AppointmentCard: View {
     }
 
     // Which actions are available depends on role + current status.
-    private var actions: [(status: AppointmentStatus, label: String, tint: Color)] {
+    private var actions: [AppointmentAction] {
         switch (isBusiness, appointment.status) {
         case (true, .requested):
-            return [(.confirmed, "Confirm", Theme.primary), (.declined, "Decline", .red)]
+            return [.init(status: .confirmed, label: "Confirm", tint: Theme.primary),
+                    .init(status: .declined, label: "Decline", tint: .red)]
         case (false, .requested), (false, .confirmed):
-            return [(.cancelled, "Cancel", .red)]
+            return [.init(status: .cancelled, label: "Cancel", tint: .red)]
         default:
             return []
         }
     }
+}
+
+/// One actionable status transition rendered as a button on an appointment card.
+private struct AppointmentAction: Identifiable {
+    var id: AppointmentStatus { status }
+    let status: AppointmentStatus
+    let label: String
+    let tint: Color
 }
 
 // MARK: - Status badge

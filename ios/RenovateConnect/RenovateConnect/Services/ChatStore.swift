@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// Holds the AI assistant conversation. Owned above the tab bar so history
 /// survives tab switches, and persisted to UserDefaults so it survives app
