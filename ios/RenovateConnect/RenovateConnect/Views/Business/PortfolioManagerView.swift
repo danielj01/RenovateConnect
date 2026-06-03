@@ -38,9 +38,16 @@ struct PortfolioManagerView: View {
                 }
             }
             .sheet(item: $editing) { project in
-                PortfolioEditorSheet(businessId: auth.myBusinessId ?? "", project: project) { saved in
-                    if let i = projects.firstIndex(where: { $0.id == saved.id }) { projects[i] = saved }
-                }
+                PortfolioEditorSheet(
+                    businessId: auth.myBusinessId ?? "",
+                    project: project,
+                    onSave: { saved in
+                        if let i = projects.firstIndex(where: { $0.id == saved.id }) { projects[i] = saved }
+                    },
+                    onDelete: { id in
+                        projects.removeAll { $0.id == id }
+                    }
+                )
             }
         }
     }
@@ -189,6 +196,10 @@ struct PortfolioEditorSheet: View {
     let businessId: String
     let project: PortfolioProject?
     let onSave: (PortfolioProject) -> Void
+    /// Optional — when present and editing an existing project, the editor
+    /// surfaces a visible Delete button. The parent removes the row from its
+    /// list when this fires (the editor already dismissed the sheet).
+    var onDelete: ((String) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var title: String
@@ -198,6 +209,8 @@ struct PortfolioEditorSheet: View {
     @State private var costMax: String
     @State private var weeks: String
     @State private var isSaving = false
+    @State private var isDeleting = false
+    @State private var showDeleteConfirm = false
     @State private var error: String?
 
     // Image editing state. `imageUrls` mirrors the project's photos so the
@@ -209,10 +222,13 @@ struct PortfolioEditorSheet: View {
 
     private var isEditing: Bool { project != nil }
 
-    init(businessId: String, project: PortfolioProject?, onSave: @escaping (PortfolioProject) -> Void) {
+    init(businessId: String, project: PortfolioProject?,
+         onSave: @escaping (PortfolioProject) -> Void,
+         onDelete: ((String) -> Void)? = nil) {
         self.businessId = businessId
         self.project = project
         self.onSave = onSave
+        self.onDelete = onDelete
         _title = State(initialValue: project?.title ?? "")
         _description = State(initialValue: project?.description ?? "")
         _category = State(initialValue: project?.category ?? "")
@@ -264,6 +280,22 @@ struct PortfolioEditorSheet: View {
                 if let error {
                     Section { Text(error).foregroundStyle(.red).font(.caption) }
                 }
+                if isEditing && onDelete != nil {
+                    Section {
+                        Button(role: .destructive) {
+                            showDeleteConfirm = true
+                        } label: {
+                            HStack {
+                                if isDeleting { ProgressView() }
+                                Label("Delete project", systemImage: "trash")
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                        .disabled(isDeleting)
+                    } footer: {
+                        Text("Permanently removes this project from your portfolio. Photos stay in cloud storage but aren't shown anywhere.")
+                    }
+                }
             }
             .navigationTitle(isEditing ? "Edit Project" : "New Project")
             .navigationBarTitleDisplayMode(.inline)
@@ -277,6 +309,27 @@ struct PortfolioEditorSheet: View {
                     }
                 }
             }
+            .alert("Delete this project?", isPresented: $showDeleteConfirm) {
+                Button("Delete", role: .destructive) { Task { await deleteProject() } }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("This can't be undone.")
+            }
+        }
+    }
+
+    private func deleteProject() async {
+        guard let project, let onDelete else { return }
+        isDeleting = true
+        error = nil
+        do {
+            try await APIService.shared.deletePortfolioProject(
+                businessId: businessId, projectId: project.id)
+            onDelete(project.id)
+            dismiss()
+        } catch {
+            isDeleting = false
+            self.error = error.localizedDescription
         }
     }
 
