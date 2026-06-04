@@ -50,6 +50,9 @@ jobs:
 
       - run: npm test
         env:
+          # The Jest setup (tests/env.js + globalSetup.js) keys off
+          # TEST_DATABASE_URL, so provide it explicitly here.
+          TEST_DATABASE_URL: postgresql://renovate:renovate@localhost:5432/renovate_test
           DATABASE_URL: postgresql://renovate:renovate@localhost:5432/renovate_test
           JWT_SECRET: test-secret
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
