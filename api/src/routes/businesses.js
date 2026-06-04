@@ -38,8 +38,9 @@ router.get('/', async (req, res, next) => {
         where,
         skip,
         take: parseInt(limit),
-        // Promoted businesses first, then by rating
-        orderBy: [{ isPromoted: 'desc' }, { averageRating: 'desc' }],
+        // Admin-verified businesses surface first (our curated trust signal),
+        // then by rating. (Paid promotion no longer affects ranking.)
+        orderBy: [{ verified: 'desc' }, { averageRating: 'desc' }],
         include: {
           reviews: { take: 3, orderBy: { createdAt: 'desc' } },
           // One hero project (featured first, approved only) so list cards can

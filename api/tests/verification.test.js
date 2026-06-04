@@ -63,6 +63,22 @@ describe('Business verification (trust badge)', () => {
     expect(found.verified).toBe(true);
   });
 
+  test('verified businesses are ranked ahead of unverified ones', async () => {
+    // A higher-rated but unverified business should still sort below a verified
+    // one — verification, not rating, is the primary sort key.
+    const { business: unverified } = await createBusiness({ companyName: 'Unverified Co' });
+    const { business: verified } = await createBusiness({ companyName: 'Verified Co' });
+    await db.business.update({ where: { id: unverified.id }, data: { averageRating: 5 } });
+    await db.business.update({
+      where: { id: verified.id },
+      data: { verified: true, verifiedAt: new Date(), averageRating: 3 },
+    });
+
+    const res = await request(app).get('/businesses');
+    const ids = res.body.businesses.map((b) => b.id);
+    expect(ids.indexOf(verified.id)).toBeLessThan(ids.indexOf(unverified.id));
+  });
+
   test('a business owner cannot verify themselves', async () => {
     const { business, token } = await createBusiness();
     const res = await request(app)

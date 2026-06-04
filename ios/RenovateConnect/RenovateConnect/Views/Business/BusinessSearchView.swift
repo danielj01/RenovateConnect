@@ -24,7 +24,9 @@ struct BusinessSearchView: View {
         ("HVAC", "wind"), ("Electrical", "bolt.fill"), ("Plumbing", "drop.fill"),
     ]
 
-    private var promoted: [Business] { businesses.filter { $0.isPromoted } }
+    // Admin-verified contractors get the featured treatment (curated trust),
+    // replacing the old paid-promotion carousel.
+    private var featured: [Business] { businesses.filter { $0.isVerified } }
     private var all: [Business] { businesses }
 
     var body: some View {
@@ -71,15 +73,15 @@ struct BusinessSearchView: View {
                             .padding(.top, 60)
 
                     } else {
-                        // Featured horizontal scroll
-                        if !promoted.isEmpty && selectedSpecialty == nil && query.isEmpty {
+                        // Verified contractors horizontal scroll
+                        if !featured.isEmpty && selectedSpecialty == nil && query.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
-                                sectionHeader(icon: "bolt.fill", title: "Featured")
+                                sectionHeader(icon: "checkmark.seal.fill", title: "Verified Pros")
                                     .padding(.horizontal, 16)
 
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 14) {
-                                        ForEach(promoted) { biz in
+                                        ForEach(featured) { biz in
                                             NavigationLink(destination: BusinessDetailView(businessId: biz.id)) {
                                                 FeaturedBusinessCard(business: biz)
                                             }
@@ -258,13 +260,13 @@ struct FeaturedBusinessCard: View {
             .frame(width: Self.cardWidth, height: Self.heroHeight)
             .clipped()
 
-            // Keep the Featured badge legible over any photo.
+            // Keep the Verified badge legible over any photo.
             LinearGradient(colors: [.black.opacity(0.28), .clear],
                            startPoint: .top, endPoint: .center)
                 .frame(width: Self.cardWidth, height: Self.heroHeight)
                 .allowsHitTesting(false)
 
-            FeaturedBadge().padding(10)
+            VerifiedBadge().padding(10)
         }
     }
 
@@ -340,7 +342,6 @@ struct BusinessListCard: View {
                                     .accessibilityLabel("Verified")
                             }
                             Spacer()
-                            if business.isPromoted { FeaturedBadge() }
                             if auth.currentUser?.role == .client {
                                 Button {
                                     favorites.toggle(business)

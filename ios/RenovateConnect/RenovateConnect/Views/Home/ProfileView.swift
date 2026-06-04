@@ -181,7 +181,7 @@ struct ProfileView: View {
                                                 StarRating(rating: biz.averageRating, count: biz.reviewCount)
                                             }
                                             Spacer()
-                                            if biz.isPromoted { FeaturedBadge() }
+                                            if biz.isVerified { VerifiedBadge() }
                                         }
                                     }
                                     .padding(16)

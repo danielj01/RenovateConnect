@@ -61,7 +61,7 @@ private struct DigestEntryCard: View {
                                 Text(entry.business.companyName)
                                     .font(.subheadline.bold())
                                     .foregroundStyle(.primary)
-                                if entry.business.isPromoted { FeaturedBadge() }
+                                if entry.business.isVerified { VerifiedBadge() }
                             }
                             Text(entry.headline)
                                 .font(.caption.weight(.medium))

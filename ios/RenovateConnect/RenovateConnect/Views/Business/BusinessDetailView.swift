@@ -113,7 +113,6 @@ struct BusinessDetailView: View {
                             .font(.title2.bold())
                             .foregroundStyle(.white)
                         if biz.isVerified { VerifiedBadge() }
-                        if biz.isPromoted { FeaturedBadge() }
                     }
                     HStack(spacing: 4) {
                         Image(systemName: "mappin.circle.fill").font(.caption)
