@@ -197,7 +197,9 @@ struct ProfileView: View {
                                 Toggle(isOn: $pushEnabled) {
                                     HStack(spacing: 12) {
                                         Image(systemName: "bell.fill")
-                                            .foregroundStyle(Theme.primary).frame(width: 28)
+                                            .font(.subheadline)
+                                            .foregroundStyle(Theme.primary)
+                                            .frame(width: 28, height: 28)
                                         VStack(alignment: .leading, spacing: 2) {
                                             Text("Push Notifications").font(.subheadline)
                                             Text("New messages, leads, and updates")
