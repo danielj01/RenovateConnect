@@ -279,7 +279,7 @@ struct BusinessDetailView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 20)
-        .background(Color(.systemGroupedBackground))
+        .background(Color(.systemBackground))
     }
 
     // MARK: - Admin verification

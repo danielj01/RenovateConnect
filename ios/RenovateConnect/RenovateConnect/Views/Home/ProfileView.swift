@@ -335,7 +335,7 @@ struct ProfileView: View {
                 }
                 .padding(.top, 20)
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.systemBackground))
             .navigationTitle("Profile")
             .task {
                 pushEnabled = auth.currentUser?.pushEnabled ?? true

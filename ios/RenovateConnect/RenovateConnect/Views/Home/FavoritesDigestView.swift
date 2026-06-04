@@ -29,7 +29,7 @@ struct FavoritesDigestView: View {
                 .padding(.vertical, 12)
             }
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color(.systemBackground))
         .navigationTitle("Saved Pro Updates")
         .navigationBarTitleDisplayMode(.inline)
         .task {

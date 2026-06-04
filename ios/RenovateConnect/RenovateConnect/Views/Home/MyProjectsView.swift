@@ -33,7 +33,7 @@ struct MyProjectsView: View {
                 }
             }
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color(.systemBackground))
         .navigationTitle("My Projects")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -255,7 +255,7 @@ struct ContractorsForEstimateView: View {
                 .padding(.vertical, 12)
             }
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color(.systemBackground))
         .navigationTitle(specialty.map { "\($0) Pros" } ?? "Contractors")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }

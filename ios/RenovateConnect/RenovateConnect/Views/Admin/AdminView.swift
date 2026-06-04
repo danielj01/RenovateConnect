@@ -37,7 +37,7 @@ struct AdminView: View {
                     ContentUnavailableState(error: error) { await load() }
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.systemBackground))
             .navigationTitle("Approvals")
             .task { await load() }
             .refreshable { await load() }

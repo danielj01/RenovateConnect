@@ -36,7 +36,7 @@ struct AppointmentsView: View {
                 .padding(.vertical, 12)
             }
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color(.systemBackground))
         .navigationTitle("Appointments")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }

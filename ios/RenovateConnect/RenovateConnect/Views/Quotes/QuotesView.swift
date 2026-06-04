@@ -39,7 +39,7 @@ struct QuotesView: View {
                 .padding(.vertical, 12)
             }
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color(.systemBackground))
         .navigationTitle("Quotes")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }

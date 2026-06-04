@@ -50,7 +50,7 @@ struct PaymentsView: View {
             }
             .padding(16)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color(.systemBackground))
         .navigationTitle("Payments")
         .navigationBarTitleDisplayMode(.inline)
         .task { await load(); await loadConnect() }

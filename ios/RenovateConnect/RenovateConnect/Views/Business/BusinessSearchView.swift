@@ -124,7 +124,7 @@ struct BusinessSearchView: View {
                     }
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.systemBackground))
             .searchable(text: $query, prompt: "Search contractors…")
             .onSubmit(of: .search) { Task { await search() } }
             .onChange(of: query) {

@@ -22,7 +22,7 @@ struct LeadsView: View {
                     list
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.systemBackground))
             .navigationTitle("Leads")
             .task { await load() }
             .refreshable { await load() }

@@ -37,7 +37,7 @@ private struct EstimatorIntroView: View {
             }
             .padding(20)
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color(.systemBackground))
         .navigationTitle("Cost Estimator")
         .navigationBarTitleDisplayMode(.inline)
     }

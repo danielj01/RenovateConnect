@@ -21,7 +21,7 @@ struct PortfolioManagerView: View {
                     grid
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.systemBackground))
             .navigationTitle("Portfolio")
             .toolbar {
                 if auth.myBusinessId != nil {
