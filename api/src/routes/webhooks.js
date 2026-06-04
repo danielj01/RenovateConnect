@@ -1,6 +1,8 @@
 const router = require('express').Router();
 const db = require('../services/db');
 const { constructWebhookEvent } = require('../services/stripe');
+const { recordActivity } = require('../services/activity');
+const { sendPush } = require('../services/push');
 
 // Apply a verified Stripe event to our DB. Pulled out of the route so it can be
 // unit-tested directly with the Stripe service mocked. Handles:
@@ -79,6 +81,35 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
         where: { stripePaymentIntentId: intentId },
         data: { status: 'REFUNDED', refundedAt: new Date() },
       });
+
+      // Let the homeowner know their deposit came back — a refund is otherwise
+      // silent. Durable feed entry + best-effort push.
+      const payment = await database.payment.findFirst({
+        where: { stripePaymentIntentId: intentId },
+        include: { business: { select: { companyName: true } } },
+      });
+      if (payment && payment.clientId) {
+        const amount = `$${(payment.amountCents / 100).toFixed(2)}`;
+        const company = payment.business?.companyName || 'the contractor';
+        const body = `Your ${amount} deposit to ${company} has been refunded.`;
+        const data = {
+          paymentId: payment.id,
+          ...(payment.quoteRequestId ? { quoteId: payment.quoteRequestId } : {}),
+          ...(payment.businessId ? { businessId: payment.businessId } : {}),
+        };
+        sendPush(payment.clientId, {
+          type: 'PAYMENT',
+          title: 'Deposit refunded 💸',
+          body,
+          data,
+        }).catch(console.error);
+        await recordActivity(payment.clientId, {
+          type: 'PAYMENT',
+          title: 'Deposit refunded',
+          body,
+          data,
+        });
+      }
     }
   }
 }

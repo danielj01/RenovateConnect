@@ -33,6 +33,7 @@ enum ActivityType {
   APPOINTMENT
   REVIEW
   SAVED_SEARCH
+  PAYMENT
 }
 
 enum QuoteStatus {

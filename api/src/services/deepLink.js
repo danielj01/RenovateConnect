@@ -23,6 +23,11 @@ function deepLinkFor(type, data) {
       return d.businessId ? { screen: 'business', id: d.businessId } : null;
     case 'SAVED_SEARCH':
       return d.businessId ? { screen: 'business', id: d.businessId } : null;
+    case 'PAYMENT':
+      // Deposit/refund events point at the originating quote, falling back to
+      // the contractor's profile.
+      if (d.quoteId) return { screen: 'quote', id: d.quoteId };
+      return d.businessId ? { screen: 'business', id: d.businessId } : null;
     default:
       return null;
   }

@@ -481,6 +481,7 @@ enum ActivityType: String, Codable {
     case appointment = "APPOINTMENT"
     case review = "REVIEW"
     case savedSearch = "SAVED_SEARCH"
+    case payment = "PAYMENT"
     // Future-proof: unknown server types decode to `.other` rather than failing.
     case other
 
@@ -496,6 +497,7 @@ enum ActivityType: String, Codable {
         case .appointment: return "calendar"
         case .review: return "star.fill"
         case .savedSearch: return "magnifyingglass"
+        case .payment: return "dollarsign.circle.fill"
         case .other: return "bell.fill"
         }
     }

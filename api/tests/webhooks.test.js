@@ -92,6 +92,21 @@ describe('handleStripeEvent', () => {
     expect(updated.status).toBe('REFUNDED');
     expect(updated.refundedAt).not.toBeNull();
   });
+
+  test('charge.refunded posts a PAYMENT activity entry for the homeowner', async () => {
+    const payment = await pendingPayment();
+    await handleStripeEvent({
+      type: 'charge.refunded',
+      data: { object: { payment_intent: 'pi_w' } },
+    });
+    const activity = await db.activity.findFirst({
+      where: { userId: payment.clientId, type: 'PAYMENT' },
+    });
+    expect(activity).not.toBeNull();
+    expect(activity.title).toBe('Deposit refunded');
+    expect(activity.body).toContain('$540.00');
+    expect(activity.data).toMatchObject({ paymentId: payment.id });
+  });
 });
 
 describe('POST /webhooks/stripe', () => {

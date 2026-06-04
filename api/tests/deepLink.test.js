@@ -36,6 +36,14 @@ describe('deepLinkFor (unit)', () => {
       .toEqual({ screen: 'business', id: 'b2' });
   });
 
+  test('PAYMENT prefers the quote, falling back to business', () => {
+    expect(deepLinkFor('PAYMENT', { quoteId: 'q9', businessId: 'b9' }))
+      .toEqual({ screen: 'quote', id: 'q9' });
+    expect(deepLinkFor('PAYMENT', { businessId: 'b9' }))
+      .toEqual({ screen: 'business', id: 'b9' });
+    expect(deepLinkFor('PAYMENT', {})).toBeNull();
+  });
+
   test('missing ids resolve to null', () => {
     expect(deepLinkFor('APPOINTMENT', {})).toBeNull();
     expect(deepLinkFor('MESSAGE', {})).toBeNull();
