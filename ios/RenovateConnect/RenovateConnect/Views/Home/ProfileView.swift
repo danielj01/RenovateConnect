@@ -124,6 +124,32 @@ struct ProfileView: View {
                         .buttonStyle(.plain)
                         .padding(.horizontal, 16)
 
+                        // Payments hub — both roles: homeowners review deposits
+                        // they've paid, contractors the deposits they've received.
+                        NavigationLink {
+                            PaymentsView()
+                        } label: {
+                            RCCard {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "creditcard.fill")
+                                        .foregroundStyle(Theme.primary).frame(width: 28)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Payments").font(.subheadline).foregroundStyle(.primary)
+                                        Text(user.role == .client
+                                             ? "Deposits you've paid"
+                                             : "Deposits you've received")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption).foregroundStyle(.secondary)
+                                }
+                                .padding(16)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.horizontal, 16)
+
                         // Business card if applicable
                         if let biz = user.business {
                             NavigationLink {
