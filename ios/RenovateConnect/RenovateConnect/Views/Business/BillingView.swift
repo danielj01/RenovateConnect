@@ -18,16 +18,14 @@ struct BillingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 18) {
-                if isLoading && summary == nil {
+                if isLoading && connect == nil {
                     ProgressView().padding(.top, 60)
-                } else if let summary {
+                } else {
                     payoutCard(connect)
-                    promotionCard(summary)
-                    paymentMethodCard(summary)
-                    leadFeesCard(summary)
-                    footnote
-                } else if let error {
-                    ContentUnavailableState(error: error) { await load() }
+                    if let error {
+                        Text(error).font(.caption).foregroundStyle(.red)
+                            .multilineTextAlignment(.center)
+                    }
                 }
             }
             .padding(20)
@@ -239,12 +237,13 @@ struct BillingView: View {
 
     private func load() async {
         error = nil
-        if summary == nil { isLoading = true }
+        if connect == nil { isLoading = true }
         defer { isLoading = false }
         do {
-            summary = try await APIService.shared.billingSummary()
-            // Payout status is secondary — don't fail the whole screen if it errors.
-            connect = try? await APIService.shared.connectStatus()
+            connect = try await APIService.shared.connectStatus()
+            // Legacy billing summary is no longer surfaced in the UI; keep it
+            // non-fatal so a payout-only screen still renders.
+            summary = try? await APIService.shared.billingSummary()
         } catch {
             self.error = error.localizedDescription
         }
