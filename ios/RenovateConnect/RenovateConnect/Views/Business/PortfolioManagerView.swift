@@ -348,7 +348,7 @@ struct PortfolioEditorSheet: View {
     /// a projectId to upload against yet) and uploaded right after the project is
     /// created on save. Thumbnails render straight from the picked data.
     private var newPhotosSection: some View {
-        Section("Photos") {
+        Section {
             if !stagedImages.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
@@ -381,6 +381,8 @@ struct PortfolioEditorSheet: View {
                 guard !items.isEmpty else { return }
                 Task { await stagePicked(items) }
             }
+        } header: {
+            Text("Photos")
         } footer: {
             Text("Photos upload when you add the project.")
         }
