@@ -1,10 +1,25 @@
 import SwiftUI
 import UIKit
+import PhotosUI
 
 struct ProfileView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var notifications: NotificationManager
     @State private var pushEnabled = true
+
+    // Profile picture editing
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var isUploadingAvatar = false
+
+    // Name editing
+    @State private var showNameEdit = false
+    @State private var nameDraft = ""
+
+    // Account deletion
+    @State private var showDeleteConfirm = false
+    @State private var isDeleting = false
+
+    @State private var errorMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -14,24 +29,44 @@ struct ProfileView: View {
                         // Avatar hero card
                         RCCard {
                             VStack(spacing: 14) {
-                                ZStack(alignment: .bottomTrailing) {
-                                    InitialsAvatar(name: user.name, size: 80)
-                                        .clipShape(Circle())
-                                        .overlay(Circle().stroke(.white, lineWidth: 3))
-                                        .shadow(color: Theme.cardShadow, radius: 8)
+                                // Tappable avatar — pick a new photo from the
+                                // library. The camera badge is the edit affordance.
+                                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                                    ZStack(alignment: .bottomTrailing) {
+                                        ProfileAvatar(avatarUrl: user.avatarUrl, name: user.name, size: 80)
+                                            .overlay(Circle().stroke(.white, lineWidth: 3))
+                                            .shadow(color: Theme.cardShadow, radius: 8)
+                                            .opacity(isUploadingAvatar ? 0.5 : 1)
+                                            .overlay {
+                                                if isUploadingAvatar { ProgressView() }
+                                            }
 
-                                    Circle()
-                                        .fill(user.role == .business ? Theme.gold : Theme.primary)
-                                        .frame(width: 22, height: 22)
-                                        .overlay(
-                                            Image(systemName: user.role == .business ? "briefcase.fill" : "person.fill")
-                                                .font(.system(size: 10))
-                                                .foregroundStyle(.white)
-                                        )
+                                        Circle()
+                                            .fill(Theme.primary)
+                                            .frame(width: 26, height: 26)
+                                            .overlay(
+                                                Image(systemName: "camera.fill")
+                                                    .font(.system(size: 11))
+                                                    .foregroundStyle(.white)
+                                            )
+                                            .overlay(Circle().stroke(.white, lineWidth: 2))
+                                    }
                                 }
+                                .buttonStyle(.plain)
+                                .disabled(isUploadingAvatar)
 
                                 VStack(spacing: 4) {
-                                    Text(user.name).font(.title2.bold())
+                                    HStack(spacing: 6) {
+                                        Text(user.name).font(.title2.bold())
+                                        Button {
+                                            nameDraft = user.name
+                                            showNameEdit = true
+                                        } label: {
+                                            Image(systemName: "pencil.circle.fill")
+                                                .font(.title3)
+                                                .foregroundStyle(Theme.primary)
+                                        }
+                                    }
                                     Text(user.email).font(.subheadline).foregroundStyle(.secondary)
                                     Text(user.role == .client ? "Homeowner" : "Business Owner")
                                         .font(.caption.weight(.medium))
@@ -272,6 +307,25 @@ struct ProfileView: View {
                                     }
                                     .padding(16)
                                 }
+
+                                Divider().padding(.horizontal, 16)
+
+                                Button(role: .destructive) {
+                                    showDeleteConfirm = true
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        if isDeleting {
+                                            ProgressView().frame(width: 28)
+                                        } else {
+                                            Image(systemName: "trash.fill")
+                                                .foregroundStyle(.red).frame(width: 28)
+                                        }
+                                        Text("Delete Account").foregroundStyle(.red)
+                                        Spacer()
+                                    }
+                                    .padding(16)
+                                }
+                                .disabled(isDeleting)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -296,6 +350,69 @@ struct ProfileView: View {
                     }
                 }
             }
+            .onChange(of: selectedPhoto) { _, item in
+                guard let item else { return }
+                Task { await uploadAvatar(item) }
+            }
+            .alert("Edit Name", isPresented: $showNameEdit) {
+                TextField("Name", text: $nameDraft)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") { Task { await saveName() } }
+            } message: {
+                Text("This is how you appear across RenovateConnect.")
+            }
+            .confirmationDialog("Delete account permanently?",
+                                isPresented: $showDeleteConfirm,
+                                titleVisibility: .visible) {
+                Button("Delete My Account", role: .destructive) {
+                    Task { await deleteAccount() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently erases your profile, messages, and history. This can't be undone.")
+            }
+            .alert("Something went wrong",
+                   isPresented: Binding(get: { errorMessage != nil },
+                                        set: { if !$0 { errorMessage = nil } })) {
+                Button("OK", role: .cancel) { errorMessage = nil }
+            } message: {
+                Text(errorMessage ?? "")
+            }
+        }
+    }
+
+    // MARK: - Actions
+
+    private func uploadAvatar(_ item: PhotosPickerItem) async {
+        isUploadingAvatar = true
+        defer { isUploadingAvatar = false; selectedPhoto = nil }
+        do {
+            guard let data = try await item.loadTransferable(type: Data.self) else { return }
+            // Normalize through UIImage so we always send a JPEG the API accepts.
+            let jpeg = UIImage(data: data)?.jpegData(compressionQuality: 0.85) ?? data
+            try await auth.uploadAvatar(jpeg)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func saveName() async {
+        let trimmed = nameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, trimmed != auth.currentUser?.name else { return }
+        do {
+            try await auth.updateName(trimmed)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func deleteAccount() async {
+        isDeleting = true
+        defer { isDeleting = false }
+        do {
+            try await auth.deleteAccount()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -310,5 +427,39 @@ struct ProfileView: View {
             Text(value).font(.subheadline).foregroundStyle(.secondary)
         }
         .padding(16)
+    }
+}
+
+// MARK: - Profile avatar
+
+/// A circular user avatar that renders the remote `avatarUrl` when present and
+/// falls back to colored initials while loading or when no picture is set.
+struct ProfileAvatar: View {
+    let avatarUrl: String?
+    let name: String
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if let avatarUrl, !avatarUrl.isEmpty, let url = URL(string: avatarUrl) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .empty:
+                        ZStack {
+                            Theme.avatarColor(for: name).opacity(0.5)
+                            ProgressView().tint(.white)
+                        }
+                    default:
+                        InitialsAvatar(name: name, size: size)
+                    }
+                }
+            } else {
+                InitialsAvatar(name: name, size: size)
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
     }
 }

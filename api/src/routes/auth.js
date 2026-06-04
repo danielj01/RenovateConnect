@@ -6,6 +6,8 @@ const { createPublicKey } = require('crypto');
 const https = require('https');
 const db = require('../services/db');
 const { authMiddleware } = require('../middleware/auth');
+const upload = require('../middleware/upload');
+const { uploadImage } = require('../services/storage');
 
 // Fetch Apple's public JWK keys (used to verify identity tokens)
 function fetchAppleKeys() {
@@ -132,6 +134,7 @@ router.get('/me', authMiddleware, async (req, res, next) => {
 const updateMeSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().nullable().optional(),
+  avatarUrl: z.string().url().nullable().optional(),
   pushEnabled: z.boolean().optional(),
   notifyLeads: z.boolean().optional(),
   notifyMessages: z.boolean().optional(),
@@ -150,6 +153,69 @@ router.patch('/me', authMiddleware, async (req, res, next) => {
     });
     delete user.passwordHash;
     res.json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /me/avatar — upload a new profile picture (multipart, single image).
+// Stores the file in S3 and saves the resulting URL on the user, returning the
+// refreshed user so the client can rebind without a second fetch.
+router.post('/me/avatar', authMiddleware, upload.single('image'), async (req, res, next) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'image required' });
+    const avatarUrl = await uploadImage(req.file.buffer, req.file.mimetype);
+    const user = await db.user.update({
+      where: { id: req.user.id },
+      data: { avatarUrl },
+      include: { business: true },
+    });
+    delete user.passwordHash;
+    res.json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE /me — permanently delete the current user's account and all their data.
+// Several relations (conversations, messages, leads, estimations) don't cascade
+// from the user, so we tear them down explicitly in dependency order inside a
+// transaction; the remaining records (business + its children, payments,
+// favorites, device tokens, activities, appointments, quote requests) cascade
+// when the user row is deleted. This is irreversible.
+router.delete('/me', authMiddleware, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const business = await db.business.findUnique({ where: { userId }, select: { id: true } });
+    const businessId = business?.id;
+
+    await db.$transaction(async (tx) => {
+      // Conversations the user takes part in — as the homeowner, and (if they
+      // own a business) as the contractor. Their leads and messages must go
+      // first because those foreign keys don't cascade.
+      const convs = await tx.conversation.findMany({
+        where: {
+          OR: [{ clientId: userId }, ...(businessId ? [{ businessId }] : [])],
+        },
+        select: { id: true },
+      });
+      const convIds = convs.map((c) => c.id);
+
+      if (convIds.length) {
+        await tx.lead.deleteMany({ where: { conversationId: { in: convIds } } });
+        await tx.message.deleteMany({ where: { conversationId: { in: convIds } } });
+        await tx.conversation.deleteMany({ where: { id: { in: convIds } } });
+      }
+      // Defensive: any leads still tied to the business (should be none left).
+      if (businessId) await tx.lead.deleteMany({ where: { businessId } });
+      // Messages the user sent elsewhere, plus their AI estimations.
+      await tx.message.deleteMany({ where: { senderId: userId } });
+      await tx.estimation.deleteMany({ where: { userId } });
+
+      await tx.user.delete({ where: { id: userId } });
+    });
+
+    res.status(204).end();
   } catch (err) {
     next(err);
   }

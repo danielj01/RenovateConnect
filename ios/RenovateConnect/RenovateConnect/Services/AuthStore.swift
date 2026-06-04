@@ -129,6 +129,24 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    /// Persist a new display name and reflect it locally. Throws on failure so
+    /// the UI can surface an error.
+    func updateName(_ name: String) async throws {
+        currentUser = try await APIService.shared.updateName(name)
+    }
+
+    /// Upload a new profile picture and reflect the updated user locally.
+    func uploadAvatar(_ image: Data) async throws {
+        currentUser = try await APIService.shared.uploadAvatar(image)
+    }
+
+    /// Permanently delete the account, then tear down the local session exactly
+    /// like a sign-out so the app returns to the welcome flow.
+    func deleteAccount() async throws {
+        try await APIService.shared.deleteAccount()
+        logout()
+    }
+
     func loadMe() async {
         do {
             currentUser = try await APIService.shared.me()

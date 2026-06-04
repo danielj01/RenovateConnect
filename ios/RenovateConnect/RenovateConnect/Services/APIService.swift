@@ -89,6 +89,41 @@ final class APIService {
         try await request("auth/me", method: "PATCH", body: ["pushEnabled": pushEnabled])
     }
 
+    /// Update the current user's display name.
+    func updateName(_ name: String) async throws -> User {
+        try await request("auth/me", method: "PATCH", body: ["name": name])
+    }
+
+    /// Upload a new profile picture (single JPEG). Returns the refreshed user
+    /// with its updated `avatarUrl`.
+    func uploadAvatar(_ image: Data) async throws -> User {
+        let url = base.appendingPathComponent("auth/me/avatar")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+
+        let boundary = UUID().uuidString
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        func append(_ s: String) { body.append(s.data(using: .utf8)!) }
+        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"image\"; filename=\"avatar.jpg\"\r\nContent-Type: image/jpeg\r\n\r\n")
+        body.append(image)
+        append("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.requestFailed((response as? HTTPURLResponse)?.statusCode ?? 0, "Upload failed")
+        }
+        return try JSONDecoder().decode(User.self, from: data)
+    }
+
+    /// Permanently delete the current user's account. Irreversible.
+    func deleteAccount() async throws {
+        try await requestNoContent("auth/me", method: "DELETE")
+    }
+
     /// Update per-category notification preferences. Only non-nil fields are
     /// sent, so a single toggle PATCHes just that category.
     func updateNotificationPrefs(notifyLeads: Bool? = nil,
