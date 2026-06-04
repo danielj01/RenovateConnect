@@ -195,6 +195,28 @@ final class APIService {
                                             licenseNumber: licenseNumber, website: website, address: address))
     }
 
+    func updateBusiness(id: String, companyName: String, description: String, city: String, state: String,
+                        zipCode: String, specialties: [String], yearsInBusiness: Int?,
+                        licenseNumber: String?, website: String?, address: String?) async throws -> Business {
+        struct Body: Encodable {
+            let companyName: String
+            let description: String
+            let city: String
+            let state: String
+            let zipCode: String
+            let specialties: [String]
+            let yearsInBusiness: Int?
+            let licenseNumber: String?
+            let website: String?
+            let address: String?
+        }
+        return try await request("businesses/\(id)", method: "PUT",
+                                 body: Body(companyName: companyName, description: description,
+                                            city: city, state: state, zipCode: zipCode,
+                                            specialties: specialties, yearsInBusiness: yearsInBusiness,
+                                            licenseNumber: licenseNumber, website: website, address: address))
+    }
+
     // Business dashboard
     func dashboard() async throws -> DashboardStats {
         try await request("businesses/dashboard")

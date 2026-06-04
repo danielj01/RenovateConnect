@@ -53,6 +53,10 @@ struct Business: Codable, Identifiable {
     let logoUrl: String?
     let city: String
     let state: String
+    // Present on owner/admin payloads (full business row); omitted from the lean
+    // public/search projections.
+    var zipCode: String?
+    var address: String?
     let specialties: [String]
     let averageRating: Double
     let reviewCount: Int

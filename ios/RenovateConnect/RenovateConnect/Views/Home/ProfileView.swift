@@ -224,6 +224,26 @@ struct ProfileView: View {
                             }
                             .buttonStyle(.plain)
                             .padding(.horizontal, 16)
+
+                            NavigationLink {
+                                EditBusinessProfileView(business: biz)
+                            } label: {
+                                RCCard {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "pencil")
+                                            .font(.subheadline)
+                                            .foregroundStyle(Theme.primary)
+                                            .frame(width: 28, height: 28)
+                                        Text("Edit business profile").font(.subheadline)
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption2).foregroundStyle(.secondary)
+                                    }
+                                    .padding(16)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 16)
                         }
 
                         // Notifications section
