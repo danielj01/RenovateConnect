@@ -68,7 +68,7 @@ function summarizeBusiness({ business, projects = [], reviews = [], since }) {
       state: business.state,
       averageRating: business.averageRating,
       reviewCount: business.reviewCount,
-      isPromoted: business.isPromoted,
+      verified: business.verified,
     },
     since: new Date(since).toISOString(),
     newProjectCount: newProjects.length,

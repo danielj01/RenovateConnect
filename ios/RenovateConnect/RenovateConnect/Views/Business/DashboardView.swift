@@ -28,7 +28,6 @@ struct DashboardView: View {
                     } else if let stats {
                         metricsGrid(stats)
                         pipelineCard(stats)
-                        promoCard(stats)
                     } else if let error {
                         ContentUnavailableState(error: error) { await load() }
                     }
@@ -103,34 +102,6 @@ struct DashboardView: View {
             }
             .padding(18)
         }
-    }
-
-    private func promoCard(_ s: DashboardStats) -> some View {
-        NavigationLink {
-            BillingView()
-        } label: {
-            RCCard {
-                HStack(spacing: 14) {
-                    Image(systemName: s.isPromoted ? "bolt.fill" : "bolt.slash.fill")
-                        .font(.title2)
-                        .foregroundStyle(s.isPromoted ? Theme.gold : .secondary)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(s.isPromoted ? "Promoted listing active" : "Billing & promotion")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text(s.isPromoted
-                             ? "You appear at the top of search results."
-                             : "Add a card, view lead fees, and get promoted.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
-                }
-                .padding(18)
-            }
-        }
-        .buttonStyle(.plain)
     }
 
     private func color(for status: LeadStatus) -> Color {

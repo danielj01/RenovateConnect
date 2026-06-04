@@ -98,7 +98,6 @@ router.get('/dashboard', authMiddleware, requireRole('BUSINESS', 'ADMIN'), async
       profileViews: business.profileViews,
       averageRating: business.averageRating,
       reviewCount: business.reviewCount,
-      isPromoted: business.isPromoted,
       totalLeads,
       conversationCount,
       leadsByStatus: byStatus,

@@ -151,8 +151,8 @@ router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) =
 
     if (isFirstContact) {
       const business = await db.business.findUnique({ where: { id: businessId } });
-      // Record the lead as unbilled. Lead fees are charged in one monthly invoice
-      // by services/billing.js#runMonthlyBilling, not inline here.
+      // Record the lead for the contractor's CRM pipeline (NEW → … → CONVERTED).
+      // Leads are no longer billed — discovery is free; we monetize the deposit.
       await db.lead.create({ data: { conversationId: conversation.id, businessId } });
       // Notify the business owner of a new lead — fire and forget.
       if (business?.userId) {

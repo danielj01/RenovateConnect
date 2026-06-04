@@ -50,7 +50,7 @@ describe('favoritesDigest service (unit)', () => {
   test('summarizeBusiness counts only items after the cutoff', () => {
     const since = daysAgo(2);
     const entry = summarizeBusiness({
-      business: { id: 'b1', companyName: 'Co', city: 'Austin', state: 'TX', averageRating: 4, reviewCount: 3, isPromoted: false },
+      business: { id: 'b1', companyName: 'Co', city: 'Austin', state: 'TX', averageRating: 4, reviewCount: 3, verified: false },
       projects: [
         { id: 'p1', title: 'New', imageUrls: [], createdAt: daysAgo(1) },
         { id: 'p0', title: 'Old', imageUrls: [], createdAt: daysAgo(5) },
@@ -66,7 +66,7 @@ describe('favoritesDigest service (unit)', () => {
 
   test('summarizeBusiness reports no updates when nothing is newer', () => {
     const entry = summarizeBusiness({
-      business: { id: 'b1', companyName: 'Co', city: 'Austin', state: 'TX', averageRating: 0, reviewCount: 0, isPromoted: false },
+      business: { id: 'b1', companyName: 'Co', city: 'Austin', state: 'TX', averageRating: 0, reviewCount: 0, verified: false },
       projects: [{ id: 'p0', title: 'Old', imageUrls: [], createdAt: daysAgo(10) }],
       reviews: [],
       since: daysAgo(3),
@@ -80,7 +80,7 @@ describe('favoritesDigest service (unit)', () => {
       id: `p${i}`, title: `P${i}`, imageUrls: [], createdAt: daysAgo(1),
     }));
     const entry = summarizeBusiness({
-      business: { id: 'b1', companyName: 'Co', city: 'Austin', state: 'TX', averageRating: 0, reviewCount: 0, isPromoted: false },
+      business: { id: 'b1', companyName: 'Co', city: 'Austin', state: 'TX', averageRating: 0, reviewCount: 0, verified: false },
       projects,
       reviews: [],
       since: daysAgo(2),

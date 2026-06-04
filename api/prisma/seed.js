@@ -20,7 +20,7 @@ const businesses = [
     yearsInBusiness: 15,
     website: 'https://peakrenovations.dev',
     logoUrl: logo('1628745277862-bc0b2d68c50c'),
-    isPromoted: true,
+    verified: true,
     averageRating: 4.9,
     portfolio: [
       { title: 'Lincoln Park Chef\'s Kitchen', category: 'Kitchen', description: 'Full gut remodel with custom walnut cabinetry, quartz waterfall island, and a pro-grade appliance package.', costMin: 62000, costMax: 78000, durationWeeks: 7, featured: true, imageUrls: [photo('1628745277862-bc0b2d68c50c'), photo('1682888813913-e13f18692019')] },
@@ -43,7 +43,7 @@ const businesses = [
     specialties: ['Kitchen', 'Bathroom', 'Flooring', 'Painting'],
     yearsInBusiness: 12,
     logoUrl: logo('1592506119503-c0b18879bd5a'),
-    isPromoted: true,
+    verified: true,
     averageRating: 4.7,
     portfolio: [
       { title: 'West Loop Whole-Floor Remodel', category: 'Kitchen', description: 'New hardwood throughout, repainted interior, and a modern backsplash refresh.', costMin: 40000, costMax: 55000, durationWeeks: 6, featured: true, imageUrls: [photo('1665507279638-5b48073c637b'), photo('1631048498692-af6262577031')] },
@@ -183,7 +183,7 @@ async function main() {
   console.log('  🛡️  admin@renovateconnect.dev (Password123!)');
 
   for (const biz of businesses) {
-    const { reviews, isPromoted = false, averageRating, portfolio = [], profileViews = 0, ...bizData } = biz;
+    const { reviews, verified = false, averageRating, portfolio = [], profileViews = 0, ...bizData } = biz;
 
     const reviewCount = reviews.length;
     const avgRating = reviews.reduce((s, r) => s + r.rating, 0) / reviewCount;
@@ -207,8 +207,8 @@ async function main() {
             yearsInBusiness: bizData.yearsInBusiness,
             website: bizData.website ?? null,
             logoUrl: bizData.logoUrl ?? null,
-            isPromoted,
-            promotedUntil: isPromoted ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) : null,
+            verified,
+            verifiedAt: verified ? new Date() : null,
             averageRating: parseFloat(avgRating.toFixed(1)),
             reviewCount,
             // Demo data is pre-approved so the seeded marketplace is browsable

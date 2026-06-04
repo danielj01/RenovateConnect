@@ -162,18 +162,6 @@ model Business {
   searchImpressions Int     @default(0)
   profileViews    Int       @default(0)
 
-  // Promoted listing
-  isPromoted      Boolean   @default(false)
-  promotedUntil   DateTime?
-  stripeCustomerId String?
-  stripeSubId      String?
-
-  // Saved payment method, captured via a Stripe Checkout setup session. We only
-  // persist the display brand + last4 (never the PAN); the actual card lives in
-  // Stripe and is set as the customer's default for off-session invoicing.
-  cardBrand        String?
-  cardLast4        String?
-
   // Stripe Connect — the contractor's connected (Express) account, used to
   // receive in-app deposit payouts. `chargesEnabled`/`payoutsEnabled` mirror the
   // Stripe account capabilities (updated via the account.updated webhook); a
@@ -328,8 +316,6 @@ model Lead {
   status         LeadStatus   @default(NEW)
   notes          String?
   estimatedValue Int?         // estimated job value in dollars, set by the business
-  billed         Boolean      @default(false)
-  billedAt       DateTime?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 

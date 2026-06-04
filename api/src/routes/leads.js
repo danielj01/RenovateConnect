@@ -47,17 +47,4 @@ router.patch('/:id', authMiddleware, requireRole('BUSINESS', 'ADMIN'), async (re
   }
 });
 
-// Admin: mark lead as billed
-router.patch('/:id/bill', authMiddleware, requireRole('ADMIN'), async (req, res, next) => {
-  try {
-    const lead = await db.lead.update({
-      where: { id: req.params.id },
-      data: { billed: true, billedAt: new Date() },
-    });
-    res.json(lead);
-  } catch (err) {
-    next(err);
-  }
-});
-
 module.exports = router;

@@ -56,7 +56,6 @@ struct Business: Codable, Identifiable {
     let specialties: [String]
     let averageRating: Double
     let reviewCount: Int
-    let isPromoted: Bool
     let yearsInBusiness: Int
     let website: String?
     let reviews: [Review]?
@@ -594,7 +593,8 @@ struct FavoritesDigestEntry: Codable, Identifiable {
         let state: String
         let averageRating: Double
         let reviewCount: Int
-        let isPromoted: Bool
+        let verified: Bool?
+        var isVerified: Bool { verified ?? false }
     }
 
     let business: Business
@@ -632,30 +632,12 @@ struct DashboardStats: Codable {
     let profileViews: Int
     let averageRating: Double
     let reviewCount: Int
-    let isPromoted: Bool
     let totalLeads: Int
     let conversationCount: Int
     let leadsByStatus: LeadsByStatus
     let conversionRate: Int
     let pipelineValue: Int
     let wonValue: Int
-}
-
-// Billing dashboard payload — the business's saved card, promoted-plan state,
-// and this month's accrued (not-yet-invoiced) lead fees. Mirrors GET /billing/summary.
-struct BillingSummary: Codable {
-    let isPromoted: Bool
-    let promotedUntil: String?
-    let card: CardInfo?
-    let hasPaymentMethod: Bool
-    let leadFeeCents: Int
-    let unbilledLeads: Int
-    let unbilledAmountCents: Int
-
-    struct CardInfo: Codable {
-        let brand: String
-        let last4: String
-    }
 }
 
 // MARK: - In-app deposits (Stripe Connect)
