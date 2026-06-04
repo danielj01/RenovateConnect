@@ -68,6 +68,8 @@ struct Business: Codable, Identifiable {
     var verified: Bool?
     var verifiedAt: String?
     var licenseNumber: String?
+    // Whether the contractor can accept in-app deposits (Stripe Connect payouts).
+    var payoutsEnabled: Bool?
 
     // Admin approval — optional because the backend only includes these for
     // owners/admins and on dashboard payloads.

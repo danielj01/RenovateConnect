@@ -166,8 +166,9 @@ struct BusinessDetailView: View {
                 .padding(16)
             }
 
-            // Trust & credentials — shown when verified or a license is on file.
-            if biz.isVerified || (biz.licenseNumber?.isEmpty == false) {
+            // Trust & credentials — shown when verified, licensed, or able to
+            // accept secured in-app payments.
+            if biz.isVerified || (biz.licenseNumber?.isEmpty == false) || (biz.payoutsEnabled == true) {
                 RCCard {
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Trust & Credentials", systemImage: "checkmark.shield.fill")
@@ -196,6 +197,19 @@ struct BusinessDetailView: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("License").font(.subheadline.weight(.semibold))
                                     Text(license).font(.caption).foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+
+                        if biz.payoutsEnabled == true {
+                            HStack(spacing: 10) {
+                                Image(systemName: "lock.shield.fill")
+                                    .foregroundStyle(Theme.success)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Accepts in-app payments")
+                                        .font(.subheadline.weight(.semibold))
+                                    Text("Pay a secured deposit through RenovateConnect")
+                                        .font(.caption).foregroundStyle(.secondary)
                                 }
                             }
                         }
