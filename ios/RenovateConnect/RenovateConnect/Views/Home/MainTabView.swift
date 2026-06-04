@@ -33,7 +33,14 @@ struct MainTabView: View {
             if auth.isAdmin {
                 adminTabs
             } else if auth.isBusiness {
-                businessTabs
+                // A contractor who hasn't created their business profile yet has
+                // nothing to show in the dashboard/leads/portfolio tabs, so gate
+                // them behind a one-time setup form.
+                if auth.currentUser?.business == nil {
+                    BusinessProfileSetupView()
+                } else {
+                    businessTabs
+                }
             } else {
                 clientTabs
             }

@@ -22,8 +22,10 @@ final class AuthStore: ObservableObject {
         do {
             let resp = try await APIService.shared.login(email: email, password: password)
             UserDefaults.standard.set(resp.token, forKey: "authToken")
-            currentUser = resp.user
-            await loadMe() // hydrate full profile (includes linked business)
+            // Hydrate the full profile (includes the linked business) before
+            // flipping to the logged-in UI, so contractors land on their tab bar
+            // and not momentarily on the "set up your business" screen.
+            await loadMe()
         } catch {
             self.error = Self.signInMessage(for: error)
         }
@@ -36,7 +38,6 @@ final class AuthStore: ObservableObject {
         do {
             let resp = try await APIService.shared.register(email: email, password: password, name: name, role: role)
             UserDefaults.standard.set(resp.token, forKey: "authToken")
-            currentUser = resp.user
             await loadMe()
         } catch {
             self.error = Self.registerMessage(for: error)
