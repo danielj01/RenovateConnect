@@ -247,6 +247,13 @@ final class APIService {
                           body: ["reason": reason ?? ""])
     }
 
+    /// Admin: grant or revoke the "Verified by RenovateConnect" trust badge,
+    /// which also sorts the business ahead of unverified ones in search.
+    func adminVerifyBusiness(id: String, verified: Bool) async throws -> Business {
+        try await request("businesses/\(id)/verify", method: "PATCH",
+                          body: ["verified": verified])
+    }
+
     func adminApprovePortfolio(projectId: String) async throws -> PortfolioProject {
         struct Empty: Encodable {}
         return try await request("admin/portfolio/\(projectId)/approve", method: "POST", body: Empty())

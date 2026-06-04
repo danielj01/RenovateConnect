@@ -10,24 +10,31 @@ struct PaymentsView: View {
     @State private var error: String?
     @State private var refundTarget: Payment?
     @State private var refundingId: String?
+    @State private var connect: ConnectStatus?
+    @State private var onboardURL: URL?
+    @State private var onboardLoading = false
 
     private var isBusiness: Bool { auth.currentUser?.role == .business }
 
     var body: some View {
         ScrollView {
-            if isLoading && payments.isEmpty {
-                ProgressView().padding(.top, 60)
-            } else if payments.isEmpty {
-                ContentUnavailableView {
-                    Label("No payments yet", systemImage: "creditcard")
-                } description: {
-                    Text(isBusiness
-                         ? "Deposits homeowners pay you will appear here."
-                         : "Deposits you pay to confirm a job will appear here.")
-                }
-                .padding(.top, 60)
-            } else {
-                LazyVStack(spacing: 12) {
+            LazyVStack(spacing: 12) {
+                // Contractor payout setup — gates whether homeowners can pay
+                // deposits at all, so it sits above the (possibly empty) history.
+                if isBusiness { payoutSetupCard }
+
+                if isLoading && payments.isEmpty {
+                    ProgressView().padding(.top, 60)
+                } else if payments.isEmpty {
+                    ContentUnavailableView {
+                        Label("No payments yet", systemImage: "creditcard")
+                    } description: {
+                        Text(isBusiness
+                             ? "Deposits homeowners pay you will appear here."
+                             : "Deposits you pay to confirm a job will appear here.")
+                    }
+                    .padding(.top, 40)
+                } else {
                     summaryCard
                     ForEach(payments) { payment in
                         PaymentRow(
@@ -40,14 +47,17 @@ struct PaymentsView: View {
                         )
                     }
                 }
-                .padding(16)
             }
+            .padding(16)
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle("Payments")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await load() }
-        .refreshable { await load() }
+        .task { await load(); await loadConnect() }
+        .refreshable { await load(); await loadConnect() }
+        .sheet(item: $onboardURL, onDismiss: { Task { await loadConnect() } }) { url in
+            SafariView(url: url).ignoresSafeArea()
+        }
         .confirmationDialog(
             "Refund this deposit?",
             isPresented: Binding(get: { refundTarget != nil },
@@ -62,11 +72,78 @@ struct PaymentsView: View {
         } message: { _ in
             Text("The homeowner gets the full deposit back, your payout is reversed, and the platform fee is returned. This can't be undone.")
         }
-        .alert("Couldn't refund", isPresented: Binding(get: { error != nil },
-                                                       set: { if !$0 { error = nil } })) {
+        .alert("Something went wrong", isPresented: Binding(get: { error != nil },
+                                                            set: { if !$0 { error = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(error ?? "")
+        }
+    }
+
+    // MARK: - Payout setup (Stripe Connect)
+
+    /// Shown to contractors. Until payouts are enabled, homeowners can't pay a
+    /// deposit on any of their jobs — so this is the gate on all in-app revenue.
+    @ViewBuilder
+    private var payoutSetupCard: some View {
+        if let connect {
+            if connect.payoutsEnabled {
+                RCCard {
+                    HStack(spacing: 12) {
+                        Image(systemName: "lock.shield.fill")
+                            .font(.title3).foregroundStyle(Theme.success)
+                            .frame(width: 36, height: 36)
+                            .background(Theme.success.opacity(0.15)).clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Payouts active").font(.subheadline.weight(.semibold))
+                            Text("Homeowners can pay deposits to confirm your jobs.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                    }
+                    .padding(14)
+                }
+            } else {
+                RCCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Set up payouts", systemImage: "building.columns.fill")
+                            .font(.headline).foregroundStyle(Theme.primary)
+                        Text("Connect a payout account to accept secured deposits from homeowners. Until you do, the \u{201C}Pay deposit\u{201D} button won't appear on your accepted quotes. Powered by Stripe.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                        Button {
+                            Task { await startOnboarding() }
+                        } label: {
+                            HStack(spacing: 8) {
+                                if onboardLoading { ProgressView().tint(.white) }
+                                Text(connect.onboarded ? "Finish payout setup" : "Set up payouts")
+                                    .font(.subheadline.weight(.semibold))
+                                Spacer()
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 38)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.primary)
+                        .disabled(onboardLoading)
+                    }
+                    .padding(16)
+                }
+            }
+        }
+    }
+
+    private func loadConnect() async {
+        guard isBusiness else { return }
+        connect = try? await APIService.shared.connectStatus()
+    }
+
+    private func startOnboarding() async {
+        onboardLoading = true
+        defer { onboardLoading = false }
+        do {
+            onboardURL = try await APIService.shared.connectOnboardURL()
+        } catch {
+            self.error = error.localizedDescription
         }
     }
 

@@ -10,6 +10,7 @@ struct BusinessDetailView: View {
     @State private var showReview = false
     @State private var showHoursEditor = false
     @State private var respondingTo: Review?
+    @State private var verifying = false
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var favorites: FavoritesStore
 
@@ -151,6 +152,12 @@ struct BusinessDetailView: View {
     private func contentSection(_ biz: Business) -> some View {
         VStack(alignment: .leading, spacing: 16) {
 
+            // Admin-only verification control. Verifying grants the trust badge
+            // and sorts the business ahead of unverified ones in search.
+            if auth.isAdmin {
+                adminVerifyCard(biz)
+            }
+
             // About
             RCCard {
                 VStack(alignment: .leading, spacing: 10) {
@@ -273,6 +280,59 @@ struct BusinessDetailView: View {
         .padding(.horizontal, 16)
         .padding(.top, 20)
         .background(Color(.systemGroupedBackground))
+    }
+
+    // MARK: - Admin verification
+
+    @ViewBuilder
+    private func adminVerifyCard(_ biz: Business) -> some View {
+        let verified = biz.isVerified
+        RCCard {
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Admin Controls", systemImage: "checkmark.shield.fill")
+                    .font(.headline)
+                    .foregroundStyle(VerifiedBadge.trust)
+
+                HStack(spacing: 10) {
+                    Image(systemName: verified ? "checkmark.seal.fill" : "seal")
+                        .foregroundStyle(verified ? VerifiedBadge.trust : .secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(verified ? "Verified" : "Not verified")
+                            .font(.subheadline.weight(.semibold))
+                        Text(verified
+                             ? "Shows the trust badge and ranks ahead of unverified listings in search."
+                             : "Verifying grants the trust badge and boosts search placement.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+
+                Button {
+                    Task { await setVerified(!verified, on: biz) }
+                } label: {
+                    HStack(spacing: 8) {
+                        if verifying { ProgressView().tint(.white) }
+                        Text(verified ? "Remove verification" : "Verify business")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 38)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(verified ? Color(.systemGray) : VerifiedBadge.trust)
+                .disabled(verifying)
+            }
+            .padding(16)
+        }
+    }
+
+    private func setVerified(_ verified: Bool, on biz: Business) async {
+        verifying = true
+        defer { verifying = false }
+        // Refetch so the badge, hero, and trust card all reflect the new state.
+        _ = try? await APIService.shared.adminVerifyBusiness(id: biz.id, verified: verified)
+        await load()
     }
 
     // MARK: - Reviews

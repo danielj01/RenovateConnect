@@ -5,6 +5,9 @@ struct DashboardView: View {
     @State private var stats: DashboardStats?
     @State private var isLoading = true
     @State private var error: String?
+    @State private var payouts: ConnectStatus?
+    @State private var onboardURL: URL?
+    @State private var onboardLoading = false
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
@@ -21,6 +24,15 @@ struct DashboardView: View {
                             status: status,
                             reason: auth.currentUser?.business?.rejectionReason
                         )
+                    }
+
+                    // Payouts gate all in-app deposits. Nudge the contractor to
+                    // finish Stripe Connect setup until it's enabled.
+                    if let payouts, !payouts.payoutsEnabled {
+                        PayoutSetupBanner(
+                            onboarded: payouts.onboarded,
+                            isLoading: onboardLoading
+                        ) { await startOnboarding() }
                     }
 
                     if isLoading {
@@ -43,6 +55,9 @@ struct DashboardView: View {
             }
             .task { await load() }
             .refreshable { await load() }
+            .sheet(item: $onboardURL, onDismiss: { Task { await loadPayouts() } }) { url in
+                SafariView(url: url).ignoresSafeArea()
+            }
         }
     }
 
@@ -122,6 +137,17 @@ struct DashboardView: View {
         } catch {
             self.error = error.localizedDescription
         }
+        await loadPayouts()
+    }
+
+    private func loadPayouts() async {
+        payouts = try? await APIService.shared.connectStatus()
+    }
+
+    private func startOnboarding() async {
+        onboardLoading = true
+        defer { onboardLoading = false }
+        onboardURL = try? await APIService.shared.connectOnboardURL()
     }
 }
 
@@ -195,6 +221,58 @@ struct ApprovalStatusBanner: View {
                 Text(body1).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
+        }
+        .padding(14)
+        .background(tint.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14).stroke(tint.opacity(0.25), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Payout setup banner
+
+/// Dashboard nudge shown until the contractor finishes Stripe Connect payout
+/// setup. Without it homeowners can't pay deposits, so it's the gate on all
+/// in-app revenue. Tapping it opens hosted onboarding directly.
+struct PayoutSetupBanner: View {
+    let onboarded: Bool
+    let isLoading: Bool
+    let action: () async -> Void
+
+    private let tint = Theme.primary
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "building.columns.fill")
+                    .font(.title3).foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+                    .background(tint.opacity(0.15)).clipShape(Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(onboarded ? "Finish payout setup" : "Set up payouts to get paid")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Homeowners can't pay deposits until you connect a payout account. Powered by Stripe.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+            }
+            Button {
+                Task { await action() }
+            } label: {
+                HStack(spacing: 8) {
+                    if isLoading { ProgressView().tint(.white) }
+                    Text(onboarded ? "Finish setup" : "Set up payouts")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity)
+                .frame(height: 38)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(tint)
+            .disabled(isLoading)
         }
         .padding(14)
         .background(tint.opacity(0.08))
