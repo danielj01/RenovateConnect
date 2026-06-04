@@ -5,6 +5,7 @@ import SwiftUI
 /// can convert into a lead — the core retention → revenue loop.
 struct MyProjectsView: View {
     enum Segment: String, CaseIterable, Identifiable {
+        case projects = "Projects"
         case saved = "Saved"
         case estimates = "Estimates"
         var id: String { rawValue }
@@ -16,6 +17,8 @@ struct MyProjectsView: View {
     @State private var segment: Segment = .saved
     @State private var estimations: [Estimation] = []
     @State private var loadingEstimates = true
+    @State private var projects: [ProjectSummary] = []
+    @State private var loadingProjects = true
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,6 +31,7 @@ struct MyProjectsView: View {
 
             ScrollView {
                 switch segment {
+                case .projects: projectsSection
                 case .saved: savedSection
                 case .estimates: estimatesSection
                 }
@@ -40,11 +44,50 @@ struct MyProjectsView: View {
             await favorites.refresh()
             await favorites.refreshDigestBadge()
             await loadEstimates()
+            await loadProjects()
         }
         .refreshable {
             await favorites.refresh()
             await favorites.refreshDigestBadge()
             await loadEstimates()
+            await loadProjects()
+        }
+    }
+
+    // MARK: - Active projects
+
+    @ViewBuilder
+    private var projectsSection: some View {
+        if loadingProjects {
+            ProgressView().padding(.top, 60)
+        } else if projects.isEmpty {
+            ContentUnavailableView {
+                Label("No active projects", systemImage: "hammer")
+            } description: {
+                Text("When you request a quote, book a visit, or pay a deposit, the contractor shows up here so you can track everything in one place.")
+            } actions: {
+                Button {
+                    goToTab(TabRouter.explore)
+                } label: {
+                    Text("Find a contractor").fontWeight(.semibold)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.primary)
+            }
+            .padding(.top, 60)
+        } else {
+            LazyVStack(spacing: 12) {
+                ForEach(projects) { project in
+                    NavigationLink(destination: ProjectDetailView(businessId: project.businessId,
+                                                                  companyName: project.companyName)) {
+                        ProjectSummaryCard(project: project)
+                            .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.top, 4)
+            .padding(.bottom, 40)
         }
     }
 
@@ -160,6 +203,81 @@ struct MyProjectsView: View {
         loadingEstimates = true
         defer { loadingEstimates = false }
         estimations = (try? await APIService.shared.myEstimations()) ?? []
+    }
+
+    private func loadProjects() async {
+        loadingProjects = true
+        defer { loadingProjects = false }
+        projects = (try? await APIService.shared.myProjects()) ?? []
+    }
+}
+
+// MARK: - Project card
+
+/// One active engagement: contractor identity, a single headline of what needs
+/// attention, and small badges for open quotes / upcoming visits / unread chat.
+private struct ProjectSummaryCard: View {
+    let project: ProjectSummary
+
+    var body: some View {
+        RCCard {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 14) {
+                    BusinessAvatar(name: project.companyName, logoUrl: project.logoUrl,
+                                   size: 50, cornerRadius: 12)
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(project.companyName)
+                                .font(.headline).foregroundStyle(.primary)
+                            if project.verified {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(VerifiedBadge.trust)
+                                    .accessibilityLabel("Verified")
+                            }
+                        }
+                        Text(project.headline)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Theme.primary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                }
+
+                if !badges.isEmpty {
+                    HStack(spacing: 8) {
+                        ForEach(badges, id: \.label) { badge in
+                            HStack(spacing: 4) {
+                                Image(systemName: badge.icon).font(.caption2)
+                                Text(badge.label).font(.caption2.weight(.medium))
+                            }
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(Theme.primaryLight)
+                            .foregroundStyle(Theme.primary)
+                            .clipShape(Capsule())
+                        }
+                    }
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private var badges: [(icon: String, label: String)] {
+        var out: [(String, String)] = []
+        if project.openQuoteCount > 0 {
+            out.append(("doc.text", "\(project.openQuoteCount) quote\(project.openQuoteCount == 1 ? "" : "s")"))
+        }
+        if project.upcomingAppointmentCount > 0 {
+            out.append(("calendar", "\(project.upcomingAppointmentCount) visit\(project.upcomingAppointmentCount == 1 ? "" : "s")"))
+        }
+        if project.unreadCount > 0 {
+            out.append(("bubble.left.fill", "\(project.unreadCount) unread"))
+        }
+        if project.paymentCount > 0 {
+            out.append(("checkmark.seal", "Deposit paid"))
+        }
+        return out
     }
 }
 

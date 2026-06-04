@@ -603,6 +603,21 @@ final class APIService {
                                             quoteHigh: quoteHigh, responseNote: responseNote))
     }
 
+    // MARK: - Project hub (derived: everything tied to one contractor)
+
+    /// Active projects for the signed-in user, grouped by contractor, newest
+    /// activity first. Read-only aggregation over quotes/appointments/payments/
+    /// messages — there's no Project table behind this.
+    func myProjects() async throws -> [ProjectSummary] {
+        try await request("projects")
+    }
+
+    /// The full aggregated timeline for one engagement (the homeowner's project
+    /// with a given contractor).
+    func project(businessId: String) async throws -> ProjectDetail {
+        try await request("projects/\(businessId)")
+    }
+
     // Activity feed
     func myActivities() async throws -> [Activity] {
         try await request("activities")
