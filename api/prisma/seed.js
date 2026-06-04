@@ -239,6 +239,15 @@ async function main() {
       if (business.profileViews !== profileViews) {
         await prisma.business.update({ where: { id: business.id }, data: { profileViews } });
       }
+      // Keep the showcase verification flag in sync on re-runs (the user.upsert
+      // above has an empty `update`, so newly-added `verified: true` flags would
+      // otherwise never reach already-seeded businesses).
+      if (business.verified !== verified) {
+        await prisma.business.update({
+          where: { id: business.id },
+          data: { verified, verifiedAt: verified ? (business.verifiedAt ?? new Date()) : null },
+        });
+      }
       if (!business.logoUrl && bizData.logoUrl) {
         await prisma.business.update({ where: { id: business.id }, data: { logoUrl: bizData.logoUrl } });
       }
