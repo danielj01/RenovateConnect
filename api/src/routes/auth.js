@@ -164,7 +164,7 @@ router.patch('/me', authMiddleware, async (req, res, next) => {
 router.post('/me/avatar', authMiddleware, upload.single('image'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'image required' });
-    const avatarUrl = await uploadImage(req.file.buffer, req.file.mimetype);
+    const avatarUrl = await uploadImage(req.file.buffer, req.file.mimetype, `${req.protocol}://${req.get('host')}`);
     const user = await db.user.update({
       where: { id: req.user.id },
       data: { avatarUrl },

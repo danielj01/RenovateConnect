@@ -398,7 +398,8 @@ router.post(
       }
       if (!req.files?.length) return res.status(400).json({ error: 'No images uploaded' });
 
-      const urls = await Promise.all(req.files.map((f) => uploadImage(f.buffer, f.mimetype)));
+      const base = `${req.protocol}://${req.get('host')}`;
+      const urls = await Promise.all(req.files.map((f) => uploadImage(f.buffer, f.mimetype, base)));
       const project = await db.portfolioProject.update({
         where: { id: existing.id },
         data: { imageUrls: [...existing.imageUrls, ...urls] },

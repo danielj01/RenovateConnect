@@ -5,6 +5,9 @@ node_modules/
 dist/
 coverage/
 
+# Locally-stored uploads (S3 fallback in dev)
+api/uploads/
+
 # Prisma
 api/prisma/migrations/*.sql.bak
 

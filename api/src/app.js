@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -31,6 +32,10 @@ app.use(morgan('dev'));
 app.use('/webhooks', webhookRoutes);
 
 app.use(express.json({ limit: '10mb' }));
+
+// Locally-stored uploads (avatars, portfolio photos) when S3 isn't in use.
+// Mounted before the rate limiter so loading images doesn't burn the quota.
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
 app.use(limiter);
