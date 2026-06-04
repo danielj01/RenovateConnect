@@ -574,6 +574,35 @@ final class APIService {
         try await requestNoContent("advertising/subscribe", method: "DELETE")
     }
 
+    // MARK: - In-app deposits (Stripe Connect)
+
+    /// Business: start (or resume) Stripe Connect onboarding so the contractor
+    /// can receive in-app deposit payouts. Returns the hosted onboarding URL.
+    func connectOnboardURL() async throws -> URL {
+        struct Resp: Decodable { let url: String }
+        let resp: Resp = try await request("payments/connect/onboard", method: "POST")
+        guard let url = URL(string: resp.url) else { throw APIError.invalidURL }
+        return url
+    }
+
+    /// Business: current payout readiness (syncs the flags from Stripe).
+    func connectStatus() async throws -> ConnectStatus {
+        try await request("payments/connect/status")
+    }
+
+    /// Homeowner: start a hosted Checkout to pay the deposit on an accepted
+    /// quote. Returns the breakdown plus the URL to open in a Safari view.
+    func depositCheckout(quoteRequestId: String) async throws -> DepositCheckout {
+        struct Body: Encodable { let quoteRequestId: String }
+        return try await request("payments/deposit", method: "POST",
+                                 body: Body(quoteRequestId: quoteRequestId))
+    }
+
+    /// Role-scoped deposit history (homeowner's payments / business's receipts).
+    func payments() async throws -> [Payment] {
+        try await request("payments")
+    }
+
     // AI Chat
     func chat(message: String, history: [[String: String]]) async throws -> (reply: String, mentioned: [BusinessRef]) {
         struct Body: Encodable { let message: String; let history: [[String: String]] }

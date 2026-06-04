@@ -9,6 +9,7 @@ import SafariServices
 /// the server is updated by webhook, so we just refresh the summary on return.
 struct BillingView: View {
     @State private var summary: BillingSummary?
+    @State private var connect: ConnectStatus?
     @State private var isLoading = true
     @State private var error: String?
     @State private var checkoutURL: URL?
@@ -20,6 +21,7 @@ struct BillingView: View {
                 if isLoading && summary == nil {
                     ProgressView().padding(.top, 60)
                 } else if let summary {
+                    payoutCard(connect)
                     promotionCard(summary)
                     paymentMethodCard(summary)
                     leadFeesCard(summary)
@@ -43,6 +45,43 @@ struct BillingView: View {
     }
 
     // MARK: Cards
+
+    private func payoutCard(_ c: ConnectStatus?) -> some View {
+        let active = c?.payoutsEnabled ?? false
+        return RCCard {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 12) {
+                    Image(systemName: active ? "checkmark.seal.fill" : "banknote")
+                        .font(.title2)
+                        .foregroundStyle(active ? Theme.success : Theme.primary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(active ? "Payouts active" : "Get paid in-app")
+                            .font(.headline)
+                        Text(active
+                             ? "Homeowners can pay a deposit when they accept your quote, paid out to your bank."
+                             : "Set up payouts so homeowners can pay a deposit the moment they accept your quote.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                if !active {
+                    Button {
+                        Task { await startConnectOnboarding() }
+                    } label: {
+                        Label(c?.onboarded == true ? "Finish payout setup" : "Set up payouts",
+                              systemImage: "building.columns")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.primary)
+                    .disabled(actionInFlight)
+                }
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
 
     private func promotionCard(_ s: BillingSummary) -> some View {
         RCCard {
@@ -176,6 +215,17 @@ struct BillingView: View {
         }
     }
 
+    private func startConnectOnboarding() async {
+        actionInFlight = true
+        error = nil
+        defer { actionInFlight = false }
+        do {
+            checkoutURL = try await APIService.shared.connectOnboardURL()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     private func cancelPromotion() async {
         actionInFlight = true
         defer { actionInFlight = false }
@@ -193,6 +243,8 @@ struct BillingView: View {
         defer { isLoading = false }
         do {
             summary = try await APIService.shared.billingSummary()
+            // Payout status is secondary — don't fail the whole screen if it errors.
+            connect = try? await APIService.shared.connectStatus()
         } catch {
             self.error = error.localizedDescription
         }

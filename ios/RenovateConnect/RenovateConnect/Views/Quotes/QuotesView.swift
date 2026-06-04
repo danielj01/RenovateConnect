@@ -70,6 +70,9 @@ private struct QuoteCard: View {
 
     @State private var working = false
     @State private var showSendQuote = false
+    @State private var depositLoading = false
+    @State private var depositError: String?
+    @State private var depositURL: URL?
 
     private var counterpartyName: String {
         isBusiness
@@ -139,6 +142,32 @@ private struct QuoteCard: View {
                         }
                     }
                 }
+
+                // Homeowner deposit — once a quote is accepted, paying the
+                // deposit in-app confirms the job and keeps it on-platform.
+                if !isBusiness, quote.status == .accepted {
+                    Divider()
+                    Button {
+                        Task { await startDeposit() }
+                    } label: {
+                        HStack(spacing: 6) {
+                            if depositLoading { ProgressView().tint(.white) }
+                            Label("Pay deposit", systemImage: "lock.shield.fill")
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 38)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Theme.success)
+                    .disabled(depositLoading)
+
+                    if let depositError {
+                        Text(depositError).font(.caption).foregroundStyle(.red)
+                    }
+                    Text("Pay a deposit to confirm the job — secured in-app.")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
             }
             .padding(16)
         }
@@ -146,6 +175,21 @@ private struct QuoteCard: View {
             SendQuoteSheet(quote: quote) { low, high, note in
                 await onUpdate(.quoted, low, high, note)
             }
+        }
+        .sheet(item: $depositURL) { url in
+            SafariView(url: url).ignoresSafeArea()
+        }
+    }
+
+    private func startDeposit() async {
+        depositLoading = true
+        depositError = nil
+        defer { depositLoading = false }
+        do {
+            let checkout = try await APIService.shared.depositCheckout(quoteRequestId: quote.id)
+            depositURL = URL(string: checkout.url)
+        } catch {
+            depositError = error.localizedDescription
         }
     }
 

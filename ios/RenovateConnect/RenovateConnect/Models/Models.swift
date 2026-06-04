@@ -642,6 +642,65 @@ struct BillingSummary: Codable {
     }
 }
 
+// MARK: - In-app deposits (Stripe Connect)
+
+/// A contractor's payout readiness. Mirrors GET /payments/connect/status.
+/// `payoutsEnabled` gates whether homeowners can pay deposits to this business.
+struct ConnectStatus: Codable {
+    let onboarded: Bool
+    let chargesEnabled: Bool
+    let payoutsEnabled: Bool
+}
+
+/// The response to POST /payments/deposit — a hosted Checkout URL plus the
+/// amount breakdown so the UI can confirm the figures before opening the page.
+struct DepositCheckout: Codable {
+    let paymentId: String
+    let url: String
+    let amountCents: Int
+    let depositCents: Int
+    let commissionCents: Int
+}
+
+enum PaymentStatus: String, Codable {
+    case pending = "PENDING"
+    case succeeded = "SUCCEEDED"
+    case failed = "FAILED"
+    case refunded = "REFUNDED"
+
+    var label: String {
+        switch self {
+        case .pending:   return "Pending"
+        case .succeeded: return "Paid"
+        case .failed:    return "Failed"
+        case .refunded:  return "Refunded"
+        }
+    }
+}
+
+/// A deposit payment row, as returned by GET /payments (role-scoped history).
+struct Payment: Codable, Identifiable {
+    let id: String
+    let amountCents: Int
+    let commissionCents: Int
+    let status: PaymentStatus
+    let description: String?
+    let paidAt: String?
+    let createdAt: String?
+    let business: PaymentBusiness?
+    let client: PaymentClient?
+
+    struct PaymentBusiness: Codable {
+        let id: String
+        let companyName: String
+        let logoUrl: String?
+    }
+    struct PaymentClient: Codable {
+        let id: String
+        let name: String
+    }
+}
+
 // MARK: - Admin approval queue
 
 /// Owner contact info embedded with each pending business in the admin queue,
