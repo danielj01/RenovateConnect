@@ -5,6 +5,28 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const LEAD_FEE_CENTS = () => parseInt(process.env.LEAD_FEE_CENTS || '2500', 10);
 const PROMOTED_MONTHLY_CENTS = () => parseInt(process.env.PROMOTED_MONTHLY_CENTS || '9900', 10);
 
+// In-app deposit economics (Option A).
+//   DEPOSIT_PERCENT   — the deposit is this % of the quote midpoint…
+//   DEPOSIT_MIN_CENTS — …but never below this floor (so tiny jobs still clear fees)
+//   COMMISSION_BPS    — the platform's cut, in basis points (800 = 8%)
+const DEPOSIT_PERCENT = () => parseInt(process.env.DEPOSIT_PERCENT || '10', 10);
+const DEPOSIT_MIN_CENTS = () => parseInt(process.env.DEPOSIT_MIN_CENTS || '5000', 10);
+const COMMISSION_BPS = () => parseInt(process.env.COMMISSION_BPS || '800', 10);
+
+// The deposit the contractor receives, derived from the accepted quote's
+// midpoint (dollars in → cents out), floored at DEPOSIT_MIN_CENTS.
+function depositCentsFor(quoteLow, quoteHigh) {
+  const midDollars = ((quoteLow || 0) + (quoteHigh || 0)) / 2;
+  const pctCents = Math.round(midDollars * 100 * (DEPOSIT_PERCENT() / 100));
+  return Math.max(DEPOSIT_MIN_CENTS(), pctCents);
+}
+
+// The platform commission for a given deposit. Charged as a fee on top, so this
+// is added to what the homeowner pays and becomes the Stripe application fee.
+function commissionCentsFor(depositCents) {
+  return Math.round(depositCents * (COMMISSION_BPS() / 10000));
+}
+
 // Where Stripe sends the user back after a hosted Checkout flow. The app opens
 // these via a web auth session and closes on the success/cancel redirect.
 const APP_BASE_URL = () => process.env.APP_BASE_URL || 'https://renovateconnect.app';
@@ -107,6 +129,63 @@ function constructWebhookEvent(rawBody, signature) {
   return stripe.webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET);
 }
 
+// --- Stripe Connect (in-app deposits) ----------------------------------------
+
+// Create an Express connected account for a contractor so they can receive
+// deposit payouts. Express accounts use Stripe-hosted onboarding (bank, tax,
+// identity), mirroring how we use hosted Checkout elsewhere.
+async function createConnectAccount(email) {
+  return stripe.accounts.create({
+    type: 'express',
+    email,
+    capabilities: {
+      card_payments: { requested: true },
+      transfers: { requested: true },
+    },
+  });
+}
+
+// A one-time, expiring onboarding URL for a connected account. The app opens it
+// in a web auth session; Stripe redirects back to APP_BASE_URL when done.
+async function createAccountOnboardingLink(accountId) {
+  return stripe.accountLinks.create({
+    account: accountId,
+    type: 'account_onboarding',
+    refresh_url: `${APP_BASE_URL()}/connect/return?status=refresh`,
+    return_url: `${APP_BASE_URL()}/connect/return?status=success`,
+  });
+}
+
+async function retrieveAccount(accountId) {
+  return stripe.accounts.retrieve(accountId);
+}
+
+// A destination-charge PaymentIntent for a deposit. The homeowner is charged
+// `amountCents` (deposit + commission); `commissionCents` is split to the
+// platform as the application fee and the remainder is transferred to the
+// contractor's connected account. Returns the intent (with client_secret).
+async function createDepositPaymentIntent({
+  amountCents,
+  commissionCents,
+  connectedAccountId,
+  customerId,
+  metadata,
+}) {
+  return stripe.paymentIntents.create({
+    amount: amountCents,
+    currency: 'usd',
+    customer: customerId || undefined,
+    application_fee_amount: commissionCents,
+    transfer_data: { destination: connectedAccountId },
+    automatic_payment_methods: { enabled: true },
+    metadata: metadata || {},
+  });
+}
+
+async function createRefund(paymentIntentId) {
+  return stripe.refunds.create({ payment_intent: paymentIntentId });
+}
+
 // Legacy alias kept for any callers still expecting the old name.
 const createLeadCharge = createLeadInvoiceItem;
 
@@ -121,4 +200,12 @@ module.exports = {
   retrieveSubscription,
   cancelSubscription,
   constructWebhookEvent,
+  // Connect / deposits
+  depositCentsFor,
+  commissionCentsFor,
+  createConnectAccount,
+  createAccountOnboardingLink,
+  retrieveAccount,
+  createDepositPaymentIntent,
+  createRefund,
 };
