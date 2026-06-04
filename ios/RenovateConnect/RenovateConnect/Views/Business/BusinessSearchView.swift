@@ -342,9 +342,9 @@ struct BusinessListCard: View {
                                     .accessibilityLabel("Verified")
                             }
                             Spacer()
-                            if auth.currentUser?.role == .client {
+                            if !auth.isBusiness && !auth.isAdmin {
                                 Button {
-                                    favorites.toggle(business)
+                                    if auth.isLoggedIn { favorites.toggle(business) } else { auth.requireSignIn() }
                                 } label: {
                                     Image(systemName: favorites.isSaved(business.id) ? "heart.fill" : "heart")
                                         .foregroundStyle(favorites.isSaved(business.id) ? Theme.primary : Color(.tertiaryLabel))

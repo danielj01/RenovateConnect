@@ -20,6 +20,12 @@ struct BusinessDetailView: View {
         return business?.reviews?.first { $0.authorId == uid }
     }
 
+    /// Homeowners — and signed-out guests previewing the app — see the contact /
+    /// quote / book / save affordances. Guests get a sign-in prompt on tap.
+    private var canActAsClient: Bool {
+        !auth.isBusiness && !auth.isAdmin
+    }
+
     var body: some View {
         Group {
             if isLoading {
@@ -34,7 +40,7 @@ struct BusinessDetailView: View {
                 }
                 .ignoresSafeArea(edges: .top)
                 .safeAreaInset(edge: .bottom) {
-                    if auth.currentUser?.role == .client {
+                    if canActAsClient {
                         contactButton(biz)
                     }
                 }
@@ -76,10 +82,10 @@ struct BusinessDetailView: View {
         }
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if auth.currentUser?.role == .client, let biz = business {
+            if canActAsClient, let biz = business {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        favorites.toggle(biz)
+                        if auth.isLoggedIn { favorites.toggle(biz) } else { auth.requireSignIn() }
                     } label: {
                         Image(systemName: favorites.isSaved(biz.id) ? "heart.fill" : "heart")
                             .foregroundStyle(favorites.isSaved(biz.id) ? Theme.primary : Color(.label))
@@ -467,7 +473,7 @@ struct BusinessDetailView: View {
         VStack(spacing: 10) {
             Divider()
             Button {
-                showContact = true
+                if auth.isLoggedIn { showContact = true } else { auth.requireSignIn() }
             } label: {
                 Label("Contact \(biz.companyName)", systemImage: "message.fill")
                     .font(.headline)
@@ -481,7 +487,7 @@ struct BusinessDetailView: View {
 
             HStack(spacing: 10) {
                 Button {
-                    showQuote = true
+                    if auth.isLoggedIn { showQuote = true } else { auth.requireSignIn() }
                 } label: {
                     Label("Get a quote", systemImage: "doc.text.magnifyingglass")
                         .font(.subheadline.weight(.semibold))
@@ -493,7 +499,7 @@ struct BusinessDetailView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
 
                 Button {
-                    showBooking = true
+                    if auth.isLoggedIn { showBooking = true } else { auth.requireSignIn() }
                 } label: {
                     Label("Appointment", systemImage: "calendar.badge.plus")
                         .font(.subheadline.weight(.semibold))

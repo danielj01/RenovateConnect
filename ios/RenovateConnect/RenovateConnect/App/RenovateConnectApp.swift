@@ -13,7 +13,10 @@ struct RenovateConnectApp: App {
                     .environmentObject(auth)
                     .environmentObject(notifications)
             } else {
-                LoginView()
+                // Signed-out visitors get a full browse + estimate experience,
+                // not a login wall. Sign-in is prompted only when they reach for
+                // an account-only action.
+                GuestTabView()
                     .environmentObject(auth)
             }
         }

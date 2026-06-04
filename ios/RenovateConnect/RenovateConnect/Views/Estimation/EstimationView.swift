@@ -146,6 +146,7 @@ private struct EstimatorIntroView: View {
 
 private struct EstimatorFormView: View {
     @EnvironmentObject private var notifications: NotificationManager
+    @EnvironmentObject private var auth: AuthStore
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
     @State private var roomType = ""
@@ -232,14 +233,28 @@ private struct EstimatorFormView: View {
         defer { isLoading = false }
         do {
             let imageData = selectedImages.compactMap { $0.jpegData(compressionQuality: 0.7) }
-            estimation = try await APIService.shared.createEstimation(
-                images: imageData,
-                roomType: roomType.isEmpty ? nil : roomType,
-                description: description.isEmpty ? nil : description
-            )
-            // A completed estimate is a high-value moment — a good time to prime
-            // notification permission (so we can tell them "your estimate is ready").
-            notifications.considerPriming()
+            let rt = roomType.isEmpty ? nil : roomType
+            let desc = description.isEmpty ? nil : description
+            if auth.isLoggedIn {
+                estimation = try await APIService.shared.createEstimation(
+                    images: imageData, roomType: rt, description: desc)
+                // A completed estimate is a high-value moment — a good time to prime
+                // notification permission (so we can tell them "your estimate is ready").
+                notifications.considerPriming()
+            } else {
+                // Guest path: run the estimate without an account, wrap the result
+                // in a throwaway Estimation so the result UI is identical.
+                let result = try await APIService.shared.guestEstimation(
+                    images: imageData, roomType: rt, description: desc)
+                estimation = Estimation(
+                    id: UUID().uuidString,
+                    imageUrls: [],
+                    roomType: rt,
+                    description: desc,
+                    result: result,
+                    createdAt: ISO8601DateFormatter().string(from: Date())
+                )
+            }
         } catch {
             self.error = error.localizedDescription
         }

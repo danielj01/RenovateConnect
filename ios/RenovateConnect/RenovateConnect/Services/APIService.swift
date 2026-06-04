@@ -376,6 +376,38 @@ final class APIService {
         return try JSONDecoder().decode(Estimation.self, from: data)
     }
 
+    /// Guest (signed-out) estimate. Hits the public endpoint that runs the AI but
+    /// persists nothing, and returns just the result. The caller wraps it in a
+    /// throwaway Estimation so the same result UI can render it.
+    func guestEstimation(images: [Data], roomType: String?, description: String?) async throws -> EstimationResult {
+        let url = base.appendingPathComponent("estimations/guest")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+
+        let boundary = UUID().uuidString
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        func append(_ string: String) { body.append(string.data(using: .utf8)!) }
+
+        for (i, img) in images.enumerated() {
+            append("--\(boundary)\r\nContent-Disposition: form-data; name=\"images\"; filename=\"img\(i).jpg\"\r\nContent-Type: image/jpeg\r\n\r\n")
+            body.append(img)
+            append("\r\n")
+        }
+        if let rt = roomType { append("--\(boundary)\r\nContent-Disposition: form-data; name=\"roomType\"\r\n\r\n\(rt)\r\n") }
+        if let d = description { append("--\(boundary)\r\nContent-Disposition: form-data; name=\"description\"\r\n\r\n\(d)\r\n") }
+        append("--\(boundary)--\r\n")
+        req.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.requestFailed((response as? HTTPURLResponse)?.statusCode ?? 0, "Estimate failed")
+        }
+        struct GuestEstimationResponse: Decodable { let result: EstimationResult }
+        return try JSONDecoder().decode(GuestEstimationResponse.self, from: data).result
+    }
+
     func myEstimations() async throws -> [Estimation] {
         try await request("estimations")
     }

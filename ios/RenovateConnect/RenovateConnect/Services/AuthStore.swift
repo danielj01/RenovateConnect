@@ -7,7 +7,18 @@ final class AuthStore: ObservableObject {
     @Published var isLoading = false
     @Published var error: String?
 
+    // Set when a signed-out guest taps an account-only action (message, save,
+    // quote, book, pay). The guest shell observes this and presents sign-in.
+    @Published var promptSignIn = false
+
     var isLoggedIn: Bool { currentUser != nil }
+
+    /// Ask the guest to sign in before continuing a gated action. No-op if the
+    /// user is already logged in (callers should branch on this).
+    func requireSignIn() {
+        guard currentUser == nil else { return }
+        promptSignIn = true
+    }
 
     init() {
         if UserDefaults.standard.string(forKey: "authToken") != nil {
