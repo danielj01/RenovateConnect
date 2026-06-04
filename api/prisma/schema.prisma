@@ -54,6 +54,17 @@ enum ApprovalStatus {
   REJECTED
 }
 
+// In-app deposit payments (Stripe Connect). A homeowner pays a deposit when they
+// accept a quote; the money is routed to the contractor's connected account and
+// the platform takes a commission as a fee on top. One Payment row per deposit
+// is our durable record — it both confirms the job happened and tracks the fee.
+enum PaymentStatus {
+  PENDING    // PaymentIntent created, not yet confirmed by the homeowner
+  SUCCEEDED  // funds captured + routed; commission collected
+  FAILED     // the charge failed (card declined, etc.)
+  REFUNDED   // the deposit was refunded (dispute/cancellation)
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -90,6 +101,7 @@ model User {
   reviews          Review[]
   savedSearches    SavedSearch[]
   quoteRequests    QuoteRequest[] @relation("ClientQuoteRequests")
+  payments         Payment[]      @relation("ClientPayments")
 }
 
 model DeviceToken {
@@ -162,6 +174,14 @@ model Business {
   cardBrand        String?
   cardLast4        String?
 
+  // Stripe Connect — the contractor's connected (Express) account, used to
+  // receive in-app deposit payouts. `chargesEnabled`/`payoutsEnabled` mirror the
+  // Stripe account capabilities (updated via the account.updated webhook); a
+  // business can only receive deposits once payouts are enabled.
+  stripeAccountId  String?
+  chargesEnabled   Boolean   @default(false)
+  payoutsEnabled   Boolean   @default(false)
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -173,6 +193,7 @@ model Business {
   appointments    Appointment[]
   hours           BusinessHours[]
   quoteRequests   QuoteRequest[]
+  payments        Payment[]
 }
 
 // A homeowner's structured request for a price estimate on a specific project.
@@ -205,6 +226,7 @@ model QuoteRequest {
 
   client       User        @relation("ClientQuoteRequests", fields: [clientId], references: [id], onDelete: Cascade)
   business     Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  payment      Payment?
 
   @@index([clientId])
   @@index([businessId])
@@ -376,6 +398,39 @@ model PortfolioProject {
   updatedAt   DateTime @updatedAt
 
   business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+// An in-app deposit a homeowner pays when accepting a quote. Created PENDING
+// when the PaymentIntent is generated and flipped to SUCCEEDED by the
+// payment_intent.succeeded webhook. Commission is charged as a fee on top:
+// `amountCents` is the total the homeowner is charged, `commissionCents` is the
+// platform's cut, and the contractor receives the difference (the deposit) in
+// their connected account.
+model Payment {
+  id                    String        @id @default(cuid())
+  quoteRequestId        String?       @unique
+  clientId              String
+  businessId            String
+
+  amountCents           Int           // total charged to the homeowner (deposit + commission)
+  commissionCents       Int           // platform fee (application_fee_amount)
+  currency              String        @default("usd")
+  status                PaymentStatus @default(PENDING)
+
+  stripePaymentIntentId String?       @unique
+  description           String?
+  paidAt                DateTime?
+  refundedAt            DateTime?
+
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  quoteRequest QuoteRequest? @relation(fields: [quoteRequestId], references: [id], onDelete: SetNull)
+  client       User          @relation("ClientPayments", fields: [clientId], references: [id], onDelete: Cascade)
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([clientId])
 }
 
 model Estimation {
