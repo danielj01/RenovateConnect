@@ -21,8 +21,11 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
       const intentId = typeof session.payment_intent === 'string'
         ? session.payment_intent
         : session.payment_intent?.id;
+      // Never resurrect a refunded deposit: both this event and
+      // payment_intent.succeeded settle the same Payment, and a delayed/replayed
+      // event must not flip a REFUNDED row back to SUCCEEDED.
       await database.payment.updateMany({
-        where: { id: session.metadata.paymentId },
+        where: { id: session.metadata.paymentId, status: { not: 'REFUNDED' } },
         data: {
           status: 'SUCCEEDED',
           paidAt: new Date(),
@@ -53,8 +56,10 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
   // both our revenue event and our proof the job is real.
   if (event.type === 'payment_intent.succeeded') {
     const intent = event.data.object;
+    // Same guard as checkout.session.completed: a replayed/late success must
+    // never overwrite a deposit we've already refunded.
     await database.payment.updateMany({
-      where: { stripePaymentIntentId: intent.id },
+      where: { stripePaymentIntentId: intent.id, status: { not: 'REFUNDED' } },
       data: { status: 'SUCCEEDED', paidAt: new Date() },
     });
     return;
@@ -62,8 +67,11 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
 
   if (event.type === 'payment_intent.payment_failed') {
     const intent = event.data.object;
+    // Don't let a stale failure clobber a deposit that already succeeded or was
+    // refunded (e.g. retry succeeded, then a failed event for an earlier attempt
+    // arrives out of order).
     await database.payment.updateMany({
-      where: { stripePaymentIntentId: intent.id },
+      where: { stripePaymentIntentId: intent.id, status: { notIn: ['SUCCEEDED', 'REFUNDED'] } },
       data: { status: 'FAILED' },
     });
     return;

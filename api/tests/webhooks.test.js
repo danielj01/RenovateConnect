@@ -93,6 +93,45 @@ describe('handleStripeEvent', () => {
     expect(updated.refundedAt).not.toBeNull();
   });
 
+  test('a replayed checkout.session.completed cannot resurrect a REFUNDED deposit', async () => {
+    const payment = await pendingPayment();
+    await db.payment.update({
+      where: { id: payment.id },
+      data: { status: 'REFUNDED', refundedAt: new Date() },
+    });
+    await handleStripeEvent({
+      type: 'checkout.session.completed',
+      data: { object: { mode: 'payment', payment_intent: 'pi_chk', metadata: { paymentId: payment.id } } },
+    });
+    const updated = await db.payment.findUnique({ where: { id: payment.id } });
+    expect(updated.status).toBe('REFUNDED');
+  });
+
+  test('a late payment_intent.succeeded cannot resurrect a REFUNDED deposit', async () => {
+    const payment = await pendingPayment();
+    await db.payment.update({
+      where: { id: payment.id },
+      data: { status: 'REFUNDED', refundedAt: new Date() },
+    });
+    await handleStripeEvent({
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_w' } },
+    });
+    const updated = await db.payment.findUnique({ where: { id: payment.id } });
+    expect(updated.status).toBe('REFUNDED');
+  });
+
+  test('an out-of-order payment_failed cannot clobber a SUCCEEDED or REFUNDED deposit', async () => {
+    const succeeded = await pendingPayment();
+    await db.payment.update({ where: { id: succeeded.id }, data: { status: 'SUCCEEDED', paidAt: new Date() } });
+    await handleStripeEvent({
+      type: 'payment_intent.payment_failed',
+      data: { object: { id: 'pi_w' } },
+    });
+    const after = await db.payment.findUnique({ where: { id: succeeded.id } });
+    expect(after.status).toBe('SUCCEEDED');
+  });
+
   test('charge.refunded posts a PAYMENT activity entry for the homeowner', async () => {
     const payment = await pendingPayment();
     await handleStripeEvent({
