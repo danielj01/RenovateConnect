@@ -33,17 +33,20 @@ struct NotificationSettingsView: View {
 
     @ViewBuilder
     private func toggle(_ category: NotifyCategory) -> some View {
-        Toggle(isOn: binding(for: category)) {
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(category.title).font(.subheadline)
-                    Text(category.subtitle).font(.caption).foregroundStyle(.secondary)
-                }
-            } icon: {
-                Image(systemName: category.icon).foregroundStyle(Theme.primary)
+        HStack(spacing: 12) {
+            Image(systemName: category.icon)
+                .font(.subheadline)
+                .foregroundStyle(Theme.primary)
+                .frame(width: 28, height: 28)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(category.title).font(.subheadline)
+                Text(category.subtitle).font(.caption).foregroundStyle(.secondary)
             }
+            Spacer(minLength: 8)
+            Toggle("", isOn: binding(for: category))
+                .labelsHidden()
+                .tint(Theme.primary)
         }
-        .tint(Theme.primary)
     }
 
     /// Reads the current value off the live user and writes through the store,
