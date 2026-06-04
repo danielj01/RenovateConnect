@@ -94,7 +94,7 @@ router.get('/', authMiddleware, async (req, res, next) => {
 async function loadOwnedQuote(req, res) {
   const quote = await db.quoteRequest.findUnique({
     where: { id: req.params.id },
-    include: { business: { select: { userId: true, companyName: true } } },
+    include: { business: { select: { userId: true, companyName: true, payoutsEnabled: true } } },
   });
   if (!quote) { res.status(404).json({ error: 'Not found' }); return null; }
   const isClient = quote.clientId === req.user.id;
@@ -197,6 +197,17 @@ router.patch('/:id', authMiddleware, async (req, res, next) => {
     });
 
     await notify(recipientId, { title, body: messageBody, quoteId: updated.id });
+
+    // When a homeowner accepts and the contractor can take in-app payments,
+    // nudge the homeowner to pay the deposit — this is the path that keeps the
+    // transaction (and our commission) on-platform.
+    if (body.status === 'ACCEPTED' && quote.business.payoutsEnabled) {
+      await notify(quote.clientId, {
+        title: 'Lock it in — pay your deposit 🔒',
+        body: `Pay your deposit to ${quote.business.companyName} to confirm the job.`,
+        quoteId: updated.id,
+      });
+    }
 
     res.json(updated);
   } catch (err) {
