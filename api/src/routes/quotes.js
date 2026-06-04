@@ -5,10 +5,13 @@ const { authMiddleware, requireRole } = require('../middleware/auth');
 const { sendPush } = require('../services/push');
 const { recordActivity } = require('../services/activity');
 
-// Shared include so both sides see who/what the quote concerns.
+// Shared include so both sides see who/what the quote concerns. `payoutsEnabled`
+// lets the homeowner's UI know whether a deposit can be paid, and `payment`
+// surfaces a deposit's status so the card can flip to "Deposit paid".
 const quoteInclude = {
-  business: { select: { id: true, companyName: true, logoUrl: true, city: true } },
+  business: { select: { id: true, companyName: true, logoUrl: true, city: true, payoutsEnabled: true } },
   client: { select: { id: true, name: true, avatarUrl: true } },
+  payment: { select: { status: true } },
 };
 
 // Notify a recipient about a quote-request event. Quote requests are sales

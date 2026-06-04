@@ -160,6 +160,9 @@ struct BusinessSummary: Codable {
     let companyName: String
     let logoUrl: String?
     let city: String
+    // Present on quote payloads: whether the contractor can accept in-app
+    // deposits. Optional because other endpoints don't select it.
+    let payoutsEnabled: Bool?
 }
 
 struct ChatMessage: Codable, Identifiable {
@@ -441,6 +444,11 @@ struct QuoteRequest: Codable, Identifiable {
     let createdAt: String
     let business: BusinessSummary?
     let client: AppointmentClient?
+    /// The deposit tied to this quote, if one has been started/paid.
+    let payment: QuotePayment?
+
+    /// Whether a deposit has already been paid for this quote.
+    var depositPaid: Bool { payment?.status == .succeeded }
 
     /// "$20,000 – $35,000", "From $20,000", "Up to $35,000", or nil.
     var budgetText: String? { Self.rangeText(budgetMin, budgetMax) }
@@ -456,6 +464,12 @@ struct QuoteRequest: Codable, Identifiable {
         default: return nil
         }
     }
+}
+
+/// The deposit attached to a quote (status only), used to flip the quote card
+/// to a "Deposit paid" state. Mirrors the `payment` include on a quote.
+struct QuotePayment: Codable {
+    let status: PaymentStatus
 }
 
 // MARK: - Activity feed
