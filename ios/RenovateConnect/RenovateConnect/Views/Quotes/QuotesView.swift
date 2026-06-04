@@ -6,6 +6,8 @@ struct QuotesView: View {
     @EnvironmentObject private var auth: AuthStore
     @State private var quotes: [QuoteRequest] = []
     @State private var isLoading = true
+    @State private var loadError: String?
+    @State private var actionError: String?
 
     private var isBusiness: Bool { auth.currentUser?.role == .business }
 
@@ -13,6 +15,17 @@ struct QuotesView: View {
         ScrollView {
             if isLoading {
                 ProgressView().padding(.top, 60)
+            } else if let loadError {
+                ContentUnavailableView {
+                    Label("Couldn't load quotes", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(loadError)
+                } actions: {
+                    Button("Try Again") { Task { await load() } }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.primary)
+                }
+                .padding(.top, 60)
             } else if quotes.isEmpty {
                 ContentUnavailableView {
                     Label("No quote requests", systemImage: "doc.text.magnifyingglass")
@@ -44,20 +57,39 @@ struct QuotesView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
+        .alert("Something went wrong", isPresented: Binding(
+            get: { actionError != nil },
+            set: { if !$0 { actionError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(actionError ?? "")
+        }
     }
 
     private func load() async {
         isLoading = true
         defer { isLoading = false }
-        quotes = (try? await APIService.shared.myQuotes()) ?? []
+        do {
+            quotes = try await APIService.shared.myQuotes()
+            loadError = nil
+        } catch {
+            // Only show the error state when we have nothing to fall back on;
+            // a failed refresh shouldn't blow away the list already on screen.
+            if quotes.isEmpty { loadError = error.localizedDescription }
+        }
     }
 
     private func update(_ quote: QuoteRequest, status: QuoteStatus,
                         low: Int?, high: Int?, note: String?) async {
-        guard let updated = try? await APIService.shared.updateQuote(
-            id: quote.id, status: status, quoteLow: low, quoteHigh: high, responseNote: note) else { return }
-        if let idx = quotes.firstIndex(where: { $0.id == updated.id }) {
-            quotes[idx] = updated
+        do {
+            let updated = try await APIService.shared.updateQuote(
+                id: quote.id, status: status, quoteLow: low, quoteHigh: high, responseNote: note)
+            if let idx = quotes.firstIndex(where: { $0.id == updated.id }) {
+                quotes[idx] = updated
+            }
+        } catch {
+            actionError = error.localizedDescription
         }
     }
 }

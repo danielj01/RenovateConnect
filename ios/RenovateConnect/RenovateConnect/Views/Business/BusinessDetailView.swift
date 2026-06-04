@@ -142,7 +142,7 @@ struct BusinessDetailView: View {
                      label: "Yrs exp.", icon: "briefcase.fill", iconColor: Theme.info)
         }
         .padding(.vertical, 16)
-        .background(.white)
+        .background(Color(.systemBackground))
         .shadow(color: Theme.cardShadow, radius: 8, y: 3)
     }
 

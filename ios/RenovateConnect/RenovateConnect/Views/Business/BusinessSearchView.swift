@@ -237,7 +237,7 @@ struct FeaturedBusinessCard: View {
             details
         }
         .frame(width: Self.cardWidth, alignment: .leading)
-        .background(.white)
+        .background(Color(.systemBackground))
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(color: Theme.cardShadow, radius: 14, x: 0, y: 5)
     }

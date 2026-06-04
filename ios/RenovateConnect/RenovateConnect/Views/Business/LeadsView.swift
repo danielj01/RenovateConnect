@@ -3,6 +3,7 @@ import SwiftUI
 struct LeadsView: View {
     @State private var leads: [Lead] = []
     @State private var isLoading = true
+    @State private var loadError: String?
     @State private var filter: LeadStatus?
     @State private var selected: Lead?
 
@@ -16,6 +17,8 @@ struct LeadsView: View {
             Group {
                 if isLoading {
                     ProgressView()
+                } else if let loadError {
+                    errorState(loadError)
                 } else if leads.isEmpty {
                     emptyState
                 } else {
@@ -78,9 +81,29 @@ struct LeadsView: View {
         }
     }
 
+    private func errorState(_ message: String) -> some View {
+        VStack(spacing: 12) {
+            Image(systemName: "wifi.exclamationmark")
+                .font(.system(size: 44)).foregroundStyle(.secondary)
+            Text("Couldn't load leads").font(.headline)
+            Text(message)
+                .font(.subheadline).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center).padding(.horizontal, 40)
+            Button("Try Again") { Task { await load() } }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.primary)
+        }
+    }
+
     private func load() async {
+        isLoading = true
         defer { isLoading = false }
-        leads = (try? await APIService.shared.myLeads()) ?? []
+        do {
+            leads = try await APIService.shared.myLeads()
+            loadError = nil
+        } catch {
+            if leads.isEmpty { loadError = error.localizedDescription }
+        }
     }
 }
 
@@ -172,6 +195,7 @@ struct LeadDetailSheet: View {
     @State private var isSaving = false
     @State private var loadingThread = false
     @State private var thread: Conversation?
+    @State private var saveError: String?
 
     init(lead: Lead, onSave: @escaping (Lead) -> Void) {
         self.lead = lead
@@ -231,6 +255,14 @@ struct LeadDetailSheet: View {
             .navigationDestination(item: $thread) { conv in
                 MessagingView(conversation: conv)
             }
+            .alert("Couldn't save", isPresented: Binding(
+                get: { saveError != nil },
+                set: { if !$0 { saveError = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(saveError ?? "")
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -269,13 +301,16 @@ struct LeadDetailSheet: View {
         isSaving = true
         defer { isSaving = false }
         let value = Int(valueText.filter(\.isNumber))
-        if let updated = try? await APIService.shared.updateLead(
-            id: lead.id, status: status,
-            notes: notes.isEmpty ? nil : notes,
-            estimatedValue: value
-        ) {
+        do {
+            let updated = try await APIService.shared.updateLead(
+                id: lead.id, status: status,
+                notes: notes.isEmpty ? nil : notes,
+                estimatedValue: value
+            )
             onSave(updated)
             dismiss()
+        } catch {
+            saveError = error.localizedDescription
         }
     }
 }

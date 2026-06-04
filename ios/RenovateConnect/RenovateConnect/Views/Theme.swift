@@ -181,7 +181,9 @@ struct RCCard<Content: View>: View {
 
     var body: some View {
         content
-            .background(.white)
+            // systemBackground stays white in light mode (preserving the
+            // shadow-on-white card look) but adapts for dark mode.
+            .background(Color(.systemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: Theme.cardShadow, radius: 14, x: 0, y: 5)
     }

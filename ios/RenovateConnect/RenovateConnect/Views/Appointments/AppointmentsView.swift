@@ -6,6 +6,8 @@ struct AppointmentsView: View {
     @EnvironmentObject private var auth: AuthStore
     @State private var appointments: [Appointment] = []
     @State private var isLoading = true
+    @State private var loadError: String?
+    @State private var actionError: String?
 
     private var isBusiness: Bool { auth.currentUser?.role == .business }
 
@@ -13,6 +15,17 @@ struct AppointmentsView: View {
         ScrollView {
             if isLoading {
                 ProgressView().padding(.top, 60)
+            } else if let loadError {
+                ContentUnavailableView {
+                    Label("Couldn't load appointments", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text(loadError)
+                } actions: {
+                    Button("Try Again") { Task { await load() } }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Theme.primary)
+                }
+                .padding(.top, 60)
             } else if appointments.isEmpty {
                 ContentUnavailableView {
                     Label("No appointments", systemImage: "calendar")
@@ -41,18 +54,36 @@ struct AppointmentsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
+        .alert("Something went wrong", isPresented: Binding(
+            get: { actionError != nil },
+            set: { if !$0 { actionError = nil } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(actionError ?? "")
+        }
     }
 
     private func load() async {
         isLoading = true
         defer { isLoading = false }
-        appointments = (try? await APIService.shared.myAppointments()) ?? []
+        do {
+            appointments = try await APIService.shared.myAppointments()
+            loadError = nil
+        } catch {
+            // Keep an already-loaded list visible if a refresh fails.
+            if appointments.isEmpty { loadError = error.localizedDescription }
+        }
     }
 
     private func update(_ appt: Appointment, to status: AppointmentStatus) async {
-        guard let updated = try? await APIService.shared.updateAppointment(id: appt.id, status: status) else { return }
-        if let idx = appointments.firstIndex(where: { $0.id == updated.id }) {
-            appointments[idx] = updated
+        do {
+            let updated = try await APIService.shared.updateAppointment(id: appt.id, status: status)
+            if let idx = appointments.firstIndex(where: { $0.id == updated.id }) {
+                appointments[idx] = updated
+            }
+        } catch {
+            actionError = error.localizedDescription
         }
     }
 }
