@@ -53,39 +53,23 @@ enum Theme {
 
 // MARK: - Shared components
 
-/// The app's brand logomark: a rounded "app-tile" filled with the brand
-/// gradient, a glossy top sheen, a house glyph, and a small coral roof accent.
-/// Built from shapes (no image asset) so it scales crisply at any size.
+/// The app's brand logomark — the "R + roof" mark rendered from the bundled
+/// `Logo` image asset. Same asset as the app icon (minus the alpha strip);
+/// rendered at `size` square with the brand's rounded-corner radius and a
+/// soft drop shadow tying it to the rest of the UI.
 struct BrandLogo: View {
     var size: CGFloat = 80
 
-    private var corner: CGFloat { size * 0.28 }
+    private var corner: CGFloat { size * 0.225 }   // matches the iOS icon mask roughly
 
     var body: some View {
-        RoundedRectangle(cornerRadius: corner, style: .continuous)
-            .fill(Theme.gradient)
-            .overlay(
-                // Glossy highlight across the top third for a light-3D feel.
-                RoundedRectangle(cornerRadius: corner, style: .continuous)
-                    .fill(LinearGradient(colors: [.white.opacity(0.30), .clear],
-                                         startPoint: .top, endPoint: .center))
-            )
-            .overlay(
-                ZStack {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: size * 0.44, weight: .bold))
-                        .foregroundStyle(.white)
-                        .shadow(color: .black.opacity(0.15), radius: 1, y: 1)
-                    // Coral accent chip, top-trailing, ties to the brand accent.
-                    Circle()
-                        .fill(Theme.accent)
-                        .frame(width: size * 0.16, height: size * 0.16)
-                        .overlay(Circle().stroke(.white, lineWidth: size * 0.03))
-                        .offset(x: size * 0.26, y: -size * 0.26)
-                }
-            )
+        Image("Logo")
+            .resizable()
+            .interpolation(.high)
+            .scaledToFill()
             .frame(width: size, height: size)
-            .shadow(color: Theme.primary.opacity(0.35), radius: size * 0.16, y: size * 0.10)
+            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            .shadow(color: Theme.primary.opacity(0.30), radius: size * 0.14, y: size * 0.08)
     }
 }
 
