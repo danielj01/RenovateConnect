@@ -35,6 +35,12 @@ struct DashboardView: View {
                         ) { await startOnboarding() }
                     }
 
+                    // Celebrate the verified badge — the contractor gets the
+                    // "Verified Pros" featured spot and higher search placement.
+                    if auth.currentUser?.business?.isVerified == true {
+                        VerifiedStatusCard()
+                    }
+
                     if isLoading {
                         ProgressView().padding(.top, 60)
                     } else if let stats {
@@ -279,6 +285,37 @@ struct PayoutSetupBanner: View {
         .clipShape(RoundedRectangle(cornerRadius: 14))
         .overlay(
             RoundedRectangle(cornerRadius: 14).stroke(tint.opacity(0.25), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Verified status card
+
+/// Celebratory dashboard card shown to verified contractors. Mirrors the trust
+/// badge homeowners see, and tells the owner what verification earns them:
+/// a spot in the "Verified Pros" carousel and higher search placement.
+struct VerifiedStatusCard: View {
+    private let tint = VerifiedBadge.trust
+
+    var body: some View {
+        RCCard {
+            HStack(spacing: 14) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.title2).foregroundStyle(tint)
+                    .frame(width: 40, height: 40)
+                    .background(tint.opacity(0.15)).clipShape(Circle())
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Verified by RenovateConnect")
+                        .font(.subheadline.weight(.semibold))
+                    Text("You're featured in Verified Pros and rank ahead of unverified contractors in search.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(16)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: 16).stroke(tint.opacity(0.3), lineWidth: 1)
         )
     }
 }

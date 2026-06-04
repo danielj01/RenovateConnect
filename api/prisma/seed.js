@@ -67,6 +67,7 @@ const businesses = [
     yearsInBusiness: 8,
     website: 'https://elitekb.dev',
     logoUrl: logo('1639405069836-f82aa6dcb900'),
+    verified: true,
     averageRating: 4.8,
     portfolio: [
       { title: 'Naperville Showcase Kitchen', category: 'Kitchen', description: 'Designer layout with a 10-ft island, brass fixtures, and integrated paneled appliances.', costMin: 70000, costMax: 95000, durationWeeks: 9, featured: true, imageUrls: [photo('1601760561441-16420502c7e0'), photo('1665507279644-67d8ed143a84')] },
