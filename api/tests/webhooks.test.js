@@ -18,7 +18,7 @@ const request = require('supertest');
 const app = require('../src/app');
 const stripe = require('../src/services/stripe');
 const { handleStripeEvent } = require('../src/routes/webhooks');
-const { db, resetDb, createBusiness } = require('./helpers');
+const { db, resetDb, createBusiness, createClient } = require('./helpers');
 
 beforeEach(async () => {
   await resetDb();
@@ -103,6 +103,64 @@ describe('handleStripeEvent', () => {
   test('an unhandled event type is ignored', async () => {
     await expect(handleStripeEvent({ type: 'payment_intent.created', data: { object: {} } }))
       .resolves.toBeUndefined();
+  });
+
+  test('account.updated syncs Connect capability flags', async () => {
+    const { business } = await createBusiness();
+    await db.business.update({ where: { id: business.id }, data: { stripeAccountId: 'acct_w' } });
+
+    await handleStripeEvent({
+      type: 'account.updated',
+      data: { object: { id: 'acct_w', charges_enabled: true, payouts_enabled: true } },
+    });
+
+    const updated = await db.business.findUnique({ where: { id: business.id } });
+    expect(updated.chargesEnabled).toBe(true);
+    expect(updated.payoutsEnabled).toBe(true);
+  });
+
+  async function pendingPayment() {
+    const { user: client } = await createClient();
+    const { business } = await createBusiness();
+    return db.payment.create({
+      data: {
+        clientId: client.id, businessId: business.id,
+        amountCents: 54000, commissionCents: 4000,
+        status: 'PENDING', stripePaymentIntentId: 'pi_w',
+      },
+    });
+  }
+
+  test('payment_intent.succeeded marks the deposit SUCCEEDED + paid', async () => {
+    const payment = await pendingPayment();
+    await handleStripeEvent({
+      type: 'payment_intent.succeeded',
+      data: { object: { id: 'pi_w' } },
+    });
+    const updated = await db.payment.findUnique({ where: { id: payment.id } });
+    expect(updated.status).toBe('SUCCEEDED');
+    expect(updated.paidAt).not.toBeNull();
+  });
+
+  test('payment_intent.payment_failed marks the deposit FAILED', async () => {
+    const payment = await pendingPayment();
+    await handleStripeEvent({
+      type: 'payment_intent.payment_failed',
+      data: { object: { id: 'pi_w' } },
+    });
+    const updated = await db.payment.findUnique({ where: { id: payment.id } });
+    expect(updated.status).toBe('FAILED');
+  });
+
+  test('charge.refunded marks the deposit REFUNDED via the intent id', async () => {
+    const payment = await pendingPayment();
+    await handleStripeEvent({
+      type: 'charge.refunded',
+      data: { object: { payment_intent: 'pi_w' } },
+    });
+    const updated = await db.payment.findUnique({ where: { id: payment.id } });
+    expect(updated.status).toBe('REFUNDED');
+    expect(updated.refundedAt).not.toBeNull();
   });
 });
 
