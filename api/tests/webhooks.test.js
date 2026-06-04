@@ -131,6 +131,18 @@ describe('handleStripeEvent', () => {
     });
   }
 
+  test('checkout.session.completed (payment) settles the deposit via metadata', async () => {
+    const payment = await pendingPayment();
+    await handleStripeEvent({
+      type: 'checkout.session.completed',
+      data: { object: { mode: 'payment', payment_intent: 'pi_chk', metadata: { paymentId: payment.id } } },
+    });
+    const updated = await db.payment.findUnique({ where: { id: payment.id } });
+    expect(updated.status).toBe('SUCCEEDED');
+    expect(updated.paidAt).not.toBeNull();
+    expect(updated.stripePaymentIntentId).toBe('pi_chk');
+  });
+
   test('payment_intent.succeeded marks the deposit SUCCEEDED + paid', async () => {
     const payment = await pendingPayment();
     await handleStripeEvent({

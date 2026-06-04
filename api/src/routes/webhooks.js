@@ -36,6 +36,22 @@ async function handleStripeEvent(event, { db: database = db, stripe: payments = 
         data: { stripeSubId: session.subscription },
       });
     }
+
+    // A homeowner's deposit checkout completed: settle the matching Payment and
+    // capture the underlying payment_intent id (so a later refund can match).
+    if (session.mode === 'payment' && session.metadata && session.metadata.paymentId) {
+      const intentId = typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id;
+      await database.payment.updateMany({
+        where: { id: session.metadata.paymentId },
+        data: {
+          status: 'SUCCEEDED',
+          paidAt: new Date(),
+          ...(intentId ? { stripePaymentIntentId: intentId } : {}),
+        },
+      });
+    }
     return;
   }
 

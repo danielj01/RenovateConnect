@@ -8,7 +8,7 @@ const {
   createConnectAccount,
   createAccountOnboardingLink,
   retrieveAccount,
-  createDepositPaymentIntent,
+  createDepositCheckoutSession,
 } = require('../services/stripe');
 
 // --- Contractor onboarding (Stripe Connect) ----------------------------------
@@ -71,11 +71,12 @@ router.get('/connect/status', authMiddleware, requireRole('BUSINESS'), async (re
 
 // --- Homeowner deposit -------------------------------------------------------
 
-// POST /payments/deposit — create a deposit PaymentIntent for an accepted quote.
-// Returns the client_secret for the iOS PaymentSheet. Idempotent per quote: a
-// quote can have at most one Payment row (unique), and a settled (SUCCEEDED)
-// deposit can't be re-created; a PENDING/FAILED one is refreshed with a new
-// intent so an abandoned PaymentSheet can be retried.
+// POST /payments/deposit — start a hosted Checkout for a deposit on an accepted
+// quote. Returns a Stripe-hosted URL the app opens in a Safari view; the
+// checkout.session.completed webhook settles the Payment row. Idempotent per
+// quote: a quote has at most one Payment row (unique). A settled (SUCCEEDED)
+// deposit can't be re-created; a PENDING/FAILED one is refreshed in place so an
+// abandoned checkout can be retried.
 router.post('/deposit', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
   try {
     const { quoteRequestId } = z.object({ quoteRequestId: z.string() }).parse(req.body);
@@ -109,17 +110,8 @@ router.post('/deposit', authMiddleware, requireRole('CLIENT'), async (req, res, 
     const amountCents = depositCents + commissionCents; // fee on top
     const description = `Deposit — ${quote.business.companyName}`;
 
-    const intent = await createDepositPaymentIntent({
-      amountCents,
-      commissionCents,
-      connectedAccountId: quote.business.stripeAccountId,
-      metadata: {
-        quoteRequestId,
-        businessId: quote.business.id,
-        clientId: req.user.id,
-      },
-    });
-
+    // Create/refresh the PENDING row first so its id can ride along as Checkout
+    // metadata; the webhook uses it to settle this exact payment.
     const data = {
       clientId: req.user.id,
       businessId: quote.business.id,
@@ -127,16 +119,33 @@ router.post('/deposit', authMiddleware, requireRole('CLIENT'), async (req, res, 
       amountCents,
       commissionCents,
       status: 'PENDING',
-      stripePaymentIntentId: intent.id,
       description,
     };
     const payment = existing
       ? await db.payment.update({ where: { id: existing.id }, data })
       : await db.payment.create({ data });
 
+    const client = await db.user.findUnique({
+      where: { id: req.user.id }, select: { email: true },
+    });
+
+    const session = await createDepositCheckoutSession({
+      amountCents,
+      commissionCents,
+      connectedAccountId: quote.business.stripeAccountId,
+      customerEmail: client?.email,
+      description,
+      metadata: {
+        paymentId: payment.id,
+        quoteRequestId,
+        businessId: quote.business.id,
+        clientId: req.user.id,
+      },
+    });
+
     res.status(201).json({
       paymentId: payment.id,
-      clientSecret: intent.client_secret,
+      url: session.url,
       amountCents,
       depositCents,
       commissionCents,

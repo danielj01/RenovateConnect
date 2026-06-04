@@ -8,7 +8,7 @@ jest.mock('../src/services/stripe', () => {
     createConnectAccount: jest.fn(),
     createAccountOnboardingLink: jest.fn(),
     retrieveAccount: jest.fn(),
-    createDepositPaymentIntent: jest.fn(),
+    createDepositCheckoutSession: jest.fn(),
   };
 });
 
@@ -104,11 +104,11 @@ describe('POST /payments/deposit', () => {
     return made;
   }
 
-  test('creates a PENDING Payment and returns the client secret + amounts', async () => {
+  test('creates a PENDING Payment and returns the hosted checkout url + amounts', async () => {
     const { user: client, token } = await createClient();
     const { business } = await payoutReadyBusiness();
     const quote = await acceptedQuote(client.id, business.id, 4000, 6000);
-    stripe.createDepositPaymentIntent.mockResolvedValueOnce({ id: 'pi_1', client_secret: 'pi_1_secret' });
+    stripe.createDepositCheckoutSession.mockResolvedValueOnce({ id: 'cs_1', url: 'https://checkout.stripe/deposit' });
 
     const res = await request(app).post('/payments/deposit')
       .set('Authorization', `Bearer ${token}`)
@@ -117,15 +117,16 @@ describe('POST /payments/deposit', () => {
     expect(res.status).toBe(201);
     // deposit = 10% of $5000 midpoint = 50000c; commission 8% = 4000c; total 54000c
     expect(res.body).toMatchObject({
-      clientSecret: 'pi_1_secret', depositCents: 50000, commissionCents: 4000, amountCents: 54000,
+      url: 'https://checkout.stripe/deposit', depositCents: 50000, commissionCents: 4000, amountCents: 54000,
     });
-    // Destination charge: fee on top, routed to the contractor's account.
-    expect(stripe.createDepositPaymentIntent).toHaveBeenCalledWith(expect.objectContaining({
+    // Destination charge: fee on top, routed to the contractor's account, with
+    // the Payment row id carried as metadata for the webhook to settle.
+    expect(stripe.createDepositCheckoutSession).toHaveBeenCalledWith(expect.objectContaining({
       amountCents: 54000, commissionCents: 4000, connectedAccountId: 'acct_ready',
+      metadata: expect.objectContaining({ paymentId: res.body.paymentId }),
     }));
     const payment = await db.payment.findUnique({ where: { quoteRequestId: quote.id } });
     expect(payment.status).toBe('PENDING');
-    expect(payment.stripePaymentIntentId).toBe('pi_1');
   });
 
   test('rejects a quote that is not ACCEPTED', async () => {
@@ -146,7 +147,7 @@ describe('POST /payments/deposit', () => {
     const res = await request(app).post('/payments/deposit')
       .set('Authorization', `Bearer ${token}`).send({ quoteRequestId: quote.id });
     expect(res.status).toBe(409);
-    expect(stripe.createDepositPaymentIntent).not.toHaveBeenCalled();
+    expect(stripe.createDepositCheckoutSession).not.toHaveBeenCalled();
   });
 
   test('forbids paying another homeowner\'s quote', async () => {
@@ -171,24 +172,23 @@ describe('POST /payments/deposit', () => {
     expect(res.status).toBe(409);
   });
 
-  test('retries a PENDING deposit by refreshing the intent in place', async () => {
+  test('retries a PENDING deposit by refreshing the checkout in place', async () => {
     const { user: client, token } = await createClient();
     const { business } = await payoutReadyBusiness();
     const quote = await acceptedQuote(client.id, business.id);
     const stale = await db.payment.create({
-      data: { clientId: client.id, businessId: business.id, quoteRequestId: quote.id, amountCents: 54000, commissionCents: 4000, status: 'PENDING', stripePaymentIntentId: 'pi_old' },
+      data: { clientId: client.id, businessId: business.id, quoteRequestId: quote.id, amountCents: 54000, commissionCents: 4000, status: 'PENDING' },
     });
-    stripe.createDepositPaymentIntent.mockResolvedValueOnce({ id: 'pi_new', client_secret: 'pi_new_secret' });
+    stripe.createDepositCheckoutSession.mockResolvedValueOnce({ id: 'cs_new', url: 'https://checkout.stripe/again' });
 
     const res = await request(app).post('/payments/deposit')
       .set('Authorization', `Bearer ${token}`).send({ quoteRequestId: quote.id });
 
     expect(res.status).toBe(201);
-    expect(res.body.clientSecret).toBe('pi_new_secret');
+    expect(res.body.url).toBe('https://checkout.stripe/again');
     const rows = await db.payment.findMany({ where: { quoteRequestId: quote.id } });
     expect(rows).toHaveLength(1); // refreshed, not duplicated
     expect(rows[0].id).toBe(stale.id);
-    expect(rows[0].stripePaymentIntentId).toBe('pi_new');
   });
 });
 

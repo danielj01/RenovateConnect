@@ -160,25 +160,39 @@ async function retrieveAccount(accountId) {
   return stripe.accounts.retrieve(accountId);
 }
 
-// A destination-charge PaymentIntent for a deposit. The homeowner is charged
-// `amountCents` (deposit + commission); `commissionCents` is split to the
-// platform as the application fee and the remainder is transferred to the
-// contractor's connected account. Returns the intent (with client_secret).
-async function createDepositPaymentIntent({
+// A hosted Checkout session (payment mode) for a deposit — a destination charge
+// opened in an in-app Safari view, like the rest of our Stripe flows. The
+// homeowner is charged `amountCents` (deposit + commission); `commissionCents`
+// is split to the platform as the application fee and the remainder transfers to
+// the contractor's connected account. The `metadata.paymentId` lets the
+// checkout.session.completed webhook settle the matching Payment row.
+async function createDepositCheckoutSession({
   amountCents,
   commissionCents,
   connectedAccountId,
-  customerId,
+  customerEmail,
+  description,
   metadata,
 }) {
-  return stripe.paymentIntents.create({
-    amount: amountCents,
-    currency: 'usd',
-    customer: customerId || undefined,
-    application_fee_amount: commissionCents,
-    transfer_data: { destination: connectedAccountId },
-    automatic_payment_methods: { enabled: true },
+  return stripe.checkout.sessions.create({
+    mode: 'payment',
+    customer_email: customerEmail || undefined,
+    line_items: [{
+      quantity: 1,
+      price_data: {
+        currency: 'usd',
+        product_data: { name: description || 'Deposit' },
+        unit_amount: amountCents,
+      },
+    }],
+    payment_intent_data: {
+      application_fee_amount: commissionCents,
+      transfer_data: { destination: connectedAccountId },
+      metadata: metadata || {},
+    },
     metadata: metadata || {},
+    success_url: `${APP_BASE_URL()}/billing/return?status=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${APP_BASE_URL()}/billing/return?status=cancel`,
   });
 }
 
@@ -206,6 +220,6 @@ module.exports = {
   createConnectAccount,
   createAccountOnboardingLink,
   retrieveAccount,
-  createDepositPaymentIntent,
+  createDepositCheckoutSession,
   createRefund,
 };
