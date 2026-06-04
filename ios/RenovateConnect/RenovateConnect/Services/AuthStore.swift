@@ -56,7 +56,9 @@ final class AuthStore: ObservableObject {
                 email: email
             )
             UserDefaults.standard.set(resp.token, forKey: "authToken")
-            currentUser = resp.user
+            // Hydrate the full profile (including any linked business) the same
+            // way login/register do, rather than trusting the lean auth payload.
+            await loadMe()
         } catch {
             self.error = "We couldn't sign you in with Apple. Please try again."
         }

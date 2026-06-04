@@ -170,6 +170,11 @@ router.post('/', authMiddleware, requireRole('BUSINESS'), async (req, res, next)
     await notifyMatchingSearches(business);
     res.status(201).json(business);
   } catch (err) {
+    // A user can only have one business profile (unique userId). A double-submit
+    // would otherwise surface as an opaque 500 — return a clear 409 instead.
+    if (err.code === 'P2002') {
+      return res.status(409).json({ error: 'You already have a business profile.' });
+    }
     next(err);
   }
 });
