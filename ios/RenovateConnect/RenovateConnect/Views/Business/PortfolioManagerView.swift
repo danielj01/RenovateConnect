@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UIKit
 
 struct PortfolioManagerView: View {
     @EnvironmentObject private var auth: AuthStore
@@ -220,6 +221,12 @@ struct PortfolioEditorSheet: View {
     @State private var picker: [PhotosPickerItem] = []
     @State private var uploading = false
 
+    // For NEW projects there's no projectId to upload against yet, so picked
+    // photos are staged here as JPEG data and uploaded right after the project
+    // is created (see `save()`).
+    @State private var newPicker: [PhotosPickerItem] = []
+    @State private var stagedImages: [Data] = []
+
     private var isEditing: Bool { project != nil }
 
     init(businessId: String, project: PortfolioProject?,
@@ -263,6 +270,8 @@ struct PortfolioEditorSheet: View {
                 }
                 if isEditing {
                     photosSection
+                } else {
+                    newPhotosSection
                 }
                 if let project, let s = project.approvalStatus, s != .approved {
                     Section {
@@ -335,9 +344,63 @@ struct PortfolioEditorSheet: View {
 
     // MARK: - Photos editor
 
+    /// Photos picker for a NEW project. Photos are staged locally (we don't have
+    /// a projectId to upload against yet) and uploaded right after the project is
+    /// created on save. Thumbnails render straight from the picked data.
+    private var newPhotosSection: some View {
+        Section("Photos") {
+            if !stagedImages.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Array(stagedImages.enumerated()), id: \.offset) { idx, data in
+                            ZStack(alignment: .topTrailing) {
+                                if let ui = UIImage(data: data) {
+                                    Image(uiImage: ui).resizable().scaledToFill()
+                                        .frame(width: 96, height: 96)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                }
+                                Button {
+                                    stagedImages.remove(at: idx)
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.white, .black.opacity(0.7))
+                                }
+                                .padding(4)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+
+            PhotosPicker(selection: $newPicker, maxSelectionCount: 10, matching: .images) {
+                Label("Add photos", systemImage: "photo.on.rectangle.angled")
+            }
+            .onChange(of: newPicker) { _, items in
+                guard !items.isEmpty else { return }
+                Task { await stagePicked(items) }
+            }
+        } footer: {
+            Text("Photos upload when you add the project.")
+        }
+    }
+
+    /// Load picked items into JPEG data staged for upload after creation.
+    private func stagePicked(_ items: [PhotosPickerItem]) async {
+        var loaded: [Data] = []
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self) {
+                loaded.append(UIImage(data: data)?.jpegData(compressionQuality: 0.85) ?? data)
+            }
+        }
+        stagedImages.append(contentsOf: loaded)
+        newPicker = []
+    }
+
     /// Grid of existing photos with per-photo delete + a PhotosPicker for
-    /// adding more. Only shown when editing — new projects need to be created
-    /// first so we have a projectId to upload against.
+    /// adding more. Used when editing — uploads happen immediately against the
+    /// existing projectId.
     private var photosSection: some View {
         Section("Photos") {
             if !imageUrls.isEmpty {
@@ -433,7 +496,7 @@ struct PortfolioEditorSheet: View {
         let hi = Int(costMax.filter(\.isNumber))
         let wk = Int(weeks.filter(\.isNumber))
         do {
-            let saved: PortfolioProject
+            var saved: PortfolioProject
             if let project {
                 saved = try await APIService.shared.updatePortfolioProject(
                     businessId: businessId, projectId: project.id,
@@ -444,6 +507,11 @@ struct PortfolioEditorSheet: View {
                     businessId: businessId,
                     title: title, description: desc, category: cat,
                     costMin: lo, costMax: hi, durationWeeks: wk)
+                // Upload any photos staged before the project existed.
+                if !stagedImages.isEmpty {
+                    saved = try await APIService.shared.uploadPortfolioImages(
+                        businessId: businessId, projectId: saved.id, images: stagedImages)
+                }
             }
             onSave(saved)
             dismiss()
