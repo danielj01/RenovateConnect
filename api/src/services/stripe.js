@@ -196,8 +196,18 @@ async function createDepositCheckoutSession({
   });
 }
 
+// Fully refund a deposit and unwind everyone's cut. For a destination charge a
+// plain refund pulls only from the platform balance and leaves the contractor's
+// transfer + our application fee in place — so we set:
+//   reverse_transfer: true        — claw the contractor's payout back
+//   refund_application_fee: true  — return our commission too
+// Net effect: the homeowner is made whole and no one keeps any money.
 async function createRefund(paymentIntentId) {
-  return stripe.refunds.create({ payment_intent: paymentIntentId });
+  return stripe.refunds.create({
+    payment_intent: paymentIntentId,
+    reverse_transfer: true,
+    refund_application_fee: true,
+  });
 }
 
 // Legacy alias kept for any callers still expecting the old name.

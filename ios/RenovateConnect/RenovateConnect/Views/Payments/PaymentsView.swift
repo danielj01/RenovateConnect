@@ -8,6 +8,8 @@ struct PaymentsView: View {
     @State private var payments: [Payment] = []
     @State private var isLoading = true
     @State private var error: String?
+    @State private var refundTarget: Payment?
+    @State private var refundingId: String?
 
     private var isBusiness: Bool { auth.currentUser?.role == .business }
 
@@ -28,7 +30,14 @@ struct PaymentsView: View {
                 LazyVStack(spacing: 12) {
                     summaryCard
                     ForEach(payments) { payment in
-                        PaymentRow(payment: payment, isBusiness: isBusiness)
+                        PaymentRow(
+                            payment: payment,
+                            isBusiness: isBusiness,
+                            isRefunding: refundingId == payment.id,
+                            onRefund: isBusiness && payment.status == .succeeded
+                                ? { refundTarget = payment }
+                                : nil
+                        )
                     }
                 }
                 .padding(16)
@@ -39,6 +48,26 @@ struct PaymentsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
+        .confirmationDialog(
+            "Refund this deposit?",
+            isPresented: Binding(get: { refundTarget != nil },
+                                 set: { if !$0 { refundTarget = nil } }),
+            titleVisibility: .visible,
+            presenting: refundTarget
+        ) { payment in
+            Button("Refund \(PaymentsView.money(payment.amountCents))", role: .destructive) {
+                Task { await refund(payment) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { _ in
+            Text("The homeowner gets the full deposit back, your payout is reversed, and the platform fee is returned. This can't be undone.")
+        }
+        .alert("Couldn't refund", isPresented: Binding(get: { error != nil },
+                                                       set: { if !$0 { error = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(error ?? "")
+        }
     }
 
     // Total successfully settled — what the homeowner has paid, or what the
@@ -83,6 +112,19 @@ struct PaymentsView: View {
         }
     }
 
+    // Issue the refund, then reload so the row reflects its new REFUNDED status
+    // (the backend settles it via webhook, so a refetch is the source of truth).
+    private func refund(_ payment: Payment) async {
+        refundingId = payment.id
+        defer { refundingId = nil }
+        do {
+            try await APIService.shared.refundPayment(id: payment.id)
+            await load()
+        } catch {
+            self.error = error.localizedDescription
+        }
+    }
+
     // MARK: - Formatting (shared by the row)
 
     static func money(_ cents: Int) -> String {
@@ -110,6 +152,8 @@ struct PaymentsView: View {
 private struct PaymentRow: View {
     let payment: Payment
     let isBusiness: Bool
+    var isRefunding: Bool = false
+    var onRefund: (() -> Void)?
 
     // Homeowner sees what they paid (gross); contractor sees the net deposit.
     private var displayCents: Int {
@@ -128,34 +172,55 @@ private struct PaymentRow: View {
 
     var body: some View {
         RCCard {
-            HStack(spacing: 14) {
-                if isBusiness {
-                    InitialsAvatar(name: counterparty, size: 44)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                } else {
-                    BusinessAvatar(name: counterparty,
-                                   logoUrl: payment.business?.logoUrl,
-                                   size: 44, cornerRadius: 12)
-                }
+            VStack(spacing: 0) {
+                HStack(spacing: 14) {
+                    if isBusiness {
+                        InitialsAvatar(name: counterparty, size: 44)
+                            .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        BusinessAvatar(name: counterparty,
+                                       logoUrl: payment.business?.logoUrl,
+                                       size: 44, cornerRadius: 12)
+                    }
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(counterparty)
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                    if let dateText {
-                        Text(dateText).font(.caption).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(counterparty)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                        if let dateText {
+                            Text(dateText).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Spacer(minLength: 8)
+
+                    VStack(alignment: .trailing, spacing: 4) {
+                        Text(PaymentsView.money(displayCents))
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                        PaymentStatusBadge(status: payment.status)
                     }
                 }
+                .padding(14)
 
-                Spacer(minLength: 8)
-
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text(PaymentsView.money(displayCents))
-                        .font(.system(size: 16, weight: .bold, design: .rounded))
-                    PaymentStatusBadge(status: payment.status)
+                if let onRefund {
+                    Divider().padding(.horizontal, 14)
+                    Button(role: .destructive, action: onRefund) {
+                        HStack(spacing: 8) {
+                            if isRefunding {
+                                ProgressView()
+                            } else {
+                                Image(systemName: "arrow.uturn.backward")
+                            }
+                            Text(isRefunding ? "Refunding…" : "Refund deposit")
+                                .font(.subheadline.weight(.medium))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                    }
+                    .disabled(isRefunding)
                 }
             }
-            .padding(14)
         }
     }
 }

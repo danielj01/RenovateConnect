@@ -603,6 +603,13 @@ final class APIService {
         try await request("payments")
     }
 
+    /// Contractor (or admin): fully refund a settled deposit. Reverses the
+    /// transfer and refunds the platform fee server-side; the row flips to
+    /// REFUNDED via webhook, so callers should re-fetch after this returns.
+    func refundPayment(id: String) async throws {
+        try await requestNoContent("payments/\(id)/refund", method: "POST")
+    }
+
     // AI Chat
     func chat(message: String, history: [[String: String]]) async throws -> (reply: String, mentioned: [BusinessRef]) {
         struct Body: Encodable { let message: String; let history: [[String: String]] }

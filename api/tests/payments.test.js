@@ -9,13 +9,14 @@ jest.mock('../src/services/stripe', () => {
     createAccountOnboardingLink: jest.fn(),
     retrieveAccount: jest.fn(),
     createDepositCheckoutSession: jest.fn(),
+    createRefund: jest.fn(),
   };
 });
 
 const request = require('supertest');
 const app = require('../src/app');
 const stripe = require('../src/services/stripe');
-const { db, resetDb, createClient, createBusiness } = require('./helpers');
+const { db, resetDb, createClient, createBusiness, createAdmin } = require('./helpers');
 
 beforeEach(async () => {
   await resetDb();
@@ -189,6 +190,105 @@ describe('POST /payments/deposit', () => {
     const rows = await db.payment.findMany({ where: { quoteRequestId: quote.id } });
     expect(rows).toHaveLength(1); // refreshed, not duplicated
     expect(rows[0].id).toBe(stale.id);
+  });
+});
+
+describe('POST /payments/:id/refund', () => {
+  // A SUCCEEDED deposit from `client` to `business`, with a Stripe charge on file.
+  async function settledDeposit(clientId, businessId, overrides = {}) {
+    return db.payment.create({
+      data: {
+        clientId, businessId,
+        amountCents: 54000, commissionCents: 4000,
+        status: 'SUCCEEDED',
+        stripePaymentIntentId: 'pi_settled',
+        paidAt: new Date(),
+        ...overrides,
+      },
+    });
+  }
+
+  test('the owning contractor can issue a full refund (reversing the transfer + fee)', async () => {
+    const { user: client } = await createClient();
+    const { business, token } = await createBusiness();
+    const payment = await settledDeposit(client.id, business.id);
+    stripe.createRefund.mockResolvedValueOnce({ id: 're_1' });
+
+    const res = await request(app).post(`/payments/${payment.id}/refund`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(stripe.createRefund).toHaveBeenCalledWith('pi_settled');
+  });
+
+  test('an admin can refund any deposit', async () => {
+    const { user: client } = await createClient();
+    const { business } = await createBusiness();
+    const { token } = await createAdmin();
+    const payment = await settledDeposit(client.id, business.id);
+    stripe.createRefund.mockResolvedValueOnce({ id: 're_2' });
+
+    const res = await request(app).post(`/payments/${payment.id}/refund`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+  });
+
+  test('the paying homeowner cannot refund their own deposit', async () => {
+    const { user: client, token } = await createClient();
+    const { business } = await createBusiness();
+    const payment = await settledDeposit(client.id, business.id);
+
+    const res = await request(app).post(`/payments/${payment.id}/refund`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+    expect(stripe.createRefund).not.toHaveBeenCalled();
+  });
+
+  test('a different contractor cannot refund someone else\'s deposit', async () => {
+    const { user: client } = await createClient();
+    const { business } = await createBusiness();
+    const { token: otherToken } = await createBusiness();
+    const payment = await settledDeposit(client.id, business.id);
+
+    const res = await request(app).post(`/payments/${payment.id}/refund`)
+      .set('Authorization', `Bearer ${otherToken}`);
+    expect(res.status).toBe(403);
+    expect(stripe.createRefund).not.toHaveBeenCalled();
+  });
+
+  test('refunding requires authentication', async () => {
+    const { user: client } = await createClient();
+    const { business } = await createBusiness();
+    const payment = await settledDeposit(client.id, business.id);
+    await request(app).post(`/payments/${payment.id}/refund`).expect(401);
+  });
+
+  test('a non-existent payment returns 404', async () => {
+    const { token } = await createAdmin();
+    await request(app).post('/payments/nope/refund')
+      .set('Authorization', `Bearer ${token}`).expect(404);
+  });
+
+  test('only a SUCCEEDED deposit can be refunded', async () => {
+    const { user: client } = await createClient();
+    const { business, token } = await createBusiness();
+    const payment = await settledDeposit(client.id, business.id, { status: 'PENDING' });
+
+    const res = await request(app).post(`/payments/${payment.id}/refund`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(409);
+    expect(stripe.createRefund).not.toHaveBeenCalled();
+  });
+
+  test('a deposit with no Stripe charge cannot be refunded', async () => {
+    const { user: client } = await createClient();
+    const { business, token } = await createBusiness();
+    const payment = await settledDeposit(client.id, business.id, { stripePaymentIntentId: null });
+
+    const res = await request(app).post(`/payments/${payment.id}/refund`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(409);
+    expect(stripe.createRefund).not.toHaveBeenCalled();
   });
 });
 

@@ -9,6 +9,7 @@ const {
   createAccountOnboardingLink,
   retrieveAccount,
   createDepositCheckoutSession,
+  createRefund,
 } = require('../services/stripe');
 
 // --- Contractor onboarding (Stripe Connect) ----------------------------------
@@ -150,6 +151,37 @@ router.post('/deposit', authMiddleware, requireRole('CLIENT'), async (req, res, 
       depositCents,
       commissionCents,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /payments/:id/refund — fully refund a settled deposit. Authorized for the
+// contractor who received it (the owning BUSINESS user) and for any ADMIN.
+// Stripe reverses the transfer and refunds our commission, making the homeowner
+// whole; the charge.refunded webhook flips the row to REFUNDED + stamps
+// refundedAt, so we don't optimistically mutate status here.
+router.post('/:id/refund', authMiddleware, async (req, res, next) => {
+  try {
+    const payment = await db.payment.findUnique({
+      where: { id: req.params.id },
+      include: { business: { select: { userId: true } } },
+    });
+    if (!payment) return res.status(404).json({ error: 'Not found' });
+
+    const isOwner = req.user.role === 'BUSINESS' && payment.business.userId === req.user.id;
+    const isAdmin = req.user.role === 'ADMIN';
+    if (!isOwner && !isAdmin) return res.status(403).json({ error: 'Forbidden' });
+
+    if (payment.status !== 'SUCCEEDED') {
+      return res.status(409).json({ error: 'Only a settled deposit can be refunded.' });
+    }
+    if (!payment.stripePaymentIntentId) {
+      return res.status(409).json({ error: 'This payment has no Stripe charge to refund.' });
+    }
+
+    await createRefund(payment.stripePaymentIntentId);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
