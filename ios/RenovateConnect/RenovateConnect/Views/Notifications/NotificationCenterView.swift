@@ -20,15 +20,16 @@ struct ActivityBellButton: View {
                     Text(activity.unreadCount > 99 ? "99+" : "\(activity.unreadCount)")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Color.red, in: Capsule())
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .frame(width: 18, height: 18)
+                        .background(Color.red, in: Circle())
                         .offset(x: 6, y: -6)
                 }
             }
-            // Reserve room for the badge so the navigation bar doesn't clip the
-            // part that sits above/right of the bell glyph.
-            .padding(.top, 8)
-            .padding(.trailing, 8)
+            // Symmetric padding keeps the bell centered while reserving room so
+            // the navigation bar doesn't clip the badge that sits past the glyph.
+            .padding(8)
         }
         .accessibilityLabel(activity.unreadCount > 0 ? "Notifications, \(activity.unreadCount) unread" : "Notifications")
         .sheet(isPresented: $showCenter) {
