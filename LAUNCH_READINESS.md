@@ -1,0 +1,230 @@
+# RenovateConnect — Launch Readiness
+
+> Operational readiness to take the app from "runs on my machine" to "live in
+> the App Store with real users and real money." This is the infra/distribution
+> companion to the business docs (`MARKET_ENTRY_AND_PROFITABILITY_PLAN.md`,
+> `RETENTION_AND_FEATURE_ROADMAP.md`). Features are tracked there; **this doc is
+> about shipping and running.**
+>
+> Status legend: ✅ done · 🟡 partial / needs config · 🔴 blocking · ⚪ nice-to-have
+
+_Last updated: 2026-06-04_
+
+---
+
+## 0. TL;DR — the critical path
+
+To be genuinely live you must clear three gates, in order:
+
+1. **Backend running in production** — there is currently *no* deployment config
+   at all. Plus two design choices silently assume a single instance and an
+   ephemeral filesystem that breaks on any PaaS.
+2. **iOS app distributable** — the bundle ID is an invalid placeholder, there's
+   no signing team, and **the Push Notifications capability is missing** (the
+   APNs code can't fire on device without it).
+3. **Go-live ops** — Stripe live mode, monitoring, backups, legal pages.
+
+Estimated effort to a TestFlight-able, production-backed build: **~3–5 focused
+engineering days**, plus Apple review lead time (typically 1–3 days for first
+submission).
+
+---
+
+## 1. Current state snapshot (what the audit found)
+
+### Already production-shaped ✅
+- Express + Prisma API, clean one-file-per-resource routing, central error
+  handler, Zod validation.
+- 22 Prisma migrations; `prisma migrate deploy` used in CI.
+- 27 API test files; CI runs lint + tests against real Postgres on every push/PR.
+- `GET /health` endpoint (ready for load-balancer health checks).
+- `helmet()` security headers; `express-rate-limit` mounted.
+- **APNs push fully implemented** — ES256 provider JWT over HTTP/2, token cached
+  ~50 min, safe no-op when unconfigured (`services/push.js`).
+- **S3 storage implemented** with local-disk fallback (`services/storage.js`).
+- **Stripe Connect** destination charges, application-fee commission, refunds,
+  milestone escrow, and webhook settlement all built.
+- Secrets hygiene: `.env` is gitignored and untracked; CI uses GitHub Secrets
+  for `ANTHROPIC_API_KEY` / `STRIPE_SECRET_KEY`.
+
+### Blocking / needs work 🔴🟡
+See sections 2–4.
+
+---
+
+## 2. Backend: get it running in production
+
+### 2.1 No deployment artifact 🔴
+There is no `Dockerfile`, `Procfile`, `fly.toml`, or `render.yaml`. The app only
+runs via `npm start` locally.
+
+- [ ] Add a `Dockerfile` (Node 20, `npm ci`, `prisma generate`, `npm start`).
+- [ ] Pick a host. **Recommendation: Render or Fly.io** — both give managed
+      Postgres + HTTPS + a secrets UI for a small Express app. Railway is a fine
+      third option. (~$7–25/mo to start.)
+- [ ] Wire a release command to run `npx prisma migrate deploy` before boot.
+- [ ] Set all env vars in the host's secret manager (see `api/.env.example`):
+      `DATABASE_URL`, `JWT_SECRET`, `ANTHROPIC_API_KEY`, `STRIPE_SECRET_KEY`,
+      `STRIPE_WEBHOOK_SECRET`, `APP_BASE_URL`, the `APNS_*` set, the `AWS_*` +
+      `S3_BUCKET` set, `NODE_ENV=production`.
+
+### 2.2 Single-instance assumptions 🔴
+Two pieces of code work locally but break the moment you run >1 instance — or
+even just on a normal PaaS:
+
+- [ ] **Auto-release sweep** is an in-process `setInterval` in `app.js`. On
+      horizontal scale it runs N times; if the instance is asleep it never runs.
+      → Move to an external scheduler (Render Cron Job / GitHub Actions cron /
+      Fly scheduled machine) hitting a protected `/internal/sweep` route, or a
+      dedicated worker. Keep it idempotent.
+- [ ] **`express-rate-limit` is in-memory** — resets per instance, ineffective
+      behind multiple nodes. → Back it with Redis (`rate-limit-redis`) for prod,
+      or consciously accept single-instance for v1 and document it.
+
+### 2.3 Ephemeral filesystem 🔴
+`services/storage.js` falls back to writing uploads to local disk. On
+Render/Fly/Railway the filesystem is wiped on every deploy — **user photos would
+silently disappear.**
+
+- [ ] Make S3 (or R2/Spaces) **mandatory in production**: if `s3Configured()` is
+      false and `NODE_ENV === 'production'`, fail fast at boot rather than
+      falling back to disk.
+- [ ] Create the prod bucket, lock down public access to read-only on the
+      `uploads/` prefix (or front it with a CDN / signed URLs).
+- [ ] ⚪ Put CloudFront / Cloudflare in front of images later for cost + speed.
+
+### 2.4 Hardening 🟡
+- [ ] **CORS** is wide open (`app.use(cors())`). Restrict `origin` to known app
+      origins (the iOS app uses a native client, so this mainly protects any web
+      surface / admin).
+- [ ] **Observability**: only `morgan('dev')` + `console.error` today.
+  - [ ] Add error tracking (**Sentry** — `@sentry/node`, ~10 min).
+  - [ ] Switch to structured JSON logs (`pino`) with `morgan('combined')` or a
+        pino-http middleware in prod.
+  - [ ] Add uptime monitoring on `/health` (BetterStack / UptimeRobot / Render's
+        built-in).
+- [ ] **Trust proxy**: behind a PaaS load balancer, set `app.set('trust proxy', 1)`
+      so rate-limit and client IPs are correct.
+- [ ] Confirm the `express.json({ limit: '10mb' })` cap is right for image
+      payloads (estimations post multipart, so likely fine).
+
+### 2.5 Database ops 🟡
+- [ ] Use **managed Postgres** with automated daily backups + point-in-time
+      recovery (Render/Fly/Neon/Supabase all offer this).
+- [ ] Verify Prisma connection-pool sizing for the instance count
+      (`connection_limit` in `DATABASE_URL`); consider PgBouncer / a pooled URL
+      if you scale.
+- [ ] Run the seed (`prisma/seed.js`) **only** for staging demo data, never blind
+      against prod.
+
+---
+
+## 3. iOS: make it distributable
+
+### 3.1 Project identity 🔴
+- [ ] **Bundle ID is invalid**: `-x4-Solutions.RenovateConnect` (leading dash).
+      Set a real reverse-DNS id, e.g. `app.renovateconnect` or
+      `com.renovateconnect.app`. Must match `APNS_BUNDLE_ID` on the server.
+- [ ] Set `DEVELOPMENT_TEAM` to the Apple Developer account team ID; enable
+      automatic signing (or set up manual provisioning profiles for CI).
+
+### 3.2 Push Notifications capability 🔴
+The APNs code exists but the app target has **no `aps-environment` entitlement**
+and **no `remote-notification` background mode** — push will not work on device.
+
+- [ ] Add the **Push Notifications** capability (creates the entitlements file +
+      `aps-environment`).
+- [ ] Add **Background Modes → Remote notifications** if you want silent/
+      background pushes.
+- [ ] In the Apple Developer portal, create an **APNs Auth Key (.p8)**; load its
+      contents + Key ID + Team ID into the server's `APNS_*` env, set
+      `APNS_PRODUCTION=true` for App Store / TestFlight builds.
+
+### 3.3 App Store compliance 🔴/🟡
+- [ ] **In-app account deletion** — Apple *requires* it (App Store Guideline
+      5.1.1(v)). Add a "Delete account" flow + a `DELETE /auth/me` endpoint that
+      hard-deletes / anonymizes the user and cascades their data.
+- [ ] **Privacy Policy + Terms of Service** URLs (host on `renovateconnect.app`).
+- [ ] **App Privacy "nutrition label"** answers in App Store Connect (data
+      collected: name/email, photos for estimates, payment via Stripe, push
+      token, usage analytics).
+- [ ] **Privacy manifest** (`PrivacyInfo.xcprivacy`) declaring required-reason
+      APIs + any tracking — now required at submission.
+- [ ] Confirm payments are correctly framed as **real-world services** (Stripe is
+      allowed; this is not digital content, so no IAP needed) — but the review
+      notes should make that explicit to avoid a 3.1.1 rejection.
+- [ ] App Store assets: icon set, screenshots (6.7" + 6.5" + iPad if supported),
+      description, keywords (see `MARKET_ENTRY` §ASO), support URL.
+- [ ] ⚪ Add iOS unit/UI tests (CI is build-only today).
+
+### 3.4 Distribution pipeline 🟡
+- [ ] First path: Xcode **Archive → TestFlight** for internal testing.
+- [ ] ⚪ Later: automate with Fastlane + a signed CI build (the current CI builds
+      unsigned for verification only).
+
+---
+
+## 4. Payments go-live (Stripe) 🟡
+
+- [ ] Switch to **live** API keys + live `STRIPE_WEBHOOK_SECRET`.
+- [ ] Register the production webhook endpoint (`https://<api>/webhooks`) in the
+      Stripe dashboard; confirm it's reachable and signature-verifying.
+- [ ] Complete the platform's **Stripe Connect** setup (platform profile, payout
+      settings, branding); contractors re-onboard against the live environment.
+- [ ] Verify the commission math end-to-end in live mode with a real card +
+      a test payout to a real connected account.
+- [ ] Decide on refund / dispute handling runbook.
+
+---
+
+## 5. Recommended infra stack (v1, lean)
+
+| Concern            | Choice (v1)                          | Why |
+|--------------------|--------------------------------------|-----|
+| API host           | Render (or Fly.io)                   | Managed, HTTPS, secrets UI, cheap |
+| Database           | Render/Neon managed Postgres         | Backups + PITR out of the box |
+| Object storage     | AWS S3 (or Cloudflare R2)            | Already coded; R2 has no egress fees |
+| Scheduler          | Render Cron → `/internal/sweep`      | Replaces in-process `setInterval` |
+| Error tracking     | Sentry                               | Free tier covers launch volume |
+| Uptime             | UptimeRobot / BetterStack on /health | Free/cheap alerting |
+| Push               | APNs token auth (.p8)                | Already coded |
+| iOS distribution   | TestFlight → App Store               | Standard |
+
+Ballpark run cost at launch: **~$25–60/mo** + Apple Developer Program ($99/yr).
+
+---
+
+## 6. Sequenced launch checklist
+
+**Phase 1 — Backend live (staging)**
+1. [ ] Dockerfile + Render/Fly config + `migrate deploy` release step
+2. [ ] Managed Postgres + S3 bucket provisioned, env vars set
+3. [ ] S3 mandatory-in-prod guard; CORS allowlist; `trust proxy`
+4. [ ] Move auto-release sweep to cron; (Redis rate-limit or accept single node)
+5. [ ] Sentry + uptime monitor wired
+6. [ ] Smoke test all flows against staging
+
+**Phase 2 — iOS shippable**
+7. [ ] Fix bundle ID + signing team
+8. [ ] Add Push Notifications + Background Modes capabilities; provision .p8
+9. [ ] Account deletion flow + endpoint
+10. [ ] Privacy policy/terms pages, App Privacy answers, privacy manifest
+11. [ ] Icon + screenshots + listing copy
+12. [ ] Archive → TestFlight internal test
+
+**Phase 3 — Go live**
+13. [ ] Stripe live keys + prod webhook + Connect verified end-to-end
+14. [ ] Seed launch supply (see Bay Area contractor outreach plan)
+15. [ ] Submit to App Store; prep launch-day monitoring runbook
+
+---
+
+## 7. Open risks to watch
+
+- **Ephemeral FS + in-process scheduler** — both pass every local test and CI,
+  then silently fail in prod. Fix in Phase 1, not after an incident.
+- **First Apple review** — account deletion, privacy manifest, and payment
+  framing are the three most common rejection causes for an app like this.
+- **Cold-start liquidity** — even a flawless app is empty without seed supply;
+  the contractor-outreach effort (below) is a launch dependency, not a
+  post-launch nicety.
