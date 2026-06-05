@@ -219,6 +219,8 @@ struct MyProjectsView: View {
 private struct ProjectSummaryCard: View {
     let project: ProjectSummary
 
+    @EnvironmentObject private var auth: AuthStore
+
     var body: some View {
         RCCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -258,9 +260,64 @@ private struct ProjectSummaryCard: View {
                         }
                     }
                 }
+
+                if project.milestoneTotal > 0 {
+                    milestoneStrip
+                }
             }
             .padding(16)
         }
+    }
+
+    /// At-a-glance escrow progress: a release bar plus pills for funds held and
+    /// anything that needs the viewer to act.
+    @ViewBuilder
+    private var milestoneStrip: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Milestones").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Spacer()
+                Text("\(project.milestonesReleased) of \(project.milestoneTotal) released")
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            ProgressView(value: Double(project.milestonesReleased),
+                         total: Double(max(project.milestoneTotal, 1)))
+                .tint(Theme.success)
+            if project.escrowCents > 0 || project.milestoneActionCount > 0 {
+                HStack(spacing: 8) {
+                    if project.escrowCents > 0 {
+                        pill(icon: "lock.fill",
+                             text: "\(project.escrowText) in escrow",
+                             tint: Theme.primary, bg: Theme.primaryLight)
+                    }
+                    if project.milestoneActionCount > 0 {
+                        pill(icon: "exclamationmark.circle.fill",
+                             text: actionLabel,
+                             tint: .white, bg: Theme.success)
+                    }
+                }
+            }
+        }
+    }
+
+    /// Role-aware nudge for milestones awaiting the viewer.
+    private var actionLabel: String {
+        let n = project.milestoneActionCount
+        if auth.isBusiness {
+            return "\(n) to submit"
+        }
+        return "\(n) to approve"
+    }
+
+    private func pill(icon: String, text: String, tint: Color, bg: Color) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon).font(.caption2)
+            Text(text).font(.caption2.weight(.semibold))
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(bg)
+        .foregroundStyle(tint)
+        .clipShape(Capsule())
     }
 
     private var badges: [(icon: String, label: String)] {

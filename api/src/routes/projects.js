@@ -28,9 +28,15 @@ function notifyPayment(recipientId, { title, body, data }) {
 const QUOTE_OPEN = ['PENDING', 'QUOTED', 'ACCEPTED'];
 const APPT_LIVE = ['REQUESTED', 'CONFIRMED'];
 const PAYMENT_LIVE = ['PENDING', 'SUCCEEDED'];
+// Milestones whose money is currently held on the platform (in escrow).
+const MILESTONE_HELD = ['FUNDED', 'SUBMITTED'];
+// Milestones still in flight — keep the project surfaced while any remain.
+const MILESTONE_LIVE = ['PENDING', 'FUNDED', 'SUBMITTED'];
 
 // Pick a single human headline for a project card, highest-signal first.
-function headlineFor({ quotes, appointments, payments, business }) {
+// Milestone escrow that needs the viewer's attention outranks everything else,
+// since it's money in motion (homeowner: approve work; contractor: do the work).
+function headlineFor({ quotes, appointments, payments, milestones, business }, role) {
   const now = Date.now();
   const accepted = quotes.find((q) => q.status === 'ACCEPTED');
   const paid = payments.find((p) => p.status === 'SUCCEEDED');
@@ -38,26 +44,55 @@ function headlineFor({ quotes, appointments, payments, business }) {
     .filter((a) => APPT_LIVE.includes(a.status) && new Date(a.scheduledAt).getTime() >= now)
     .sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt));
 
+  const ms = milestones || [];
+  if (role === 'CLIENT' && ms.some((m) => m.status === 'SUBMITTED')) return 'Approve completed work';
+  if (role === 'BUSINESS' && ms.some((m) => m.status === 'FUNDED')) return 'Submit completed work';
+  if (role === 'CLIENT' && ms.some((m) => m.status === 'PENDING')) return 'Fund a milestone';
+
   if (accepted && !paid && business.payoutsEnabled) return 'Pay your deposit';
   if (quotes.some((q) => q.status === 'QUOTED')) return 'Quote ready to review';
   if (upcoming.some((a) => a.status === 'CONFIRMED')) return 'Appointment confirmed';
   if (upcoming.some((a) => a.status === 'REQUESTED')) return 'Appointment requested';
   if (quotes.some((q) => q.status === 'PENDING')) return 'Awaiting quote';
+  if (ms.some((m) => MILESTONE_HELD.includes(m.status))) return 'Funds in escrow';
   if (paid) return 'Deposit paid';
   return 'In progress';
+}
+
+// Role-aware milestone progress for a project card: how many stages exist, how
+// many are released, how much is currently held in escrow, and how many need
+// the viewer to act (homeowner approves SUBMITTED work; contractor submits
+// FUNDED work).
+function milestoneProgress(milestones, role) {
+  const list = milestones || [];
+  const escrowCents = list
+    .filter((m) => MILESTONE_HELD.includes(m.status))
+    .reduce((sum, m) => sum + m.amountCents, 0);
+  const milestoneActionCount = role === 'CLIENT'
+    ? list.filter((m) => m.status === 'SUBMITTED').length
+    : list.filter((m) => m.status === 'FUNDED').length;
+  return {
+    milestoneTotal: list.length,
+    milestonesReleased: list.filter((m) => m.status === 'APPROVED').length,
+    escrowCents,
+    milestoneActionCount,
+  };
 }
 
 // Whether a project counts as "active" — surfaced in the list. We hide stale
 // engagements (declined/withdrawn quotes only, past appointments, refunded
 // payments) so the hub shows what needs attention, not full history.
-function isActive({ quotes, appointments, payments }) {
+function isActive({ quotes, appointments, payments, milestones }) {
   const now = Date.now();
   const liveQuote = quotes.some((q) => QUOTE_OPEN.includes(q.status));
   const upcomingAppt = appointments.some(
     (a) => APPT_LIVE.includes(a.status) && new Date(a.scheduledAt).getTime() >= now,
   );
   const livePayment = payments.some((p) => PAYMENT_LIVE.includes(p.status));
-  return liveQuote || upcomingAppt || livePayment;
+  // Escrow keeps a project active even after its quote/appointment go stale —
+  // money is still in motion until every milestone is released or refunded.
+  const liveMilestone = (milestones || []).some((m) => MILESTONE_LIVE.includes(m.status));
+  return liveQuote || upcomingAppt || livePayment || liveMilestone;
 }
 
 // Latest timestamp across everything in the project — drives card ordering.
@@ -99,7 +134,7 @@ router.get('/', authMiddleware, async (req, res, next) => {
       verified: true, payoutsEnabled: true,
     };
 
-    const [quotes, appointments, payments, conversations] = await Promise.all([
+    const [quotes, appointments, payments, conversations, persistedProjects] = await Promise.all([
       db.quoteRequest.findMany({ where: scope, include: { business: { select: businessSelect } } }),
       db.appointment.findMany({ where: scope, include: { business: { select: businessSelect } } }),
       db.payment.findMany({ where: scope, include: { business: { select: businessSelect } } }),
@@ -110,13 +145,20 @@ router.get('/', authMiddleware, async (req, res, next) => {
           messages: { select: { senderId: true, createdAt: true } },
         },
       }),
+      db.project.findMany({
+        where: scope,
+        include: {
+          business: { select: businessSelect },
+          milestones: { select: { amountCents: true, status: true } },
+        },
+      }),
     ]);
 
     // Group everything by businessId.
     const byBiz = new Map();
     const bucket = (b) => {
       if (!byBiz.has(b.id)) {
-        byBiz.set(b.id, { business: b, quotes: [], appointments: [], payments: [], conversation: null });
+        byBiz.set(b.id, { business: b, quotes: [], appointments: [], payments: [], conversation: null, milestones: [] });
       }
       return byBiz.get(b.id);
     };
@@ -124,6 +166,7 @@ router.get('/', authMiddleware, async (req, res, next) => {
     appointments.forEach((a) => bucket(a.business).appointments.push(a));
     payments.forEach((p) => bucket(p.business).payments.push(p));
     conversations.forEach((c) => { bucket(c.business).conversation = c; });
+    persistedProjects.forEach((pr) => { bucket(pr.business).milestones = pr.milestones; });
 
     const projects = [...byBiz.values()]
       .filter(isActive)
@@ -133,13 +176,14 @@ router.get('/', authMiddleware, async (req, res, next) => {
         logoUrl: proj.business.logoUrl,
         city: proj.business.city,
         verified: proj.business.verified,
-        headline: headlineFor(proj),
+        headline: headlineFor(proj, role),
         openQuoteCount: proj.quotes.filter((q) => QUOTE_OPEN.includes(q.status)).length,
         upcomingAppointmentCount: proj.appointments.filter(
           (a) => APPT_LIVE.includes(a.status) && new Date(a.scheduledAt).getTime() >= Date.now(),
         ).length,
         unreadCount: unreadCount(proj.conversation, req.user.id, role),
         paymentCount: proj.payments.filter((p) => p.status === 'SUCCEEDED').length,
+        ...milestoneProgress(proj.milestones, role),
         lastActivityAt: lastActivityAt(proj),
       }))
       .sort((a, b) => new Date(b.lastActivityAt || 0) - new Date(a.lastActivityAt || 0));

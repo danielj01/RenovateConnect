@@ -66,6 +66,36 @@ describe('GET /projects', () => {
     const proj = res.body.find((p) => p.businessId === business.id);
     expect(proj.unreadCount).toBe(1); // only the contractor's message counts
   });
+
+  test('surfaces milestone progress, escrow held, and a role-aware action count', async () => {
+    const { user: client, token: clientToken } = await createClient();
+    const { business, token: ownerToken } = await createBusiness();
+
+    const project = await db.project.create({
+      data: { clientId: client.id, businessId: business.id, title: 'Kitchen project' },
+    });
+    // One released, one held-and-submitted (needs homeowner approval), one funded
+    // (needs contractor to submit), one not yet funded.
+    await db.milestone.create({ data: { projectId: project.id, title: 'Demo', amountCents: 100000, status: 'APPROVED', approvedAt: new Date() } });
+    await db.milestone.create({ data: { projectId: project.id, title: 'Cabinets', amountCents: 200000, status: 'SUBMITTED', fundedAt: new Date(), submittedAt: new Date() } });
+    await db.milestone.create({ data: { projectId: project.id, title: 'Counters', amountCents: 300000, status: 'FUNDED', fundedAt: new Date() } });
+    await db.milestone.create({ data: { projectId: project.id, title: 'Paint', amountCents: 50000, status: 'PENDING' } });
+
+    // Homeowner view: escrow = SUBMITTED + FUNDED; action = SUBMITTED to approve.
+    const asClient = await request(app).get('/projects').set('Authorization', `Bearer ${clientToken}`);
+    const cp = asClient.body.find((p) => p.businessId === business.id);
+    expect(cp.milestoneTotal).toBe(4);
+    expect(cp.milestonesReleased).toBe(1);
+    expect(cp.escrowCents).toBe(500000); // 200000 + 300000 held on platform
+    expect(cp.milestoneActionCount).toBe(1); // one SUBMITTED awaiting approval
+    expect(cp.headline).toBe('Approve completed work');
+
+    // Contractor view of the same project: action = FUNDED work to submit.
+    const asOwner = await request(app).get('/projects').set('Authorization', `Bearer ${ownerToken}`);
+    const op = asOwner.body.find((p) => p.businessId === business.id);
+    expect(op.milestoneActionCount).toBe(1); // one FUNDED awaiting submission
+    expect(op.headline).toBe('Submit completed work');
+  });
 });
 
 describe('GET /projects/:businessId', () => {

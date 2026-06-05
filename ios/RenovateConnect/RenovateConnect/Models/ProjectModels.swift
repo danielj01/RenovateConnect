@@ -18,9 +18,21 @@ struct ProjectSummary: Codable, Identifiable {
     let upcomingAppointmentCount: Int
     let unreadCount: Int
     let paymentCount: Int
+    // Milestone escrow progress (0 when this engagement has no project yet).
+    let milestoneTotal: Int
+    let milestonesReleased: Int
+    let escrowCents: Int
+    /// How many milestones need the *viewer* to act (homeowner: approve
+    /// submitted work; contractor: submit funded work).
+    let milestoneActionCount: Int
     let lastActivityAt: String?
 
     var id: String { businessId }
+
+    /// Money currently held in escrow, formatted as whole dollars.
+    var escrowText: String {
+        "$\(Int(Double(escrowCents) / 100).formatted())"
+    }
 }
 
 /// The full aggregated timeline for one engagement.
