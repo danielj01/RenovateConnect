@@ -15,6 +15,23 @@ function s3Configured() {
   return Boolean(BUCKET && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
 }
 
+function isProduction() {
+  return process.env.NODE_ENV === 'production';
+}
+
+// Called at boot. The local-disk fallback is ephemeral on every PaaS (the
+// filesystem is wiped on each deploy), so a production server without S3 would
+// silently lose every uploaded photo. Fail fast instead of discovering it later.
+function assertStorageConfigured() {
+  if (isProduction() && !s3Configured()) {
+    throw new Error(
+      '[storage] S3 is required in production (set S3_BUCKET, AWS_ACCESS_KEY_ID, ' +
+      'AWS_SECRET_ACCESS_KEY, AWS_REGION). Refusing to start with the ephemeral ' +
+      'local-disk fallback, which loses uploads on every deploy.'
+    );
+  }
+}
+
 // Persist an image and return a URL that can be loaded back. Prefers S3; falls
 // back to local disk. `baseUrl` (e.g. "http://192.168.1.5:3000") is used to
 // build an absolute URL for the local fallback so devices on the LAN can fetch
@@ -30,7 +47,10 @@ async function uploadImage(buffer, mimetype, baseUrl) {
       );
       return `https://${BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
     } catch (err) {
-      // Don't block development on bad credentials — fall through to local disk.
+      // In production the local-disk fallback is ephemeral, so silently saving
+      // there would lose the image on the next deploy. Surface the failure
+      // instead. In dev, fall through to disk so bad/expired creds don't block.
+      if (isProduction()) throw err;
       console.warn(`[storage] S3 upload failed (${err.message}); saving to local disk`);
     }
   }
@@ -41,4 +61,4 @@ async function uploadImage(buffer, mimetype, baseUrl) {
   return `${base}/${key}`;
 }
 
-module.exports = { uploadImage };
+module.exports = { uploadImage, assertStorageConfigured, s3Configured };
