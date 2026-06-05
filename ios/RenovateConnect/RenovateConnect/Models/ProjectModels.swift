@@ -28,9 +28,68 @@ struct ProjectDetail: Codable {
     let business: ProjectBusiness
     let conversationId: String?
     let unreadCount: Int
+    /// The persisted Project + milestone escrow, if it's been set up for this pair.
+    let project: ProjectRecord?
     let quotes: [ProjectQuote]
     let appointments: [ProjectAppointment]
     let payments: [ProjectPayment]
+}
+
+// MARK: - Milestone escrow
+
+enum MilestoneStatus: String, Codable {
+    case pending = "PENDING"
+    case funded = "FUNDED"
+    case submitted = "SUBMITTED"
+    case approved = "APPROVED"
+    case refunded = "REFUNDED"
+
+    var label: String {
+        switch self {
+        case .pending: return "Not funded"
+        case .funded: return "In escrow"
+        case .submitted: return "Awaiting your approval"
+        case .approved: return "Released"
+        case .refunded: return "Refunded"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .pending: return "circle.dashed"
+        case .funded: return "lock.fill"
+        case .submitted: return "photo.on.rectangle.angled"
+        case .approved: return "checkmark.seal.fill"
+        case .refunded: return "arrow.uturn.backward.circle.fill"
+        }
+    }
+}
+
+/// The persisted project container holding milestone escrow stages.
+struct ProjectRecord: Codable {
+    let id: String
+    let title: String
+    let status: String
+    let quoteRequestId: String?
+    let createdAt: String
+    let milestones: [Milestone]
+}
+
+struct Milestone: Codable, Identifiable {
+    let id: String
+    let title: String
+    let amountCents: Int
+    let status: MilestoneStatus
+    let proofUrls: [String]
+    let fundedAt: String?
+    let submittedAt: String?
+    let approvedAt: String?
+    let createdAt: String
+
+    /// Contractor's portion, formatted as dollars.
+    var amountText: String {
+        "$\(Int(Double(amountCents) / 100).formatted())"
+    }
 }
 
 struct ProjectBusiness: Codable {

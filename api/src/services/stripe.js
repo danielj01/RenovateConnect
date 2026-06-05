@@ -101,6 +101,59 @@ async function createDepositCheckoutSession({
   });
 }
 
+// --- Milestone escrow (separate charges + transfers) -------------------------
+//
+// Unlike a deposit (a destination charge that pays out immediately), a milestone
+// is true escrow: the homeowner's payment lands in the *platform* balance and is
+// held until release. So funding uses a plain charge (no transfer_data), and
+// release is a separate transfer to the contractor. The platform keeps the
+// commission; the contractor receives `amountCents`.
+
+// Hosted Checkout to fund a milestone. Charges the homeowner the full
+// `totalCents` (milestone amount + commission) onto the platform balance — no
+// transfer yet. `metadata.paymentId` lets the webhook settle the Payment row and
+// flip the milestone to FUNDED.
+async function createMilestoneCheckoutSession({
+  totalCents,
+  customerEmail,
+  description,
+  metadata,
+}) {
+  return stripe.checkout.sessions.create({
+    mode: 'payment',
+    customer_email: customerEmail || undefined,
+    line_items: [{
+      quantity: 1,
+      price_data: {
+        currency: 'usd',
+        product_data: { name: description || 'Milestone payment' },
+        unit_amount: totalCents,
+      },
+    }],
+    payment_intent_data: { metadata: metadata || {} }, // held on platform
+    metadata: metadata || {},
+    success_url: `${APP_BASE_URL()}/billing/return?status=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${APP_BASE_URL()}/billing/return?status=cancel`,
+  });
+}
+
+// Release a funded milestone: transfer the contractor's portion from the held
+// platform balance to their connected account. The commission stays behind.
+async function createMilestoneTransfer({ amountCents, connectedAccountId, metadata }) {
+  return stripe.transfers.create({
+    amount: amountCents,
+    currency: 'usd',
+    destination: connectedAccountId,
+    metadata: metadata || {},
+  });
+}
+
+// Refund a funded-but-unreleased milestone. No transfer has happened yet, so a
+// plain refund returns the full charge to the homeowner from the platform.
+async function createMilestoneRefund(paymentIntentId) {
+  return stripe.refunds.create({ payment_intent: paymentIntentId });
+}
+
 // Fully refund a deposit and unwind everyone's cut. For a destination charge a
 // plain refund pulls only from the platform balance and leaves the contractor's
 // transfer + our application fee in place — so we set:
@@ -125,4 +178,8 @@ module.exports = {
   retrieveAccount,
   createDepositCheckoutSession,
   createRefund,
+  // Milestone escrow
+  createMilestoneCheckoutSession,
+  createMilestoneTransfer,
+  createMilestoneRefund,
 };

@@ -32,6 +32,16 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
           ...(intentId ? { stripePaymentIntentId: intentId } : {}),
         },
       });
+
+      // Milestone funding: the held charge cleared → mark the milestone FUNDED
+      // (escrow holds the money until the homeowner releases it). Guard against
+      // a replayed event clobbering a later state (SUBMITTED/APPROVED/REFUNDED).
+      if (session.metadata.milestoneId) {
+        await database.milestone.updateMany({
+          where: { id: session.metadata.milestoneId, status: 'PENDING' },
+          data: { status: 'FUNDED', fundedAt: new Date() },
+        });
+      }
     }
     return;
   }
@@ -96,6 +106,15 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
         where: { stripePaymentIntentId: intentId },
         include: { business: { select: { companyName: true } } },
       });
+
+      // Milestone funding refunded → reflect it on the milestone so escrow state
+      // stays consistent (a refunded milestone returns to the homeowner).
+      if (payment?.milestoneId) {
+        await database.milestone.updateMany({
+          where: { id: payment.milestoneId, status: { in: ['FUNDED', 'SUBMITTED'] } },
+          data: { status: 'REFUNDED' },
+        });
+      }
       if (payment && payment.clientId) {
         const amount = `$${(payment.amountCents / 100).toFixed(2)}`;
         const company = payment.business?.companyName || 'the contractor';

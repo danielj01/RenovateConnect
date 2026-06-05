@@ -66,6 +66,27 @@ enum PaymentStatus {
   REFUNDED   // the deposit was refunded (dispute/cancellation)
 }
 
+// A Project is the first-class version of the derived hub: one persistent
+// container per accepted job, holding the staged milestone payments. (The
+// read-only /projects aggregation still works for engagements without one.)
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+// Milestone escrow lifecycle. Funds are held on the platform when the homeowner
+// funds a milestone, and only transferred to the contractor on release
+// (homeowner approval, or auto-release after the grace window once work is
+// submitted). A funded-but-unreleased milestone can be refunded in full.
+enum MilestoneStatus {
+  PENDING    // created by the contractor, not yet funded
+  FUNDED     // homeowner paid; funds held on the platform balance
+  SUBMITTED  // contractor marked the work done and attached proof
+  APPROVED   // released — funds transferred to the contractor
+  REFUNDED   // funded then refunded back to the homeowner
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -103,6 +124,7 @@ model User {
   savedSearches    SavedSearch[]
   quoteRequests    QuoteRequest[] @relation("ClientQuoteRequests")
   payments         Payment[]      @relation("ClientPayments")
+  projects         Project[]      @relation("ClientProjects")
 }
 
 model DeviceToken {
@@ -183,6 +205,7 @@ model Business {
   hours           BusinessHours[]
   quoteRequests   QuoteRequest[]
   payments        Payment[]
+  projects        Project[]
 }
 
 // A homeowner's structured request for a price estimate on a specific project.
@@ -216,6 +239,7 @@ model QuoteRequest {
   client       User        @relation("ClientQuoteRequests", fields: [clientId], references: [id], onDelete: Cascade)
   business     Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
   payment      Payment?
+  project      Project?
 
   @@index([clientId])
   @@index([businessId])
@@ -396,6 +420,8 @@ model PortfolioProject {
 model Payment {
   id                    String        @id @default(cuid())
   quoteRequestId        String?       @unique
+  // When this payment funds a milestone (escrow) rather than a quote deposit.
+  milestoneId           String?       @unique
   clientId              String
   businessId            String
 
@@ -413,11 +439,58 @@ model Payment {
   updatedAt             DateTime      @updatedAt
 
   quoteRequest QuoteRequest? @relation(fields: [quoteRequestId], references: [id], onDelete: SetNull)
+  milestone    Milestone?    @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
   client       User          @relation("ClientPayments", fields: [clientId], references: [id], onDelete: Cascade)
   business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([clientId])
+}
+
+// One persistent job container per (homeowner, contractor) pair, optionally tied
+// to the accepted quote it came from. Holds the staged milestone payments.
+model Project {
+  id             String        @id @default(cuid())
+  clientId       String
+  businessId     String
+  quoteRequestId String?       @unique
+  title          String
+  status         ProjectStatus @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  client       User          @relation("ClientProjects", fields: [clientId], references: [id], onDelete: Cascade)
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  quoteRequest QuoteRequest? @relation(fields: [quoteRequestId], references: [id], onDelete: SetNull)
+  milestones   Milestone[]
+
+  @@unique([clientId, businessId])
+  @@index([clientId])
+  @@index([businessId])
+}
+
+// A staged escrow payment within a project. `amountCents` is the contractor's
+// portion for the stage; the platform commission is charged on top at funding.
+// Funds are held on the platform until release, then transferred to the
+// contractor's connected account (`stripeTransferId`).
+model Milestone {
+  id               String          @id @default(cuid())
+  projectId        String
+  title            String
+  amountCents      Int
+  status           MilestoneStatus @default(PENDING)
+  proofUrls        String[]
+  stripeTransferId String?
+  fundedAt         DateTime?
+  submittedAt      DateTime?
+  approvedAt       DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  payment  Payment?
+
+  @@index([projectId])
 }
 
 model Estimation {

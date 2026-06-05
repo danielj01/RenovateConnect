@@ -618,6 +618,62 @@ final class APIService {
         try await request("projects/\(businessId)")
     }
 
+    // MARK: - Milestone escrow
+
+    /// Create (or fetch) the persistent Project for an accepted quote, so staged
+    /// milestone payments can hang off it.
+    func createProject(quoteRequestId: String) async throws -> ProjectRecord {
+        try await request("projects", method: "POST", body: ["quoteRequestId": quoteRequestId])
+    }
+
+    /// Contractor: add a payment milestone to a project (amount in cents).
+    func addMilestone(projectId: String, title: String, amountCents: Int) async throws -> Milestone {
+        struct Body: Encodable { let title: String; let amountCents: Int }
+        return try await request("projects/\(projectId)/milestones", method: "POST",
+                                 body: Body(title: title, amountCents: amountCents))
+    }
+
+    /// Homeowner: fund a milestone. Returns a hosted Checkout URL to open in a
+    /// Safari view; funds are held in escrow until release.
+    func fundMilestone(projectId: String, milestoneId: String) async throws -> URL {
+        struct Resp: Decodable { let url: String }
+        let resp: Resp = try await request("projects/\(projectId)/milestones/\(milestoneId)/fund", method: "POST")
+        guard let url = URL(string: resp.url) else { throw APIError.invalidURL }
+        return url
+    }
+
+    /// Homeowner: release escrowed funds to the contractor.
+    func approveMilestone(projectId: String, milestoneId: String) async throws -> Milestone {
+        try await request("projects/\(projectId)/milestones/\(milestoneId)/approve", method: "POST")
+    }
+
+    /// Contractor: mark a funded milestone complete, attaching proof photos.
+    func submitMilestone(projectId: String, milestoneId: String, images: [Data]) async throws -> Milestone {
+        let url = base.appendingPathComponent("projects/\(projectId)/milestones/\(milestoneId)/submit")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+
+        let boundary = UUID().uuidString
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        func append(_ s: String) { body.append(s.data(using: .utf8)!) }
+        for (i, img) in images.enumerated() {
+            append("--\(boundary)\r\nContent-Disposition: form-data; name=\"images\"; filename=\"proof\(i).jpg\"\r\nContent-Type: image/jpeg\r\n\r\n")
+            body.append(img)
+            append("\r\n")
+        }
+        append("--\(boundary)--\r\n")
+        req.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.requestFailed((response as? HTTPURLResponse)?.statusCode ?? 0, "Submit failed")
+        }
+        return try JSONDecoder().decode(Milestone.self, from: data)
+    }
+
     // Activity feed
     func myActivities() async throws -> [Activity] {
         try await request("activities")

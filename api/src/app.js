@@ -80,6 +80,16 @@ const PORT = process.env.PORT || 3000;
 // Don't bind a port under test — supertest drives the app object directly.
 if (process.env.NODE_ENV !== 'test' && require.main === module) {
   app.listen(PORT, () => console.log(`API running on :${PORT}`));
+
+  // Periodically release milestone funds the homeowner left un-actioned past the
+  // grace window (protects contractors from being ghosted after submitting work).
+  // Lightweight in-process timer — fine for a single API instance.
+  const { autoReleaseStaleMilestones } = projectRoutes;
+  const runAutoRelease = () => autoReleaseStaleMilestones()
+    .then((n) => { if (n) console.log(`Auto-released ${n} milestone(s)`); })
+    .catch((err) => console.error('Auto-release sweep failed', err));
+  setInterval(runAutoRelease, 6 * 60 * 60 * 1000).unref(); // every 6h
+  runAutoRelease();
 }
 
 module.exports = app;
