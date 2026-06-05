@@ -8,6 +8,7 @@ struct DashboardView: View {
     @State private var payouts: ConnectStatus?
     @State private var onboardURL: URL?
     @State private var onboardLoading = false
+    @State private var showShare = false
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
@@ -42,6 +43,7 @@ struct DashboardView: View {
                     }
 
                     earningsLink
+                    shareProfileCard
 
                     if isLoading {
                         ProgressView().padding(.top, 60)
@@ -59,6 +61,14 @@ struct DashboardView: View {
             .navigationTitle("Dashboard")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                if auth.currentUser?.business != nil {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button { showShare = true } label: {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("Share your profile")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     ActivityBellButton()
                 }
@@ -67,6 +77,11 @@ struct DashboardView: View {
             .refreshable { await load() }
             .sheet(item: $onboardURL, onDismiss: { Task { await loadPayouts() } }) { url in
                 SafariView(url: url).ignoresSafeArea()
+            }
+            .sheet(isPresented: $showShare) {
+                if let business = auth.currentUser?.business {
+                    ShareProfileView(business: business)
+                }
             }
         }
     }
@@ -111,6 +126,33 @@ struct DashboardView: View {
             }
         }
         .buttonStyle(.plain)
+    }
+
+    // Growth loop: every contractor who shares becomes a demand channel.
+    @ViewBuilder
+    private var shareProfileCard: some View {
+        if auth.currentUser?.business != nil {
+            Button { showShare = true } label: {
+                RCCard {
+                    HStack(spacing: 14) {
+                        Image(systemName: "square.and.arrow.up.circle.fill")
+                            .font(.title2).foregroundStyle(Theme.primary)
+                            .frame(width: 40, height: 40)
+                            .background(Theme.primary.opacity(0.15)).clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Share your profile").font(.subheadline.weight(.semibold))
+                            Text("Get a link + QR code for your site, Instagram, and cards to win more clients.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                    .padding(16)
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private func metricsGrid(_ s: DashboardStats) -> some View {

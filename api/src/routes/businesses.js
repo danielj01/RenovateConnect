@@ -6,6 +6,15 @@ const { notifyMatchingSearches } = require('../services/savedSearch');
 const upload = require('../middleware/upload');
 const { uploadImage } = require('../services/storage');
 
+// Public shareable URL for a business profile. Contractors share this (link +
+// QR) on their site/Instagram/cards to send customers straight to their profile;
+// it's also where the future web landing page (apple-app-site-association
+// universal link) will resolve. Derived from APP_BASE_URL so it's env-driven.
+function shareUrlFor(id) {
+  const base = (process.env.APP_BASE_URL || 'https://renovateconnect.app').replace(/\/+$/, '');
+  return `${base}/b/${id}`;
+}
+
 const profileSchema = z.object({
   companyName: z.string().min(1),
   description: z.string().min(1),
@@ -154,7 +163,7 @@ router.get('/:id', async (req, res, next) => {
       db.business.update({ where: { id: business.id }, data: { profileViews: { increment: 1 } } }).catch(() => {});
     }
 
-    res.json(business);
+    res.json({ ...business, shareUrl: shareUrlFor(business.id) });
   } catch (err) {
     next(err);
   }

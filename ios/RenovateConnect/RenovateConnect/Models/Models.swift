@@ -79,7 +79,18 @@ struct Business: Codable, Identifiable {
     var approvalStatus: ApprovalStatus?
     var rejectionReason: String?
 
+    // Public shareable profile URL (server-provided on the detail payload).
+    var shareUrl: String?
+
     var isVerified: Bool { verified ?? false }
+
+    /// The link a contractor shares (site/IG/cards) to send customers to their
+    /// profile. Prefers the server value; falls back to the canonical format so
+    /// it works even on lean payloads (e.g. the owner's own `currentUser`).
+    var shareLink: URL {
+        if let shareUrl, let url = URL(string: shareUrl) { return url }
+        return URL(string: "https://renovateconnect.app/b/\(id)")!
+    }
 }
 
 /// A contractor's recurring open hours for one weekday. Times are minutes from

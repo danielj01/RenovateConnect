@@ -81,3 +81,19 @@ describe('PUT /businesses/:id', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('GET /businesses/:id — shareUrl', () => {
+  test('includes a shareable profile URL ending in /b/<id>', async () => {
+    const { token } = await ownerWithoutProfile();
+    const created = await request(app).post('/businesses')
+      .set('Authorization', `Bearer ${token}`)
+      .send(validProfile);
+
+    // Owner can fetch their own profile regardless of approval status.
+    const res = await request(app).get(`/businesses/${created.body.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.shareUrl).toBe('string');
+    expect(res.body.shareUrl).toMatch(new RegExp(`/b/${created.body.id}$`));
+  });
+});
