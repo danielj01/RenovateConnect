@@ -46,6 +46,25 @@ struct ActivityBellButton: View {
     }
 }
 
+extension ActivityBellButton {
+    /// Forward the shared stores explicitly. SwiftUI doesn't reliably propagate
+    /// `@EnvironmentObject`s into `.toolbar` content (it's hosted by the UIKit
+    /// navigation bar, outside the SwiftUI subtree) when they're injected above
+    /// a `TabView`. Toolbar call sites must read the stores in their own body —
+    /// where the environment is valid — and re-inject them here, or the bell
+    /// crashes resolving `ActivityStore`.
+    func withSharedStores(activity: ActivityStore, router: TabRouter,
+                          notifications: NotificationManager, auth: AuthStore,
+                          favorites: FavoritesStore) -> some View {
+        self
+            .environmentObject(activity)
+            .environmentObject(router)
+            .environmentObject(notifications)
+            .environmentObject(auth)
+            .environmentObject(favorites)
+    }
+}
+
 /// The activity feed itself: a durable record of leads, messages, and
 /// appointment updates, each deep-linking to the relevant screen.
 struct NotificationCenterView: View {

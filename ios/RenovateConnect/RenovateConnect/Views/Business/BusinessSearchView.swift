@@ -2,6 +2,13 @@ import SwiftUI
 
 struct BusinessSearchView: View {
     @EnvironmentObject private var auth: AuthStore
+    // Forwarded onto the toolbar bell (see ActivityBellButton.withSharedStores).
+    // `activity` is only present for signed-in users, so it must never be read
+    // outside the `auth.isLoggedIn` gate below — guests have no ActivityStore.
+    @EnvironmentObject private var activity: ActivityStore
+    @EnvironmentObject private var router: TabRouter
+    @EnvironmentObject private var notifications: NotificationManager
+    @EnvironmentObject private var favorites: FavoritesStore
     @State private var query = ""
     @State private var selectedSpecialty: String? = nil
     @State private var businesses: [Business] = []
@@ -150,7 +157,12 @@ struct BusinessSearchView: View {
                 // Guests have no activity feed (and no ActivityStore in their
                 // environment), so the bell is only for signed-in users.
                 if auth.isLoggedIn {
-                    ToolbarItem(placement: .topBarTrailing) { ActivityBellButton() }
+                    ToolbarItem(placement: .topBarTrailing) {
+                        ActivityBellButton().withSharedStores(
+                            activity: activity, router: router, notifications: notifications,
+                            auth: auth, favorites: favorites
+                        )
+                    }
                 }
             }
             .sheet(isPresented: $showSavedSearches) {

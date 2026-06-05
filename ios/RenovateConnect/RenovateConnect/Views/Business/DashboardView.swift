@@ -2,6 +2,13 @@ import SwiftUI
 
 struct DashboardView: View {
     @EnvironmentObject private var auth: AuthStore
+    // Read here (where the environment is valid) so they can be forwarded onto
+    // the toolbar bell, which otherwise can't resolve them. See
+    // ActivityBellButton.withSharedStores.
+    @EnvironmentObject private var activity: ActivityStore
+    @EnvironmentObject private var router: TabRouter
+    @EnvironmentObject private var notifications: NotificationManager
+    @EnvironmentObject private var favorites: FavoritesStore
     @State private var stats: DashboardStats?
     @State private var isLoading = true
     @State private var error: String?
@@ -59,7 +66,12 @@ struct DashboardView: View {
             .navigationTitle("Dashboard")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { ActivityBellButton() }
+                ToolbarItem(placement: .topBarTrailing) {
+                    ActivityBellButton().withSharedStores(
+                        activity: activity, router: router, notifications: notifications,
+                        auth: auth, favorites: favorites
+                    )
+                }
             }
             .task { await load() }
             .refreshable { await load() }
