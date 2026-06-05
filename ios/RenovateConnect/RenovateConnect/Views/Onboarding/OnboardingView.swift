@@ -4,14 +4,28 @@ import SwiftUI
 /// first login, then suppressed via `hasCompletedOnboarding`. Pure client-side
 /// — orients new homeowners and contractors to the features that drive
 /// retention (estimates, booking, leads, portfolio).
+///
+/// Also runs for signed-out visitors on first launch (`isGuest`), using a
+/// homeowner-focused deck that ends on a slide explaining what signing in
+/// unlocks (messaging, quotes, booking) — with a secondary "Sign in" action.
 struct OnboardingView: View {
     let role: UserRole
+    var isGuest: Bool = false
     let onFinish: () -> Void
+    var onSignIn: (() -> Void)? = nil
 
     @State private var page = 0
 
     private var pages: [OnboardingPage] {
-        role == .business ? OnboardingPage.business : OnboardingPage.client
+        if isGuest { return OnboardingPage.guest }
+        return role == .business ? OnboardingPage.business : OnboardingPage.client
+    }
+
+    private var isLastPage: Bool { page == pages.count - 1 }
+
+    private var primaryTitle: String {
+        if !isLastPage { return "Next" }
+        return (isGuest && onSignIn != nil) ? "Sign in" : "Get started"
     }
 
     var body: some View {
@@ -46,13 +60,17 @@ struct OnboardingView: View {
             .padding(.bottom, 24)
 
             Button {
-                if page < pages.count - 1 {
+                if !isLastPage {
                     withAnimation { page += 1 }
+                } else if isGuest, let onSignIn {
+                    // On the final guest slide the primary CTA leads to sign-in;
+                    // browsing stays available via the secondary button below.
+                    onSignIn()
                 } else {
                     onFinish()
                 }
             } label: {
-                Text(page == pages.count - 1 ? "Get started" : "Next")
+                Text(primaryTitle)
                     .font(.headline)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
@@ -61,7 +79,15 @@ struct OnboardingView: View {
             .tint(Theme.primary)
             .clipShape(RoundedRectangle(cornerRadius: 14))
             .padding(.horizontal, 24)
-            .padding(.bottom, 32)
+            .padding(.bottom, isGuest && isLastPage ? 12 : 32)
+
+            // Guests can always skip sign-in and keep browsing.
+            if isGuest && isLastPage {
+                Button("Keep browsing") { onFinish() }
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.bottom, 28)
+            }
         }
         .background(Color(.systemBackground))
     }
@@ -125,6 +151,20 @@ private struct OnboardingPage: Identifiable {
         .init(icon: "folder.fill",
               title: "Keep it organized",
               subtitle: "Save your favorite pros and revisit past estimates anytime in My Projects."),
+    ]
+
+    // Shown to signed-out visitors on first launch. Mirrors the homeowner
+    // value props, then closes by spelling out what an account unlocks.
+    static let guest: [OnboardingPage] = [
+        .init(icon: "safari.fill",
+              title: "Find trusted pros",
+              subtitle: "Browse verified renovation contractors near you, with reviews and real project photos — no account needed."),
+        .init(icon: "camera.viewfinder",
+              title: "Instant AI estimates",
+              subtitle: "Snap a photo of your space and get an instant, itemized cost breakdown before you commit. Free to try."),
+        .init(icon: "person.crop.circle.badge.checkmark",
+              title: "Sign in to do more",
+              subtitle: "Create a free account to message contractors, request quotes, book appointments, and save your favorite pros."),
     ]
 
     static let business: [OnboardingPage] = [

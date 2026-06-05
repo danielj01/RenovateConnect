@@ -13,6 +13,10 @@ struct GuestTabView: View {
     @StateObject private var router = TabRouter.shared
     @StateObject private var notifications = NotificationManager.shared
 
+    // First-launch intro for signed-out visitors. Persisted so it shows once;
+    // separate from the post-login `hasCompletedOnboarding` flag.
+    @AppStorage("hasSeenGuestIntro") private var hasSeenGuestIntro = false
+
     var body: some View {
         TabView(selection: $router.selection) {
             BusinessSearchView()
@@ -34,6 +38,17 @@ struct GuestTabView: View {
         .fullScreenCover(isPresented: $auth.promptSignIn) {
             GuestSignInCover()
                 .environmentObject(auth)
+        }
+        // First-launch intro: explains the app and what signing in unlocks.
+        .fullScreenCover(isPresented: .constant(!hasSeenGuestIntro)) {
+            OnboardingView(role: .client, isGuest: true) {
+                hasSeenGuestIntro = true
+            } onSignIn: {
+                // Dismiss the intro first, then raise sign-in on the next runloop
+                // so the two full-screen covers don't fight over presentation.
+                hasSeenGuestIntro = true
+                DispatchQueue.main.async { auth.requireSignIn() }
+            }
         }
     }
 }

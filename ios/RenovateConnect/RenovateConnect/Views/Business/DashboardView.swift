@@ -301,7 +301,6 @@ struct PayoutSetupBanner: View {
                     if isLoading { ProgressView().tint(.white) }
                     Text(onboarded ? "Finish setup" : "Set up payouts")
                         .font(.subheadline.weight(.semibold))
-                    Spacer()
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 38)
