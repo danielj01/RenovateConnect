@@ -20,6 +20,42 @@ function notifyPayment(recipientId, { title, body, data }) {
   return recordActivity(recipientId, { type: 'PAYMENT', title, body, data: data || {} });
 }
 
+// Stable title for the post-release review nudge — also used to dedupe so a
+// multi-milestone project doesn't ask the same homeowner over and over.
+const REVIEW_PROMPT_TITLE = 'How did it go? ⭐';
+
+// Once a milestone's funds are released, nudge the homeowner to review the
+// contractor. Scoped per (business, homeowner) to mirror the one-review-per-
+// business rule: skip if they've already reviewed, and don't stack duplicate
+// prompts as further milestones release. Rides the REVIEW notification category.
+async function promptReviewAfterRelease(project) {
+  const clientId = project.clientId;
+  if (!clientId || !project.businessId) return;
+
+  // Already left a review for this contractor — nothing to ask for.
+  const existingReview = await db.review.findUnique({
+    where: { businessId_authorId: { businessId: project.businessId, authorId: clientId } },
+  });
+  if (existingReview) return;
+
+  // Already nudged for this contractor — don't pile up duplicate prompts.
+  const alreadyPrompted = await db.activity.findFirst({
+    where: {
+      userId: clientId,
+      type: 'REVIEW',
+      title: REVIEW_PROMPT_TITLE,
+      data: { path: ['businessId'], equals: project.businessId },
+    },
+  });
+  if (alreadyPrompted) return;
+
+  const company = project.business?.companyName || 'your contractor';
+  const body = `Your milestone payment to ${company} was released. How did the work go? Leave a review to help other homeowners.`;
+  const data = { businessId: project.businessId, projectId: project.id, prompt: 'review' };
+  sendPush(clientId, { type: 'REVIEW', title: REVIEW_PROMPT_TITLE, body, data }).catch(console.error);
+  await recordActivity(clientId, { type: 'REVIEW', title: REVIEW_PROMPT_TITLE, body, data });
+}
+
 // A "project" is a derived view, not a table: it's everything tied to one
 // homeowner↔contractor pair (quotes, appointments, payments, the conversation),
 // grouped by the counterparty. This keeps the hub read-only and migration-free —
@@ -538,6 +574,8 @@ async function releaseMilestone(project, milestone) {
     body: `Payment for "${milestone.title}" ($${(milestone.amountCents / 100).toLocaleString()}) is on its way.`,
     data: { projectId: project.id, businessId: project.businessId },
   });
+  // Work shipped and paid — a natural moment to ask the homeowner for a review.
+  await promptReviewAfterRelease(project);
   return updated;
 }
 

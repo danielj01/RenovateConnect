@@ -522,6 +522,9 @@ struct ActivityData: Codable {
 struct DeepLink: Codable, Equatable, Identifiable {
     enum Screen: String, Codable {
         case conversation, appointment, quote, business
+        // Opens the review composer for a contractor (id == businessId), used by
+        // the post-release "leave a review" nudge.
+        case review
         // Forward-compat: unknown server screens decode to `.other`.
         case other
 
@@ -538,7 +541,11 @@ struct DeepLink: Codable, Equatable, Identifiable {
     /// priority as the backend (`conversationId` → `quoteId` → `appointmentId`
     /// → `businessId`). Returns nil when nothing actionable is present.
     init?(userInfo: [AnyHashable: Any]) {
-        if let id = userInfo["conversationId"] as? String {
+        // A review nudge carries businessId plus prompt == "review"; route it to
+        // the composer rather than the plain business profile.
+        if (userInfo["prompt"] as? String) == "review", let id = userInfo["businessId"] as? String {
+            self.screen = .review; self.id = id
+        } else if let id = userInfo["conversationId"] as? String {
             self.screen = .conversation; self.id = id
         } else if let id = userInfo["quoteId"] as? String {
             self.screen = .quote; self.id = id

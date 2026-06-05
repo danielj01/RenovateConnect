@@ -31,6 +31,11 @@ describe('deepLinkFor (unit)', () => {
       .toEqual({ screen: 'business', id: 'b1' });
   });
 
+  test('REVIEW nudge (prompt) → review composer', () => {
+    expect(deepLinkFor('REVIEW', { businessId: 'b1', prompt: 'review', projectId: 'p1' }))
+      .toEqual({ screen: 'review', id: 'b1' });
+  });
+
   test('SAVED_SEARCH → business', () => {
     expect(deepLinkFor('SAVED_SEARCH', { businessId: 'b2', savedSearchId: 's1' }))
       .toEqual({ screen: 'business', id: 'b2' });

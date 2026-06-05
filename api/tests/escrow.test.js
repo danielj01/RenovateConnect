@@ -233,6 +233,94 @@ describe('auto-release sweep', () => {
   });
 });
 
+describe('review prompt after release', () => {
+  const PROMPT_TITLE = 'How did it go? ⭐';
+
+  async function fundedMilestone() {
+    const { user: client, token: clientToken } = await createClient();
+    const owner = await payoutBusiness();
+    const project = await db.project.create({
+      data: { clientId: client.id, businessId: owner.business.id, title: 'Kitchen project' },
+    });
+    const milestone = await db.milestone.create({
+      data: { projectId: project.id, title: 'Cabinets', amountCents: 500000, status: 'FUNDED', fundedAt: new Date() },
+    });
+    return { client, clientToken, owner, project, milestone };
+  }
+
+  test('approving a release nudges the homeowner to review the contractor', async () => {
+    const { client, clientToken, owner, project, milestone } = await fundedMilestone();
+
+    stripe.createMilestoneTransfer.mockResolvedValueOnce({ id: 'tr_review' });
+    const res = await request(app).post(`/projects/${project.id}/milestones/${milestone.id}/approve`)
+      .set('Authorization', `Bearer ${clientToken}`);
+    expect(res.status).toBe(200);
+
+    const prompt = await db.activity.findFirst({
+      where: { userId: client.id, type: 'REVIEW', title: PROMPT_TITLE },
+    });
+    expect(prompt).not.toBeNull();
+    expect(prompt.data.businessId).toBe(owner.business.id);
+    expect(prompt.data.projectId).toBe(project.id);
+    expect(prompt.body).toContain('Test Co');
+  });
+
+  test('a second milestone release does not re-prompt the same homeowner', async () => {
+    const { client, clientToken, project, milestone } = await fundedMilestone();
+    const second = await db.milestone.create({
+      data: { projectId: project.id, title: 'Counters', amountCents: 200000, status: 'FUNDED', fundedAt: new Date() },
+    });
+
+    stripe.createMilestoneTransfer.mockResolvedValue({ id: 'tr_x' });
+    await request(app).post(`/projects/${project.id}/milestones/${milestone.id}/approve`)
+      .set('Authorization', `Bearer ${clientToken}`);
+    await request(app).post(`/projects/${project.id}/milestones/${second.id}/approve`)
+      .set('Authorization', `Bearer ${clientToken}`);
+
+    const count = await db.activity.count({
+      where: { userId: client.id, type: 'REVIEW', title: PROMPT_TITLE },
+    });
+    expect(count).toBe(1);
+  });
+
+  test('no nudge if the homeowner already reviewed this contractor', async () => {
+    const { client, clientToken, owner, project, milestone } = await fundedMilestone();
+    await db.review.create({
+      data: { businessId: owner.business.id, authorId: client.id, authorName: 'Test Client', rating: 5 },
+    });
+
+    stripe.createMilestoneTransfer.mockResolvedValueOnce({ id: 'tr_y' });
+    await request(app).post(`/projects/${project.id}/milestones/${milestone.id}/approve`)
+      .set('Authorization', `Bearer ${clientToken}`);
+
+    const count = await db.activity.count({
+      where: { userId: client.id, type: 'REVIEW', title: PROMPT_TITLE },
+    });
+    expect(count).toBe(0);
+  });
+
+  test('auto-release also nudges the homeowner to review', async () => {
+    const { user: client } = await createClient();
+    const owner = await payoutBusiness();
+    const project = await db.project.create({
+      data: { clientId: client.id, businessId: owner.business.id, title: 'Kitchen project' },
+    });
+    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+    await db.milestone.create({
+      data: { projectId: project.id, title: 'Old', amountCents: 300000, status: 'SUBMITTED', submittedAt: eightDaysAgo },
+    });
+
+    stripe.createMilestoneTransfer.mockResolvedValue({ id: 'tr_auto' });
+    await autoReleaseStaleMilestones();
+
+    const prompt = await db.activity.findFirst({
+      where: { userId: client.id, type: 'REVIEW', title: PROMPT_TITLE },
+    });
+    expect(prompt).not.toBeNull();
+    expect(prompt.data.businessId).toBe(owner.business.id);
+  });
+});
+
 describe('refund a funded milestone', () => {
   test('contractor refunds; charge.refunded webhook flips milestone to REFUNDED', async () => {
     const { user: client } = await createClient();

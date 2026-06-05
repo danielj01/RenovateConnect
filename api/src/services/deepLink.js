@@ -5,8 +5,8 @@
 // client sniff every optional key, we resolve a single normalized link
 // descriptor — { screen, id } — that the app can route on directly.
 //
-// `screen` is one of: 'conversation' | 'appointment' | 'quote' | 'business'.
-// Returns null when nothing actionable can be linked.
+// `screen` is one of: 'conversation' | 'appointment' | 'quote' | 'business' |
+// 'review'. Returns null when nothing actionable can be linked.
 function deepLinkFor(type, data) {
   const d = data || {};
   switch (type) {
@@ -19,7 +19,9 @@ function deepLinkFor(type, data) {
     case 'APPOINTMENT':
       return d.appointmentId ? { screen: 'appointment', id: d.appointmentId } : null;
     case 'REVIEW':
-      // A new review or a reply both point at the business profile.
+      // The post-release nudge opens the review composer directly; a new review
+      // or a business reply just point at the business profile.
+      if (d.prompt === 'review' && d.businessId) return { screen: 'review', id: d.businessId };
       return d.businessId ? { screen: 'business', id: d.businessId } : null;
     case 'SAVED_SEARCH':
       return d.businessId ? { screen: 'business', id: d.businessId } : null;

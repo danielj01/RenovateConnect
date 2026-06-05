@@ -127,6 +127,12 @@ struct NotificationCenterView: View {
             } label: {
                 ActivityRow(item: item)
             }
+        case .review:
+            NavigationLink {
+                BusinessDetailView(businessId: item.link!.id, autoPresentReview: true)
+            } label: {
+                ActivityRow(item: item)
+            }
         case .other, .none:
             ActivityRow(item: item)
         }

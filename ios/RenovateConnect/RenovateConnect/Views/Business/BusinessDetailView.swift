@@ -2,12 +2,16 @@ import SwiftUI
 
 struct BusinessDetailView: View {
     let businessId: String
+    /// When opened from the post-release "leave a review" nudge, auto-present the
+    /// review composer once the business has loaded.
+    var autoPresentReview: Bool = false
     @State private var business: Business?
     @State private var isLoading = true
     @State private var showContact = false
     @State private var showBooking = false
     @State private var showQuote = false
     @State private var showReview = false
+    @State private var didAutoPresentReview = false
     @State private var showHoursEditor = false
     @State private var respondingTo: Review?
     @State private var verifying = false
@@ -519,6 +523,12 @@ struct BusinessDetailView: View {
     private func load() async {
         defer { isLoading = false }
         business = try? await APIService.shared.getBusiness(id: businessId)
+        // Honor a review-nudge deep link, but only for someone who can review
+        // (homeowners/guests), and only once after the first successful load.
+        if autoPresentReview, business != nil, canActAsClient, !didAutoPresentReview {
+            didAutoPresentReview = true
+            showReview = true
+        }
     }
 }
 
