@@ -37,10 +37,27 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
       // (escrow holds the money until the homeowner releases it). Guard against
       // a replayed event clobbering a later state (SUBMITTED/APPROVED/REFUNDED).
       if (session.metadata.milestoneId) {
-        await database.milestone.updateMany({
+        const funded = await database.milestone.updateMany({
           where: { id: session.metadata.milestoneId, status: 'PENDING' },
           data: { status: 'FUNDED', fundedAt: new Date() },
         });
+
+        // Only on the real PENDING→FUNDED transition (not a replayed event), tell
+        // the contractor money is in escrow so they can start the work.
+        if (funded.count > 0) {
+          const milestone = await database.milestone.findUnique({
+            where: { id: session.metadata.milestoneId },
+            include: { project: { include: { business: { select: { userId: true } } } } },
+          });
+          const ownerId = milestone?.project?.business?.userId;
+          if (ownerId) {
+            const amount = `$${(milestone.amountCents / 100).toLocaleString()}`;
+            const body = `The homeowner funded "${milestone.title}" (${amount}). It's held in escrow — finish the work and submit it to get paid.`;
+            const data = { projectId: milestone.projectId, businessId: milestone.project.businessId };
+            sendPush(ownerId, { type: 'PAYMENT', title: 'Milestone funded 🔒', body, data }).catch(console.error);
+            await recordActivity(ownerId, { type: 'PAYMENT', title: 'Milestone funded', body, data });
+          }
+        }
       }
     }
     return;
@@ -118,7 +135,12 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
       if (payment && payment.clientId) {
         const amount = `$${(payment.amountCents / 100).toFixed(2)}`;
         const company = payment.business?.companyName || 'the contractor';
-        const body = `Your ${amount} deposit to ${company} has been refunded.`;
+        // Milestone refunds and deposit refunds share this path; word it for
+        // whichever this charge was.
+        const isMilestone = !!payment.milestoneId;
+        const noun = isMilestone ? 'milestone payment' : 'deposit';
+        const body = `Your ${amount} ${noun} to ${company} has been refunded.`;
+        const title = isMilestone ? 'Milestone refunded 💸' : 'Deposit refunded 💸';
         const data = {
           paymentId: payment.id,
           ...(payment.quoteRequestId ? { quoteId: payment.quoteRequestId } : {}),
@@ -126,13 +148,13 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
         };
         sendPush(payment.clientId, {
           type: 'PAYMENT',
-          title: 'Deposit refunded 💸',
+          title,
           body,
           data,
         }).catch(console.error);
         await recordActivity(payment.clientId, {
           type: 'PAYMENT',
-          title: 'Deposit refunded',
+          title: isMilestone ? 'Milestone refunded' : 'Deposit refunded',
           body,
           data,
         });

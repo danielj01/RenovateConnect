@@ -126,6 +126,13 @@ describe('milestone lifecycle', () => {
     expect(m.status).toBe('FUNDED');
     expect((await db.payment.findUnique({ where: { id: payment.id } })).status).toBe('SUCCEEDED');
 
+    // Funding notifies the contractor that money is in escrow.
+    const fundedActivity = await db.activity.findFirst({
+      where: { userId: owner.user.id, type: 'PAYMENT', title: 'Milestone funded' },
+    });
+    expect(fundedActivity).not.toBeNull();
+    expect(fundedActivity.body).toContain('Cabinets');
+
     // Contractor submits work (no photos in test) → SUBMITTED.
     const submit = await request(app).post(`/projects/${project.id}/milestones/${milestone.id}/submit`)
       .set('Authorization', `Bearer ${owner.token}`);
@@ -144,6 +151,30 @@ describe('milestone lifecycle', () => {
     m = await db.milestone.findUnique({ where: { id: milestone.id } });
     expect(m.stripeTransferId).toBe('tr_ms');
     expect(client).toBeTruthy();
+  });
+
+  test('a replayed funded webhook does not re-notify the contractor', async () => {
+    const { client, owner, project } = await setupProject();
+    // Already FUNDED — a duplicate/late checkout event must be a silent no-op.
+    const milestone = await db.milestone.create({
+      data: { projectId: project.id, title: 'Cabinets', amountCents: 500000, status: 'FUNDED', fundedAt: new Date() },
+    });
+    const payment = await db.payment.create({
+      data: {
+        clientId: client.id, businessId: owner.business.id, milestoneId: milestone.id,
+        amountCents: 540000, commissionCents: 40000, status: 'SUCCEEDED',
+      },
+    });
+
+    await handleStripeEvent({
+      type: 'checkout.session.completed',
+      data: { object: { mode: 'payment', metadata: { paymentId: payment.id, milestoneId: milestone.id } } },
+    });
+
+    const count = await db.activity.count({
+      where: { userId: owner.user.id, title: 'Milestone funded' },
+    });
+    expect(count).toBe(0);
   });
 
   test('cannot fund an already-funded milestone', async () => {
@@ -189,6 +220,16 @@ describe('auto-release sweep', () => {
 
     expect((await db.milestone.findUnique({ where: { id: stale.id } })).status).toBe('APPROVED');
     expect((await db.milestone.findUnique({ where: { id: fresh.id } })).status).toBe('SUBMITTED');
+
+    // Contractor is told funds went out (via releaseMilestone) and the homeowner
+    // is told it auto-released (they never tapped approve). notifyPayment stores
+    // the emoji title verbatim in the feed.
+    expect(await db.activity.findFirst({
+      where: { userId: owner.user.id, type: 'PAYMENT', title: 'Milestone released 💰' },
+    })).not.toBeNull();
+    expect(await db.activity.findFirst({
+      where: { userId: client.id, type: 'PAYMENT', title: 'Milestone auto-released ⏱️' },
+    })).not.toBeNull();
   });
 });
 
@@ -221,5 +262,12 @@ describe('refund a funded milestone', () => {
       data: { object: { payment_intent: 'pi_ref' } },
     });
     expect((await db.milestone.findUnique({ where: { id: milestone.id } })).status).toBe('REFUNDED');
+
+    // The homeowner is told, with milestone-specific wording (not "deposit").
+    const refundActivity = await db.activity.findFirst({
+      where: { userId: client.id, type: 'PAYMENT', title: 'Milestone refunded' },
+    });
+    expect(refundActivity).not.toBeNull();
+    expect(refundActivity.body).toContain('milestone payment');
   });
 });

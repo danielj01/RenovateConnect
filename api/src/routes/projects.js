@@ -608,8 +608,15 @@ async function autoReleaseStaleMilestones({ now = new Date() } = {}) {
   for (const m of stale) {
     if (!m.project.business.stripeAccountId) continue; // can't pay out yet; skip
     try {
+      // releaseMilestone notifies the contractor; the homeowner also needs to
+      // know their funds went out automatically (they never tapped approve).
       await releaseMilestone(m.project, m);
       released += 1;
+      await notifyPayment(m.project.clientId, {
+        title: 'Milestone auto-released ⏱️',
+        body: `"${m.title}" was approved automatically after ${AUTO_RELEASE_DAYS()} days, and the payment was sent to ${m.project.business.companyName}.`,
+        data: { projectId: m.project.id, businessId: m.project.businessId },
+      });
     } catch (err) {
       console.error('Auto-release failed for milestone', m.id, err);
     }
