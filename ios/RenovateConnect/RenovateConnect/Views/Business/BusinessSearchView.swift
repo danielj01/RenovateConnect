@@ -147,7 +147,11 @@ struct BusinessSearchView: View {
                         .accessibilityLabel("Saved searches")
                     }
                 }
-                ToolbarItem(placement: .topBarTrailing) { ActivityBellButton() }
+                // Guests have no activity feed (and no ActivityStore in their
+                // environment), so the bell is only for signed-in users.
+                if auth.isLoggedIn {
+                    ToolbarItem(placement: .topBarTrailing) { ActivityBellButton() }
+                }
             }
             .sheet(isPresented: $showSavedSearches) {
                 SavedSearchesView { applied in
