@@ -187,6 +187,63 @@ router.post('/:id/refund', authMiddleware, async (req, res, next) => {
   }
 });
 
+// GET /payments/earnings — the contractor's money at a glance. Two income
+// streams settle differently:
+//   • Quote deposits are destination charges — the contractor's net
+//     (amount − commission) lands in their Stripe balance as soon as the
+//     deposit SUCCEEDS, so a settled deposit counts as released.
+//   • Milestone escrow holds the homeowner's funds on the platform; the
+//     contractor receives the milestone amount (commission was charged on top
+//     to the homeowner) only when the milestone is APPROVED/released. Until
+//     then it sits in escrow.
+router.get('/earnings', authMiddleware, requireRole('BUSINESS'), async (req, res, next) => {
+  try {
+    const business = await db.business.findUnique({ where: { userId: req.user.id } });
+    if (!business) return res.status(404).json({ error: 'No business profile found' });
+
+    const [payments, milestones] = await Promise.all([
+      db.payment.findMany({
+        where: { businessId: business.id },
+        select: { amountCents: true, commissionCents: true, status: true, milestoneId: true },
+      }),
+      db.milestone.findMany({
+        where: { project: { businessId: business.id } },
+        select: { amountCents: true, status: true },
+      }),
+    ]);
+
+    // Deposits (non-milestone payments): net to the contractor on settlement.
+    const deposits = payments.filter((p) => !p.milestoneId);
+    const settledDeposits = deposits.filter((p) => p.status === 'SUCCEEDED');
+    const depositsNetCents = settledDeposits.reduce((s, p) => s + (p.amountCents - p.commissionCents), 0);
+
+    // Milestones: released once APPROVED; held while FUNDED/SUBMITTED.
+    const approved = milestones.filter((m) => m.status === 'APPROVED');
+    const held = milestones.filter((m) => m.status === 'FUNDED' || m.status === 'SUBMITTED');
+    const milestonesReleasedCents = approved.reduce((s, m) => s + m.amountCents, 0);
+    const inEscrowCents = held.reduce((s, m) => s + m.amountCents, 0);
+
+    // Platform fees taken across every settled payment (informational).
+    const lifetimeFeesCents = payments
+      .filter((p) => p.status === 'SUCCEEDED')
+      .reduce((s, p) => s + p.commissionCents, 0);
+    const refundedCents = payments
+      .filter((p) => p.status === 'REFUNDED')
+      .reduce((s, p) => s + p.amountCents, 0);
+
+    res.json({
+      releasedCents: depositsNetCents + milestonesReleasedCents,
+      inEscrowCents,
+      lifetimeFeesCents,
+      refundedCents,
+      releasedCount: settledDeposits.length + approved.length,
+      inEscrowCount: held.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // GET /payments — role-scoped payment history, newest first.
 router.get('/', authMiddleware, async (req, res, next) => {
   try {

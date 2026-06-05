@@ -41,6 +41,8 @@ struct DashboardView: View {
                         VerifiedStatusCard()
                     }
 
+                    earningsLink
+
                     if isLoading {
                         ProgressView().padding(.top, 60)
                     } else if let stats {
@@ -81,6 +83,32 @@ struct DashboardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+
+    // Entry point to the full earnings breakdown (released vs. in escrow).
+    private var earningsLink: some View {
+        NavigationLink {
+            EarningsView()
+        } label: {
+            RCCard {
+                HStack(spacing: 14) {
+                    Image(systemName: "dollarsign.circle.fill")
+                        .font(.title2).foregroundStyle(.green)
+                        .frame(width: 40, height: 40)
+                        .background(Color.green.opacity(0.15)).clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Earnings").font(.subheadline.weight(.semibold))
+                        Text("See what you've been paid and what's held in escrow.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                }
+                .padding(16)
+            }
+        }
+        .buttonStyle(.plain)
     }
 
     private func metricsGrid(_ s: DashboardStats) -> some View {

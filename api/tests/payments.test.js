@@ -292,6 +292,43 @@ describe('POST /payments/:id/refund', () => {
   });
 });
 
+describe('GET /payments/earnings', () => {
+  test('summarizes released, escrowed, fees and refunds for the contractor', async () => {
+    const { user: client } = await createClient();
+    const { business, token: bizToken } = await createBusiness();
+
+    // A settled deposit: net to the contractor is amount − commission.
+    await db.payment.create({ data: { clientId: client.id, businessId: business.id, amountCents: 100000, commissionCents: 8000, status: 'SUCCEEDED' } });
+    // A refunded deposit: excluded from released, counted as refunded.
+    await db.payment.create({ data: { clientId: client.id, businessId: business.id, amountCents: 50000, commissionCents: 4000, status: 'REFUNDED', refundedAt: new Date() } });
+
+    const project = await db.project.create({
+      data: { clientId: client.id, businessId: business.id, title: 'Kitchen project' },
+    });
+    const approved = await db.milestone.create({ data: { projectId: project.id, title: 'Demo', amountCents: 300000, status: 'APPROVED', approvedAt: new Date() } });
+    await db.milestone.create({ data: { projectId: project.id, title: 'Cabinets', amountCents: 200000, status: 'FUNDED', fundedAt: new Date() } });
+    await db.milestone.create({ data: { projectId: project.id, title: 'Counters', amountCents: 100000, status: 'SUBMITTED', submittedAt: new Date() } });
+    await db.milestone.create({ data: { projectId: project.id, title: 'Paint', amountCents: 50000, status: 'PENDING' } });
+    // A settled milestone-funding payment contributes its commission to fees.
+    await db.payment.create({ data: { clientId: client.id, businessId: business.id, milestoneId: approved.id, amountCents: 324000, commissionCents: 24000, status: 'SUCCEEDED' } });
+
+    const res = await request(app).get('/payments/earnings').set('Authorization', `Bearer ${bizToken}`);
+    expect(res.status).toBe(200);
+    expect(res.body.releasedCents).toBe(392000); // 92000 deposit net + 300000 approved milestone
+    expect(res.body.inEscrowCents).toBe(300000); // FUNDED 200000 + SUBMITTED 100000
+    expect(res.body.inEscrowCount).toBe(2);
+    expect(res.body.releasedCount).toBe(2); // 1 settled deposit + 1 approved milestone
+    expect(res.body.lifetimeFeesCents).toBe(32000); // 8000 deposit + 24000 milestone funding
+    expect(res.body.refundedCents).toBe(50000);
+  });
+
+  test('a homeowner cannot read contractor earnings', async () => {
+    const { token: clientToken } = await createClient();
+    const res = await request(app).get('/payments/earnings').set('Authorization', `Bearer ${clientToken}`);
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('GET /payments', () => {
   test('returns only the caller\'s payments (client) / business payments (owner)', async () => {
     const { user: client, token: clientToken } = await createClient();

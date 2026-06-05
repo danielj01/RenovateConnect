@@ -663,6 +663,18 @@ struct ConnectStatus: Codable {
     let payoutsEnabled: Bool
 }
 
+/// The response to GET /payments/earnings — the contractor's money at a glance.
+/// `releasedCents` is what's settled to them (deposit nets + approved
+/// milestones); `inEscrowCents` is milestone funds held until release.
+struct Earnings: Codable {
+    let releasedCents: Int
+    let inEscrowCents: Int
+    let lifetimeFeesCents: Int
+    let refundedCents: Int
+    let releasedCount: Int
+    let inEscrowCount: Int
+}
+
 /// The response to POST /payments/deposit — a hosted Checkout URL plus the
 /// amount breakdown so the UI can confirm the figures before opening the page.
 struct DepositCheckout: Codable {

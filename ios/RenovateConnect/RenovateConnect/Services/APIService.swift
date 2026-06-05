@@ -766,6 +766,11 @@ final class APIService {
         try await request("payments")
     }
 
+    /// Contractor: aggregate earnings — released vs. in-escrow, plus fees/refunds.
+    func earnings() async throws -> Earnings {
+        try await request("payments/earnings")
+    }
+
     /// Contractor (or admin): fully refund a settled deposit. Reverses the
     /// transfer and refunds the platform fee server-side; the row flips to
     /// REFUNDED via webhook, so callers should re-fetch after this returns.
