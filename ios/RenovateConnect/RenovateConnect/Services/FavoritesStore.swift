@@ -7,6 +7,10 @@ import Combine
 /// Toggles are optimistic — the UI flips immediately and reconciles on failure.
 @MainActor
 final class FavoritesStore: ObservableObject {
+    /// Shared instance so toolbar content (outside the injected SwiftUI
+    /// environment) can resolve it without an `@EnvironmentObject` lookup.
+    static let shared = FavoritesStore()
+
     @Published private(set) var businesses: [Business] = []
     @Published private(set) var savedIds: Set<String> = []
 

@@ -4,10 +4,13 @@ struct MainTabView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var notifications: NotificationManager
     @StateObject private var inbox = InboxStore()
-    @StateObject private var favorites = FavoritesStore()
     @StateObject private var chat = ChatStore()
-    @StateObject private var router = TabRouter()
-    @StateObject private var activity = ActivityStore()
+    // Shared singletons (not freshly constructed) so the toolbar bell —
+    // hosted outside this view's injected environment — resolves the SAME
+    // instances and keeps the badge/polling consistent. See ActivityStore.shared.
+    @StateObject private var favorites = FavoritesStore.shared
+    @StateObject private var router = TabRouter.shared
+    @StateObject private var activity = ActivityStore.shared
 
     // First-run welcome flow; flipped true once the user finishes or skips.
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false

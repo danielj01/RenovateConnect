@@ -3,11 +3,19 @@ import SwiftUI
 /// Toolbar bell that opens the activity feed and shows an unread badge.
 /// Drop into any screen's `.toolbar`; relies on the shared `ActivityStore`.
 struct ActivityBellButton: View {
-    @EnvironmentObject private var activity: ActivityStore
-    @EnvironmentObject private var router: TabRouter
-    @EnvironmentObject private var notifications: NotificationManager
+    // These stores are referenced as shared singletons rather than
+    // `@EnvironmentObject`s. The bell lives in `.toolbar` content, which is
+    // hosted by the UIKit navigation bar OUTSIDE the SwiftUI subtree where
+    // `MainTabView` injects activity/router/favorites — so an environment
+    // lookup for them crashes. The singletons are the same instances the tab
+    // views use, so the badge and polling stay consistent.
+    @ObservedObject private var activity = ActivityStore.shared
+    private let router = TabRouter.shared
+    private let notifications = NotificationManager.shared
+    private let favorites = FavoritesStore.shared
+    // AuthStore IS injected at the app root (WindowGroup), so unlike the stores
+    // above it resolves correctly even in toolbar-hosted content.
     @EnvironmentObject private var auth: AuthStore
-    @EnvironmentObject private var favorites: FavoritesStore
     @State private var showCenter = false
 
     var body: some View {
@@ -43,25 +51,6 @@ struct ActivityBellButton: View {
                 .environmentObject(favorites)
         }
         .task { await activity.refreshUnread() }
-    }
-}
-
-extension ActivityBellButton {
-    /// Forward the shared stores explicitly. SwiftUI doesn't reliably propagate
-    /// `@EnvironmentObject`s into `.toolbar` content (it's hosted by the UIKit
-    /// navigation bar, outside the SwiftUI subtree) when they're injected above
-    /// a `TabView`. Toolbar call sites must read the stores in their own body —
-    /// where the environment is valid — and re-inject them here, or the bell
-    /// crashes resolving `ActivityStore`.
-    func withSharedStores(activity: ActivityStore, router: TabRouter,
-                          notifications: NotificationManager, auth: AuthStore,
-                          favorites: FavoritesStore) -> some View {
-        self
-            .environmentObject(activity)
-            .environmentObject(router)
-            .environmentObject(notifications)
-            .environmentObject(auth)
-            .environmentObject(favorites)
     }
 }
 

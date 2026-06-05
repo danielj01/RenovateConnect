@@ -6,6 +6,13 @@ import Combine
 /// mirroring `InboxStore`. A real-time transport can replace polling later.
 @MainActor
 final class ActivityStore: ObservableObject {
+    /// Shared instance. Referenced directly by `ActivityBellButton` so the bell
+    /// (hosted in the UIKit navigation bar, outside the SwiftUI environment that
+    /// `MainTabView` injects into) can resolve it without an `@EnvironmentObject`
+    /// lookup that would crash. The tab views inject this same instance so the
+    /// badge count and polling stay consistent app-wide.
+    static let shared = ActivityStore()
+
     @Published var activities: [Activity] = []
     @Published var unreadCount = 0
 

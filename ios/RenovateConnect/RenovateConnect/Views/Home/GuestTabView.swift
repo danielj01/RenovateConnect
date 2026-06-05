@@ -8,8 +8,9 @@ struct GuestTabView: View {
     @EnvironmentObject private var auth: AuthStore
 
     // Child views (search/detail/estimate) expect these in the environment.
-    @StateObject private var favorites = FavoritesStore()
-    @StateObject private var router = TabRouter()
+    // Shared singletons keep parity with the signed-in shell and the toolbar bell.
+    @StateObject private var favorites = FavoritesStore.shared
+    @StateObject private var router = TabRouter.shared
     @StateObject private var notifications = NotificationManager.shared
 
     var body: some View {
