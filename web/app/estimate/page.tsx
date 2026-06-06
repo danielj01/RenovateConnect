@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { appStoreUrl } from '@/lib/config';
 
 interface LineItem { item: string; low: number; high: number; unit?: string }
@@ -29,6 +29,13 @@ export default function EstimatePage() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
   const [result, setResult] = useState<EstimateResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Prefill the room from ?room= (the SEO cost pages link in pre-filled). Read
+  // on mount via window so the page stays statically rendered.
+  useEffect(() => {
+    const room = new URLSearchParams(window.location.search).get('room');
+    if (room && ROOM_TYPES.includes(room)) setRoomType(room);
+  }, []);
 
   const previews = files.map((f) => URL.createObjectURL(f));
 
