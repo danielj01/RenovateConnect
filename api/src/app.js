@@ -32,8 +32,26 @@ const { assertStorageConfigured } = require('./services/storage');
 
 const app = express();
 
+// Behind a single PaaS load balancer in prod — trust one proxy hop so
+// rate-limit and req.ip use the real client IP (X-Forwarded-For), not the LB's.
+app.set('trust proxy', 1);
+
 app.use(helmet());
-app.use(cors());
+
+// CORS: native iOS app sends no Origin (allowed), browsers must be on the
+// allowlist. WEB_ORIGINS is a comma-separated list; defaults cover local dev.
+const allowedOrigins = (process.env.WEB_ORIGINS
+  || 'http://localhost:3000,http://localhost:3001')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+app.use(cors({
+  origin(origin, cb) {
+    // No Origin header → native app / curl / server-to-server. Allow.
+    // Disallowed browser origins get no CORS headers (browser blocks the read)
+    // rather than a thrown 500 — keeps the error log / Sentry clean.
+    cb(null, !origin || allowedOrigins.includes(origin));
+  },
+}));
+
 app.use(morgan('dev'));
 
 // Stripe webhooks need raw body — mount before json parser

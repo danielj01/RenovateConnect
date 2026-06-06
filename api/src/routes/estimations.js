@@ -1,15 +1,29 @@
 const router = require('express').Router();
+const rateLimit = require('express-rate-limit');
 const db = require('../services/db');
 const { authMiddleware } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { estimateRenovationCost } = require('../services/ai');
 const { uploadImage } = require('../services/storage');
 
+// The guest estimate is unauthenticated AND calls Claude (vision) — so it's both
+// a cost center and a DoS target once exposed to the open web. Cap it tightly
+// per IP, well below the global limiter. Skipped under test so suites can hit it
+// freely. Relies on `trust proxy` (set in app.js) for the real client IP in prod.
+const guestEstimateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: Number(process.env.GUEST_ESTIMATE_MAX || 8),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+  message: { error: 'Too many estimates from this device. Please try again in a bit, or get the app.' },
+});
+
 // POST /estimations/guest — same AI estimate as the authed route, but for
 // signed-out homeowners trying the app. We run the model and return the result
 // WITHOUT persisting anything (no user to attach it to, no image storage). This
 // is the low-friction "snap a photo, see a price before signing up" entry point.
-router.post('/guest', upload.array('images', 5), async (req, res, next) => {
+router.post('/guest', guestEstimateLimiter, upload.array('images', 5), async (req, res, next) => {
   try {
     if (!req.files?.length) {
       return res.status(400).json({ error: 'At least one image is required' });

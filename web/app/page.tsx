@@ -15,9 +15,8 @@ export default function Home() {
       </p>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
-        <a className="btn btn-primary" href={appStoreUrl}>Get the app</a>
-        {/* Estimator CTA is wired in Phase 2. */}
-        <a className="btn btn-secondary" href={appStoreUrl}>Get an instant estimate</a>
+        <a className="btn btn-primary" href="/estimate">Get an instant estimate</a>
+        <a className="btn btn-secondary" href={appStoreUrl}>Get the app</a>
       </div>
 
       <div className="card" style={{ marginTop: 40 }}>
