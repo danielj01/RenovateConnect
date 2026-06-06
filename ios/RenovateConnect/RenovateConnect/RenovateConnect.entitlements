@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Universal Links: lets the app open https://renovateconnect.app/b/:id and
+	     /estimate links (matches web/app routes + the AASA paths). Add the APNs
+	     environment here too when wiring Push (see LAUNCH_READINESS.md §3.2). -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:renovateconnect.app</string>
+	</array>
+</dict>
+</plist>

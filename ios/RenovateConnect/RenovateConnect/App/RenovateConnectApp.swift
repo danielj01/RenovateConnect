@@ -27,17 +27,38 @@ struct RenovateConnectApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if auth.isLoggedIn {
-                MainTabView()
-                    .environmentObject(auth)
-                    .environmentObject(notifications)
-            } else {
-                // Signed-out visitors get a full browse + estimate experience,
-                // not a login wall. Sign-in is prompted only when they reach for
-                // an account-only action.
-                GuestTabView()
-                    .environmentObject(auth)
-            }
+            rootView
+                // Universal links (contractor share URLs, e.g. /b/:id) — opened
+                // from Safari/Messages when the app is installed. Both hooks are
+                // needed: cold-start delivers a browsing user-activity, warm
+                // foreground delivers via onOpenURL.
+                .onOpenURL { handleIncomingURL($0) }
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    if let url = activity.webpageURL { handleIncomingURL(url) }
+                }
         }
+    }
+
+    @ViewBuilder
+    private var rootView: some View {
+        if auth.isLoggedIn {
+            MainTabView()
+                .environmentObject(auth)
+                .environmentObject(notifications)
+        } else {
+            // Signed-out visitors get a full browse + estimate experience, not a
+            // login wall. Sign-in is prompted only when they reach for an
+            // account-only action.
+            GuestTabView()
+                .environmentObject(auth)
+        }
+    }
+
+    /// Route an incoming universal link by reusing the existing deep-link
+    /// pipeline: set the pending link and let the active shell present it (the
+    /// same path push notifications use).
+    private func handleIncomingURL(_ url: URL) {
+        guard let link = DeepLink(webURL: url) else { return }
+        notifications.pendingDeepLink = link
     }
 }

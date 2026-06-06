@@ -573,6 +573,20 @@ struct DeepLink: Codable, Equatable, Identifiable {
         self.screen = screen
         self.id = id
     }
+
+    /// Build a link from an incoming universal link (e.g. the contractor share
+    /// URL `https://renovateconnect.app/b/<id>`). Returns nil for paths we don't
+    /// route. Mirrors the web routes in `web/app`.
+    init?(webURL url: URL) {
+        let parts = url.pathComponents.filter { $0 != "/" }
+        // /b/<id> → contractor profile
+        if parts.count == 2, parts[0] == "b" {
+            self.screen = .business
+            self.id = parts[1]
+            return
+        }
+        return nil
+    }
 }
 
 struct Activity: Codable, Identifiable {

@@ -17,6 +17,9 @@ struct GuestTabView: View {
     // separate from the post-login `hasCompletedOnboarding` flag.
     @AppStorage("hasSeenGuestIntro") private var hasSeenGuestIntro = false
 
+    // A universal link to a contractor profile (/b/:id) tapped while signed out.
+    @State private var deepLinkBusiness: DeepLink?
+
     var body: some View {
         TabView(selection: $router.selection) {
             BusinessSearchView()
@@ -49,6 +52,24 @@ struct GuestTabView: View {
                 hasSeenGuestIntro = true
                 DispatchQueue.main.async { auth.requireSignIn() }
             }
+        }
+        // Universal-link to a contractor profile while signed out: guests can
+        // browse profiles, so present it directly (account-only actions inside
+        // still prompt sign-in).
+        .onChange(of: notifications.pendingDeepLink) { _, link in
+            if let link, link.screen == .business {
+                deepLinkBusiness = link
+                notifications.pendingDeepLink = nil
+            }
+        }
+        .sheet(item: $deepLinkBusiness) { link in
+            NavigationStack {
+                BusinessDetailView(businessId: link.id)
+            }
+            .environmentObject(auth)
+            .environmentObject(favorites)
+            .environmentObject(router)
+            .environmentObject(notifications)
         }
     }
 }
