@@ -17,8 +17,9 @@ struct GuestTabView: View {
     // separate from the post-login `hasCompletedOnboarding` flag.
     @AppStorage("hasSeenGuestIntro") private var hasSeenGuestIntro = false
 
-    // A universal link to a contractor profile (/b/:id) tapped while signed out.
-    @State private var deepLinkBusiness: DeepLink?
+    // A universal link (contractor profile /b/:id or saved estimate /e/:code)
+    // tapped while signed out — guests can view both.
+    @State private var deepLink: DeepLink?
 
     var body: some View {
         TabView(selection: $router.selection) {
@@ -53,18 +54,22 @@ struct GuestTabView: View {
                 DispatchQueue.main.async { auth.requireSignIn() }
             }
         }
-        // Universal-link to a contractor profile while signed out: guests can
-        // browse profiles, so present it directly (account-only actions inside
-        // still prompt sign-in).
+        // Universal links while signed out: guests can view a contractor profile
+        // or a saved estimate directly (account-only actions inside still prompt
+        // sign-in).
         .onChange(of: notifications.pendingDeepLink) { _, link in
-            if let link, link.screen == .business {
-                deepLinkBusiness = link
+            if let link, link.screen == .business || link.screen == .savedEstimate {
+                deepLink = link
                 notifications.pendingDeepLink = nil
             }
         }
-        .sheet(item: $deepLinkBusiness) { link in
-            NavigationStack {
-                BusinessDetailView(businessId: link.id)
+        .sheet(item: $deepLink) { link in
+            Group {
+                if link.screen == .savedEstimate {
+                    SavedEstimateView(code: link.id)
+                } else {
+                    NavigationStack { BusinessDetailView(businessId: link.id) }
+                }
             }
             .environmentObject(auth)
             .environmentObject(favorites)

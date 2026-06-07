@@ -52,3 +52,20 @@ export async function getBusiness(id: string): Promise<Business | null> {
   if (!res.ok) throw new Error(`API ${res.status} fetching business ${id}`);
   return res.json();
 }
+
+export interface SharedEstimate {
+  code: string;
+  roomType?: string | null;
+  result: import('./estimate').EstimateResult;
+  createdAt: string;
+}
+
+/** Read a saved estimate by its short code. Returns null on 404. */
+export async function getSharedEstimate(code: string): Promise<SharedEstimate | null> {
+  const res = await fetch(`${API_BASE}/estimations/shared/${encodeURIComponent(code)}`, {
+    cache: 'no-store', // each code is fetched once; don't cache misses
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`API ${res.status} fetching estimate ${code}`);
+  return res.json();
+}

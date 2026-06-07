@@ -771,6 +771,21 @@ final class APIService {
         try await request("payments/earnings")
     }
 
+    /// Fetch a web-saved estimate by its short code (the estimator handoff) and
+    /// adapt it into an `Estimation` so the existing result view can render it.
+    func sharedEstimate(code: String) async throws -> Estimation {
+        struct Shared: Decodable {
+            let code: String
+            let roomType: String?
+            let result: EstimationResult
+            let createdAt: String
+        }
+        let normalized = code.uppercased().filter { $0.isLetter || $0.isNumber }
+        let s: Shared = try await request("estimations/shared/\(normalized)")
+        return Estimation(id: s.code, imageUrls: [], roomType: s.roomType,
+                          description: nil, result: s.result, createdAt: s.createdAt)
+    }
+
     /// Contractor (or admin): fully refund a settled deposit. Reverses the
     /// transfer and refunds the platform fee server-side; the row flips to
     /// REFUNDED via webhook, so callers should re-fetch after this returns.

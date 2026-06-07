@@ -505,6 +505,17 @@ model Estimation {
   user        User     @relation(fields: [userId], references: [id])
 }
 
+// An anonymous estimate "saved" from the web estimator so it can follow the
+// user into the app via a short code / universal link (the saved-estimate
+// handoff). Not attached to a user; read by its unguessable `code`.
+model SharedEstimate {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  roomType  String?
+  result    Json
+  createdAt DateTime @default(now())
+}
+
 model Review {
   id            String   @id @default(cuid())
   businessId    String

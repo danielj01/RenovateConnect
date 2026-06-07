@@ -141,7 +141,9 @@ struct NotificationCenterView: View {
             } label: {
                 ActivityRow(item: item)
             }
-        case .other, .none:
+        // savedEstimate only arrives via universal links, never the activity
+        // feed, so it renders as a plain (non-navigating) row here.
+        case .savedEstimate, .other, .none:
             ActivityRow(item: item)
         }
     }

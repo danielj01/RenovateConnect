@@ -15,7 +15,14 @@ struct EstimationView: View {
 
 // MARK: - Intro / value-prop landing
 
+/// Wrapper so a share code can drive `.sheet(item:)` (String isn't Identifiable).
+private struct PresentedEstimateCode: Identifiable { let id = UUID(); let value: String }
+
 private struct EstimatorIntroView: View {
+    @State private var showCodeEntry = false
+    @State private var codeInput = ""
+    @State private var presentedCode: PresentedEstimateCode?
+
     // Outcome-first "how it works" — each step sells the benefit, not the spec.
     private let steps: [(icon: String, title: String, detail: String)] = [
         ("photo.badge.plus", "Add a few photos",
@@ -33,6 +40,7 @@ private struct EstimatorIntroView: View {
                 perks
                 howItWorks
                 cta
+                codeEntryButton
                 disclaimer
             }
             .padding(20)
@@ -40,6 +48,32 @@ private struct EstimatorIntroView: View {
         .background(Color(.systemBackground))
         .navigationTitle("Cost Estimator")
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Enter your estimate code", isPresented: $showCodeEntry) {
+            TextField("e.g. ABCD-2345", text: $codeInput)
+                .textInputAutocapitalization(.characters)
+            Button("View estimate") {
+                let c = codeInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !c.isEmpty { presentedCode = PresentedEstimateCode(value: c) }
+                codeInput = ""
+            }
+            Button("Cancel", role: .cancel) { codeInput = "" }
+        } message: {
+            Text("Saved an estimate on the web? Enter the code from that page to pull it up here.")
+        }
+        .sheet(item: $presentedCode) { code in
+            SavedEstimateView(code: code.value)
+                .environmentObject(TabRouter.shared)
+        }
+    }
+
+    // New-install fallback for the saved-estimate handoff: type the code shown on
+    // the web /e/<code> page.
+    private var codeEntryButton: some View {
+        Button { showCodeEntry = true } label: {
+            Text("Have an estimate code from the web?")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(Theme.primary)
+        }
     }
 
     private var hero: some View {
@@ -257,6 +291,48 @@ private struct EstimatorFormView: View {
             }
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+/// Loads a web-saved estimate by its share code (the estimator handoff —
+/// universal link `/e/<code>` or the manual "enter code" fallback) and presents
+/// it with the standard result view.
+struct SavedEstimateView: View {
+    let code: String
+    @State private var estimation: Estimation?
+    @State private var error: String?
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        if let estimation {
+            EstimationResultView(estimation: estimation)
+        } else {
+            NavigationStack {
+                Group {
+                    if let error {
+                        ContentUnavailableState(error: error) { await load() }
+                    } else {
+                        ProgressView("Loading your estimate…")
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .navigationTitle("Saved estimate")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+                }
+            }
+            .task { await load() }
+        }
+    }
+
+    private func load() async {
+        error = nil
+        do {
+            estimation = try await APIService.shared.sharedEstimate(code: code)
+        } catch {
+            self.error = "We couldn’t find that estimate. Check the code and try again."
         }
     }
 }

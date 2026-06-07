@@ -101,7 +101,7 @@ struct MainTabView: View {
         case .conversation:
             notifications.pendingConversationId = link.id
             router.selection = messagesTab
-        case .appointment, .quote, .business, .review:
+        case .appointment, .quote, .business, .review, .savedEstimate:
             deepLinkSheet = link
         case .other:
             break
@@ -116,6 +116,7 @@ struct MainTabView: View {
         case .review:       BusinessDetailView(businessId: link.id, autoPresentReview: true)
         case .appointment:  AppointmentsView()
         case .quote:        QuotesView()
+        case .savedEstimate: SavedEstimateView(code: link.id)
         case .conversation, .other: EmptyView()
         }
     }

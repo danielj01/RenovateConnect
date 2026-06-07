@@ -2,25 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { appStoreUrl } from '@/lib/config';
-
-interface LineItem { item: string; low: number; high: number; unit?: string }
-interface EstimateResult {
-  summary: string;
-  lineItems: LineItem[];
-  totalLow: number;
-  totalHigh: number;
-  currency?: string;
-  confidence?: string;
-  notes?: string;
-}
+import { type EstimateResult } from '@/lib/estimate';
+import { EstimateBreakdown } from '@/components/EstimateBreakdown';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
 const ROOM_TYPES = ['Kitchen', 'Bathroom', 'Bedroom', 'Living room', 'Whole home', 'Exterior', 'Other'];
-
-function money(n: number, currency = 'USD'): string {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(n);
-}
 
 export default function EstimatePage() {
   const [files, setFiles] = useState<File[]>([]);
@@ -71,7 +58,7 @@ export default function EstimatePage() {
   }
 
   if (status === 'done' && result) {
-    return <ResultView result={result} onReset={reset} />;
+    return <ResultView result={result} roomType={roomType} onReset={reset} />;
   }
 
   return (
@@ -139,36 +126,33 @@ export default function EstimatePage() {
   );
 }
 
-function ResultView({ result, onReset }: { result: EstimateResult; onReset: () => void }) {
-  const currency = result.currency || 'USD';
+function ResultView({ result, roomType, onReset }: { result: EstimateResult; roomType: string; onReset: () => void }) {
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Save & get matched: persist the result, then route to /e/<code> — which
+  // opens the app (if installed) or shows the result + code to carry it in.
+  async function saveAndContinue() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const res = await fetch(`${API_BASE}/estimations/share`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ result, roomType }),
+      });
+      if (!res.ok) throw new Error('save failed');
+      const { code } = await res.json();
+      window.location.href = `/e/${code}`;
+    } catch {
+      setSaving(false);
+      setSaveError('Couldn’t save right now — you can still get the app.');
+    }
+  }
+
   return (
     <main className="container">
-      <div className="card" style={{ textAlign: 'center', background: 'var(--primary-light)', border: 'none' }}>
-        <div className="muted" style={{ fontSize: 14 }}>Estimated cost range</div>
-        <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--primary)', margin: '4px 0' }}>
-          {money(result.totalLow, currency)} – {money(result.totalHigh, currency)}
-        </div>
-        {result.confidence ? <span className="badge">Confidence: {result.confidence}</span> : null}
-      </div>
-
-      {result.summary ? <p style={{ marginTop: 18 }}>{result.summary}</p> : null}
-
-      <h2 style={{ fontSize: 20, marginTop: 22 }}>Itemized breakdown</h2>
-      <div className="card" style={{ padding: 0 }}>
-        {result.lineItems?.map((li, i) => (
-          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 16px', borderTop: i === 0 ? 'none' : '1px solid var(--border)' }}>
-            <div>
-              <div style={{ fontWeight: 600 }}>{li.item}</div>
-              {li.unit ? <div className="muted" style={{ fontSize: 13 }}>{li.unit}</div> : null}
-            </div>
-            <div style={{ whiteSpace: 'nowrap' }}>{money(li.low, currency)} – {money(li.high, currency)}</div>
-          </div>
-        ))}
-      </div>
-
-      {result.notes ? (
-        <p className="muted" style={{ fontSize: 14, marginTop: 14 }}>{result.notes}</p>
-      ) : null}
+      <EstimateBreakdown result={result} />
 
       {/* Conversion gate — the whole point of the front door. */}
       <section className="card" style={{ marginTop: 26, textAlign: 'center', background: 'var(--bg-soft)' }}>
@@ -176,9 +160,14 @@ function ResultView({ result, onReset }: { result: EstimateResult; onReset: () =
         <p className="muted" style={{ marginTop: 6 }}>
           Save this estimate and get matched with vetted local contractors — with payment protection and no spam.
         </p>
-        <a className="btn btn-primary btn-block" href={appStoreUrl} style={{ marginTop: 8 }}>
-          Save & get matched in the app
-        </a>
+        <button className="btn btn-primary btn-block" style={{ marginTop: 8 }} onClick={saveAndContinue} disabled={saving}>
+          {saving ? 'Saving…' : 'Save & get matched in the app'}
+        </button>
+        {saveError ? (
+          <p style={{ color: '#b91c1c', marginTop: 10 }}>
+            {saveError} <a href={appStoreUrl}>Get the app</a>
+          </p>
+        ) : null}
       </section>
 
       <button onClick={onReset} className="btn btn-secondary btn-block" style={{ marginTop: 12 }}>

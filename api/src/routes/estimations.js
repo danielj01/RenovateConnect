@@ -1,10 +1,24 @@
 const router = require('express').Router();
+const crypto = require('crypto');
+const { z } = require('zod');
 const rateLimit = require('express-rate-limit');
 const db = require('../services/db');
 const { authMiddleware } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { estimateRenovationCost } = require('../services/ai');
 const { uploadImage } = require('../services/storage');
+
+// Human-friendly share codes: no ambiguous chars (0/O, 1/I/L). Displayed as
+// e.g. "ABCD-2345"; stored/looked up normalized (uppercase, no separators).
+const SHARE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+function randomShareCode(len = 8) {
+  let out = '';
+  for (let i = 0; i < len; i += 1) out += SHARE_ALPHABET[crypto.randomInt(SHARE_ALPHABET.length)];
+  return out;
+}
+function normalizeCode(raw) {
+  return String(raw || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
 
 // The guest estimate is unauthenticated AND calls Claude (vision) — so it's both
 // a cost center and a DoS target once exposed to the open web. Cap it tightly
@@ -39,6 +53,61 @@ router.post('/guest', guestEstimateLimiter, upload.array('images', 5), async (re
     res.status(200).json({ result });
   } catch (err) {
     next(err);
+  }
+});
+
+// Saved-estimate handoff: persist a guest's result so it can follow them into
+// the app via a short code / universal link. Unauthenticated + display-only, so
+// rate-limit it like the guest estimator.
+const shareLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: Number(process.env.SHARE_ESTIMATE_MAX || 20),
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
+const shareSchema = z.object({
+  // Stored as-is for redisplay; we don't trust it as anything but view data.
+  result: z.record(z.any()),
+  roomType: z.string().max(60).optional(),
+});
+
+// POST /estimations/share — store a result, return a short code.
+router.post('/share', shareLimiter, async (req, res, next) => {
+  try {
+    const { result, roomType } = shareSchema.parse(req.body);
+    // Retry on the (vanishingly unlikely) code collision.
+    let code;
+    for (let i = 0; i < 5; i += 1) {
+      code = randomShareCode();
+      const clash = await db.sharedEstimate.findUnique({ where: { code } });
+      if (!clash) break;
+    }
+    const saved = await db.sharedEstimate.create({
+      data: { code, roomType: roomType || null, result },
+    });
+    res.status(201).json({ code: saved.code });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /estimations/shared/:code — read a saved estimate (web page + app hydrate).
+router.get('/shared/:code', async (req, res, next) => {
+  try {
+    const code = normalizeCode(req.params.code);
+    if (!code) return res.status(404).json({ error: 'Not found' });
+    const est = await db.sharedEstimate.findUnique({ where: { code } });
+    if (!est) return res.status(404).json({ error: 'Not found' });
+    return res.json({
+      code: est.code,
+      roomType: est.roomType,
+      result: est.result,
+      createdAt: est.createdAt,
+    });
+  } catch (err) {
+    return next(err);
   }
 });
 

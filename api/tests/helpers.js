@@ -15,6 +15,7 @@ async function resetDb() {
   await db.conversation.deleteMany();
   await db.review.deleteMany();
   await db.estimation.deleteMany();
+  await db.sharedEstimate.deleteMany();
   await db.deviceToken.deleteMany();
   await db.favorite.deleteMany();
   await db.savedSearch.deleteMany();

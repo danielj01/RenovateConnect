@@ -536,6 +536,8 @@ struct DeepLink: Codable, Equatable, Identifiable {
         // Opens the review composer for a contractor (id == businessId), used by
         // the post-release "leave a review" nudge.
         case review
+        // A saved web estimate (id == share code) — the estimator handoff.
+        case savedEstimate
         // Forward-compat: unknown server screens decode to `.other`.
         case other
 
@@ -582,6 +584,12 @@ struct DeepLink: Codable, Equatable, Identifiable {
         // /b/<id> → contractor profile
         if parts.count == 2, parts[0] == "b" {
             self.screen = .business
+            self.id = parts[1]
+            return
+        }
+        // /e/<code> → saved web estimate (handoff)
+        if parts.count == 2, parts[0] == "e" {
+            self.screen = .savedEstimate
             self.id = parts[1]
             return
         }
