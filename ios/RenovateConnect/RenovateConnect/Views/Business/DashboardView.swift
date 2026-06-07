@@ -163,7 +163,6 @@ struct DashboardView: View {
             MetricCard(title: "Conversion", value: "\(s.conversionRate)%", icon: "chart.line.uptrend.xyaxis", tint: .green)
             MetricCard(title: "Rating", value: String(format: "%.1f", s.averageRating), icon: "star.fill", tint: Theme.gold)
             MetricCard(title: "Won Value", value: "$\(s.wonValue.formatted())", icon: "checkmark.seal.fill", tint: .green)
-            MetricCard(title: "Pipeline", value: "$\(s.pipelineValue.formatted())", icon: "tray.full.fill", tint: .purple)
         }
     }
 

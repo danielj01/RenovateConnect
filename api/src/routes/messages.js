@@ -4,6 +4,8 @@ const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { sendPush } = require('../services/push');
 const { recordActivity } = require('../services/activity');
+const upload = require('../middleware/upload');
+const { uploadImage } = require('../services/storage');
 
 // The timestamp a participant last opened a conversation. CLIENT and BUSINESS
 // each track their own "last read" so unread counts are per-viewer.
@@ -221,10 +223,17 @@ router.get('/:id/messages', authMiddleware, async (req, res, next) => {
   }
 });
 
-// POST /conversations/:id/messages — send a message in an existing conversation
-router.post('/:id/messages', authMiddleware, async (req, res, next) => {
+// POST /conversations/:id/messages — send a message in an existing conversation.
+// Accepts JSON ({ body }) or multipart (text + up to 5 image attachments).
+router.post('/:id/messages', authMiddleware, upload.array('images', 5), async (req, res, next) => {
   try {
-    const { body } = z.object({ body: z.string().min(1) }).parse(req.body);
+    // Body is optional when at least one image is attached.
+    const { body } = z.object({ body: z.string().trim().optional() }).parse(req.body);
+    const hasImages = Boolean(req.files?.length);
+    if (!body && !hasImages) {
+      return res.status(400).json({ error: 'A message or an image is required' });
+    }
+
     const conv = await db.conversation.findUnique({ where: { id: req.params.id } });
     if (!conv) return res.status(404).json({ error: 'Not found' });
 
@@ -233,8 +242,13 @@ router.post('/:id/messages', authMiddleware, async (req, res, next) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const imageUrls = hasImages
+      ? await Promise.all(req.files.map((f) => uploadImage(f.buffer, f.mimetype, baseUrl)))
+      : [];
+
     const message = await db.message.create({
-      data: { conversationId: req.params.id, senderId: req.user.id, body },
+      data: { conversationId: req.params.id, senderId: req.user.id, body: body || '', imageUrls },
     });
     // Sending implies the sender has read everything up to now.
     await db.conversation.update({
@@ -253,16 +267,18 @@ router.post('/:id/messages', authMiddleware, async (req, res, next) => {
       } else {
         title = business?.companyName || 'New message';
       }
+      // Image-only messages have no text — show a photo preview instead.
+      const preview = body || (imageUrls.length ? '📷 Photo' : '');
       sendPush(recipientId, {
         type: 'MESSAGE',
         title,
-        body,
+        body: preview,
         data: { type: 'message', conversationId: conv.id },
       }).catch(console.error);
       await recordActivity(recipientId, {
         type: 'MESSAGE',
         title: `New message from ${title}`,
-        body,
+        body: preview,
         data: { conversationId: conv.id },
       });
     }

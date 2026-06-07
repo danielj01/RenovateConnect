@@ -435,6 +435,38 @@ final class APIService {
         try await request("conversations/\(conversationId)/messages", method: "POST", body: ["body": body])
     }
 
+    /// Send a message with one or more photo attachments (and optional text) via
+    /// multipart. The server stores the images and returns the created message.
+    func sendMessage(conversationId: String, body: String, images: [Data]) async throws -> ChatMessage {
+        let url = base.appendingPathComponent("conversations/\(conversationId)/messages")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+
+        let boundary = UUID().uuidString
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+        var payload = Data()
+        func append(_ s: String) { payload.append(s.data(using: .utf8)!) }
+        let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            append("--\(boundary)\r\nContent-Disposition: form-data; name=\"body\"\r\n\r\n\(trimmed)\r\n")
+        }
+        for (i, img) in images.enumerated() {
+            append("--\(boundary)\r\nContent-Disposition: form-data; name=\"images\"; filename=\"img\(i).jpg\"\r\nContent-Type: image/jpeg\r\n\r\n")
+            payload.append(img)
+            append("\r\n")
+        }
+        append("--\(boundary)--\r\n")
+        req.httpBody = payload
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.requestFailed((response as? HTTPURLResponse)?.statusCode ?? 0, "Send failed")
+        }
+        return try JSONDecoder().decode(ChatMessage.self, from: data)
+    }
+
     /// Marks a conversation read for the current user (clears its unread count).
     @discardableResult
     func markConversationRead(conversationId: String) async throws -> Bool {

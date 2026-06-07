@@ -94,7 +94,7 @@ struct ConversationRowView: View {
                     .font(.subheadline)
                     .fontWeight(conversation.hasUnread ? .bold : .semibold)
                 if let lastMsg = conversation.messages?.first {
-                    Text(lastMsg.body)
+                    Text(lastMsg.hasText ? lastMsg.body : (lastMsg.images.isEmpty ? "" : "📷 Photo"))
                         .font(.caption)
                         .foregroundStyle(conversation.hasUnread ? .primary : .secondary)
                         .fontWeight(conversation.hasUnread ? .medium : .regular)

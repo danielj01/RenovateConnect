@@ -186,7 +186,11 @@ struct ChatMessage: Codable, Identifiable {
     let conversationId: String
     let senderId: String
     let body: String
+    var imageUrls: [String]?
     let createdAt: String
+
+    var images: [String] { imageUrls ?? [] }
+    var hasText: Bool { !body.isEmpty }
 }
 
 struct Estimation: Codable, Identifiable {
