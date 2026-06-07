@@ -79,6 +79,17 @@ jobs:
 
       - run: npm run build
 
+  docker:
+    name: API — Docker build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Validates the production image builds (npm ci + prisma generate succeed).
+      - name: Build API image
+        run: docker build -t renovate-connect-api ./api
+
   ios:
     name: iOS — build
     runs-on: macos-15
