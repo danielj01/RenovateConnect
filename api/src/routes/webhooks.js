@@ -23,6 +23,7 @@ async function applyProSubscription(database, sub) {
     proStatus: sub.status,
     proTrialEndsAt: toDate(sub.trial_end),
     proCurrentPeriodEnd: toDate(sub.current_period_end),
+    ...(sub.metadata && sub.metadata.plan ? { proPlan: sub.metadata.plan } : {}),
   };
   if (businessId) {
     await database.business.updateMany({ where: { id: businessId }, data });
@@ -60,6 +61,7 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
           stripeCustomerId: typeof session.customer === 'string' ? session.customer : session.customer?.id,
           proSubscriptionId: typeof session.subscription === 'string' ? session.subscription : session.subscription?.id,
           proStatus: 'trialing',
+          ...(session.metadata.plan ? { proPlan: session.metadata.plan } : {}),
         },
       });
       return;

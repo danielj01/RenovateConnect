@@ -177,9 +177,20 @@ async function createRefund(paymentIntentId) {
 // metadata lets the webhook map status changes back to the right business.
 
 const PRO_PRICE_CENTS = () => parseInt(process.env.PRO_PRICE_CENTS || '500', 10);
+const INSIGHTS_PRICE_CENTS = () => parseInt(process.env.INSIGHTS_PRICE_CENTS || '1000', 10);
 const PRO_TRIAL_DAYS = () => parseInt(process.env.PRO_TRIAL_DAYS || '90', 10);
 
-async function createProCheckoutSession({ businessId, customerId, customerEmail }) {
+// Two tiers: "sponsored" ($5 — the labeled Sponsored slot) and "insights" ($10 —
+// Sponsored slot + aggregated market insights). Insights is a strict superset.
+function proPlanConfig(plan) {
+  if (plan === 'insights') {
+    return { plan: 'insights', name: 'RenovateConnect Pro — Insights', unitAmount: INSIGHTS_PRICE_CENTS() };
+  }
+  return { plan: 'sponsored', name: 'RenovateConnect Pro', unitAmount: PRO_PRICE_CENTS() };
+}
+
+async function createProCheckoutSession({ businessId, customerId, customerEmail, plan }) {
+  const cfg = proPlanConfig(plan);
   return stripe.checkout.sessions.create({
     mode: 'subscription',
     ...(customerId ? { customer: customerId } : { customer_email: customerEmail || undefined }),
@@ -188,17 +199,17 @@ async function createProCheckoutSession({ businessId, customerId, customerEmail 
       quantity: 1,
       price_data: {
         currency: 'usd',
-        product_data: { name: 'RenovateConnect Pro' },
-        unit_amount: PRO_PRICE_CENTS(),
+        product_data: { name: cfg.name },
+        unit_amount: cfg.unitAmount,
         recurring: { interval: 'month' },
       },
     }],
     subscription_data: {
       trial_period_days: PRO_TRIAL_DAYS(),
-      metadata: { businessId },
+      metadata: { businessId, plan: cfg.plan },
     },
     client_reference_id: businessId,
-    metadata: { businessId, kind: 'pro_subscription' },
+    metadata: { businessId, plan: cfg.plan, kind: 'pro_subscription' },
     success_url: `${APP_BASE_URL()}/billing/return?status=success&pro=1`,
     cancel_url: `${APP_BASE_URL()}/billing/return?status=cancel`,
   });

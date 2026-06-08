@@ -200,6 +200,7 @@ model Business {
   stripeCustomerId    String?
   proSubscriptionId   String?
   proStatus           String?   // Stripe sub status: trialing | active | past_due | canceled | …
+  proPlan             String?   // which tier: "sponsored" ($5) | "insights" ($10)
   proTrialEndsAt      DateTime?
   proCurrentPeriodEnd DateTime?
 
