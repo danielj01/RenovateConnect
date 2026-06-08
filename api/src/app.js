@@ -27,6 +27,7 @@ const paymentRoutes = require('./routes/payments');
 const projectRoutes = require('./routes/projects');
 const adminRoutes = require('./routes/admin');
 const internalRoutes = require('./routes/internal');
+const feedRoutes = require('./routes/feed');
 
 const { assertStorageConfigured } = require('./services/storage');
 
@@ -83,6 +84,7 @@ app.use('/payments', paymentRoutes);
 app.use('/projects', projectRoutes);
 app.use('/admin', adminRoutes);
 app.use('/internal', internalRoutes);
+app.use('/feed', feedRoutes);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 

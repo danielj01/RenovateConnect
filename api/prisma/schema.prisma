@@ -409,6 +409,9 @@ model PortfolioProject {
   costMax     Int?
   durationWeeks Int?
   imageUrls   String[]
+  // Optional "before" photos, paired by index with imageUrls (the "after"
+  // results) to render Before & After in the portfolio + inspiration feed.
+  beforeImageUrls String[]
   featured    Boolean  @default(false)
 
   // Admin approval — same flow as Business. New projects start PENDING and

@@ -491,9 +491,14 @@ router.post(
 
       const base = `${req.protocol}://${req.get('host')}`;
       const urls = await Promise.all(req.files.map((f) => uploadImage(f.buffer, f.mimetype, base)));
+      // type=before appends to the Before & After "before" set; default is the
+      // "after"/result set (imageUrls), preserving existing behavior.
+      const isBefore = req.body.type === 'before';
       const project = await db.portfolioProject.update({
         where: { id: existing.id },
-        data: { imageUrls: [...existing.imageUrls, ...urls] },
+        data: isBefore
+          ? { beforeImageUrls: [...existing.beforeImageUrls, ...urls] }
+          : { imageUrls: [...existing.imageUrls, ...urls] },
       });
       res.json(project);
     } catch (err) {
@@ -519,10 +524,13 @@ router.delete(
       if (!existing || existing.businessId !== business.id) {
         return res.status(404).json({ error: 'Not found' });
       }
-      const remaining = existing.imageUrls.filter((u) => u !== url);
+      // Remove the URL from whichever set it's in (after or before).
       const project = await db.portfolioProject.update({
         where: { id: existing.id },
-        data: { imageUrls: remaining },
+        data: {
+          imageUrls: existing.imageUrls.filter((u) => u !== url),
+          beforeImageUrls: existing.beforeImageUrls.filter((u) => u !== url),
+        },
       });
       res.json(project);
     } catch (err) {
