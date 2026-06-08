@@ -88,6 +88,9 @@ struct Business: Codable, Identifiable {
     var lng: Double?
     var distanceMiles: Double?
 
+    // Set on businesses returned in the search "sponsored" array (Pro placement).
+    var sponsored: Bool?
+
     var isVerified: Bool { verified ?? false }
 
     /// Short distance label for cards, e.g. "0.8 mi" / "12 mi" / "Nearby".
@@ -265,6 +268,18 @@ struct BusinessSearchResponse: Codable {
     let total: Int
     let page: Int
     let limit: Int
+    // Clearly-labeled Pro placements shown above organic results (page 1).
+    var sponsored: [Business]?
+}
+
+/// Contractor "Pro" subscription state (GET /payments/pro/status).
+struct ProStatus: Codable {
+    let isPro: Bool
+    let status: String?
+    let trialEndsAt: String?
+    let currentPeriodEnd: String?
+
+    var isTrialing: Bool { status == "trialing" }
 }
 
 // MARK: - Saved searches

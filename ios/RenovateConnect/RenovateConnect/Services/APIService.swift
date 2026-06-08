@@ -818,6 +818,25 @@ final class APIService {
         try await request("payments/earnings")
     }
 
+    // MARK: - Pro subscription
+
+    func proStatus() async throws -> ProStatus {
+        try await request("payments/pro/status")
+    }
+
+    /// Start the Pro Checkout and return the hosted URL to open in a web session.
+    func proSubscribeURL() async throws -> URL {
+        struct Resp: Decodable { let url: String }
+        struct Empty: Encodable {}
+        let resp: Resp = try await request("payments/pro/subscribe", method: "POST", body: Empty())
+        guard let url = URL(string: resp.url) else { throw APIError.invalidURL }
+        return url
+    }
+
+    func cancelPro() async throws {
+        try await requestNoContent("payments/pro/cancel", method: "POST")
+    }
+
     /// Fetch a web-saved estimate by its short code (the estimator handoff) and
     /// adapt it into an `Estimation` so the existing result view can render it.
     func sharedEstimate(code: String) async throws -> Estimation {

@@ -7,6 +7,7 @@ struct BusinessSearchView: View {
     @State private var query = ""
     @State private var selectedSpecialty: String? = nil
     @State private var businesses: [Business] = []
+    @State private var sponsored: [Business] = []
     @State private var isLoading = false
     @State private var error: String?
     @State private var showSavedSearches = false
@@ -109,6 +110,23 @@ struct BusinessSearchView: View {
                                 }
                             }
                             .padding(.bottom, 24)
+                        }
+
+                        // Sponsored (Pro) — clearly labeled, shown above organic
+                        // results without reordering them.
+                        if !sponsored.isEmpty {
+                            VStack(alignment: .leading, spacing: 12) {
+                                sectionHeader(icon: "megaphone.fill", title: "Sponsored")
+                                    .padding(.horizontal, 16)
+                                ForEach(sponsored) { biz in
+                                    NavigationLink(destination: BusinessDetailView(businessId: biz.id)) {
+                                        BusinessListCard(business: biz)
+                                            .padding(.horizontal, 16)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.bottom, 20)
                         }
 
                         // All contractors
@@ -241,6 +259,7 @@ struct BusinessSearchView: View {
                 lng: coord?.longitude
             )
             businesses = resp.businesses
+            sponsored = resp.sponsored ?? []
         } catch {
             self.error = error.localizedDescription
         }
@@ -388,6 +407,13 @@ struct BusinessListCard: View {
                                     .font(.subheadline)
                                     .foregroundStyle(VerifiedBadge.trust)
                                     .accessibilityLabel("Verified")
+                            }
+                            if business.sponsored == true {
+                                Text("Sponsored")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 6).padding(.vertical, 2)
+                                    .background(Color(.systemGray5), in: Capsule())
                             }
                             Spacer()
                             if !auth.isBusiness && !auth.isAdmin {

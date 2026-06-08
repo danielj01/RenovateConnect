@@ -9,6 +9,10 @@ struct DashboardView: View {
     @State private var onboardURL: URL?
     @State private var onboardLoading = false
     @State private var showShare = false
+    @State private var pro: ProStatus?
+    @State private var proCheckoutURL: URL?
+    @State private var proLoading = false
+    @State private var showCancelPro = false
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
@@ -44,6 +48,7 @@ struct DashboardView: View {
 
                     earningsLink
                     shareProfileCard
+                    proCard
 
                     if isLoading {
                         ProgressView().padding(.top, 60)
@@ -82,6 +87,15 @@ struct DashboardView: View {
                 if let business = auth.currentUser?.business {
                     ShareProfileView(business: business)
                 }
+            }
+            .sheet(item: $proCheckoutURL, onDismiss: { Task { await loadPro() } }) { url in
+                SafariView(url: url).ignoresSafeArea()
+            }
+            .alert("Manage Pro", isPresented: $showCancelPro) {
+                Button("Cancel subscription", role: .destructive) { Task { await cancelPro() } }
+                Button("Keep Pro", role: .cancel) {}
+            } message: {
+                Text("You'll keep Pro until the end of your current period, then stop being featured.")
             }
         }
     }
@@ -155,6 +169,50 @@ struct DashboardView: View {
         }
     }
 
+    // Pro upsell / status. Subscribers appear in the clearly-labeled "Sponsored"
+    // slot in search. $5/mo with a 90-day free trial.
+    @ViewBuilder
+    private var proCard: some View {
+        if auth.currentUser?.business != nil {
+            let isPro = pro?.isPro == true
+            Button {
+                if isPro { showCancelPro = true } else { Task { await startPro() } }
+            } label: {
+                RCCard {
+                    HStack(spacing: 14) {
+                        Image(systemName: isPro ? "star.circle.fill" : "star.circle")
+                            .font(.title2).foregroundStyle(Theme.gold)
+                            .frame(width: 40, height: 40)
+                            .background(Theme.gold.opacity(0.15)).clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(isPro ? "RenovateConnect Pro" : "Get featured in search")
+                                .font(.subheadline.weight(.semibold))
+                            Text(proSubtitle(isPro))
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        if proLoading {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(16)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func proSubtitle(_ isPro: Bool) -> String {
+        guard isPro else { return "$5/mo · first 3 months free. Appear in the Sponsored slot." }
+        if pro?.isTrialing == true, let ends = pro?.trialEndsAt?.shortDate {
+            return "Free trial active · renews \(ends). Tap to manage."
+        }
+        return "Active · you're featured in search. Tap to manage."
+    }
+
     private func metricsGrid(_ s: DashboardStats) -> some View {
         LazyVGrid(columns: columns, spacing: 14) {
             MetricCard(title: "Impressions", value: "\(s.searchImpressions)", icon: "magnifyingglass", tint: .teal)
@@ -215,16 +273,42 @@ struct DashboardView: View {
             self.error = error.localizedDescription
         }
         await loadPayouts()
+        await loadPro()
     }
 
     private func loadPayouts() async {
         payouts = try? await APIService.shared.connectStatus()
     }
 
+    private func loadPro() async {
+        pro = try? await APIService.shared.proStatus()
+    }
+
+    private func startPro() async {
+        proLoading = true
+        defer { proLoading = false }
+        proCheckoutURL = try? await APIService.shared.proSubscribeURL()
+    }
+
+    private func cancelPro() async {
+        try? await APIService.shared.cancelPro()
+        await loadPro()
+    }
+
     private func startOnboarding() async {
         onboardLoading = true
         defer { onboardLoading = false }
         onboardURL = try? await APIService.shared.connectOnboardURL()
+    }
+}
+
+private extension String {
+    /// ISO-8601 timestamp → short local date ("Sep 3, 2026"), or nil.
+    var shortDate: String? {
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        guard let date = iso.date(from: self) ?? ISO8601DateFormatter().date(from: self) else { return nil }
+        return date.formatted(date: .abbreviated, time: .omitted)
     }
 }
 
