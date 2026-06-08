@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import CoreLocation
 
 /// Forward-geocoding for contractor profiles: turn an address into coordinates
