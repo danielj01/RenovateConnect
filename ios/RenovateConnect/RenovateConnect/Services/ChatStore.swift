@@ -6,6 +6,10 @@ import Combine
 /// restarts — turning a one-off Q&A into a return-worthy thread.
 @MainActor
 final class ChatStore: ObservableObject {
+    /// Shared instance so AI chat can be presented from anywhere (e.g. the
+    /// Explore screen) with consistent history, now that it's no longer a tab.
+    static let shared = ChatStore()
+
     @Published private(set) var messages: [ChatTurn] = []
     @Published var isLoading = false
 

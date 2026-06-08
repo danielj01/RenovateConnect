@@ -14,6 +14,7 @@ struct BusinessSearchView: View {
     @State private var saveState: SaveState = .idle
     @State private var nearMe = false
     @State private var showLocationDenied = false
+    @State private var showAIChat = false
 
     /// Tracks the inline "save this search" button across taps so the homeowner
     /// gets feedback without a disruptive alert.
@@ -181,6 +182,15 @@ struct BusinessSearchView: View {
                         }
                         .accessibilityLabel("Saved searches")
                     }
+                    // AI Assistant moved here from its own tab (replaced by Inspiration).
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showAIChat = true
+                        } label: {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                        }
+                        .accessibilityLabel("AI assistant")
+                    }
                 }
                 // Guests have no activity feed (and no ActivityStore in their
                 // environment), so the bell is only for signed-in users.
@@ -189,6 +199,15 @@ struct BusinessSearchView: View {
                         ActivityBellButton()
                     }
                 }
+            }
+            .sheet(isPresented: $showAIChat) {
+                // AIChatView has its own NavigationStack; re-inject the stores it
+                // (and the business detail it links to) need, via shared singletons.
+                AIChatView()
+                    .environmentObject(ChatStore.shared)
+                    .environmentObject(auth)
+                    .environmentObject(FavoritesStore.shared)
+                    .environmentObject(TabRouter.shared)
             }
             .sheet(isPresented: $showSavedSearches) {
                 SavedSearchesView { applied in

@@ -4,7 +4,7 @@ struct MainTabView: View {
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var notifications: NotificationManager
     @StateObject private var inbox = InboxStore()
-    @StateObject private var chat = ChatStore()
+    @StateObject private var chat = ChatStore.shared
     // Shared singletons (not freshly constructed) so the toolbar bell —
     // hosted outside this view's injected environment — resolves the SAME
     // instances and keeps the badge/polling consistent. See ActivityStore.shared.
@@ -132,8 +132,9 @@ struct MainTabView: View {
                 .tabItem { Label("Estimate", systemImage: "camera.viewfinder") }
                 .tag(1)
 
-            AIChatView()
-                .tabItem { Label("AI Chat", systemImage: "bubble.left.and.bubble.right.fill") }
+            // Inspiration replaces the AI Chat tab; AI chat now opens from Explore.
+            InspirationView()
+                .tabItem { Label("Inspiration", systemImage: "photo.on.rectangle.angled") }
                 .tag(2)
 
             ConversationsView()

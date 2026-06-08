@@ -199,6 +199,49 @@ struct BusinessSummary: Codable {
     let payoutsEnabled: Bool?
 }
 
+// MARK: - Inspiration feed
+
+/// One photo in the Inspiration feed (GET /feed). Each is a contractor's real
+/// project photo; tapping routes to that contractor.
+struct FeedItem: Codable, Identifiable {
+    let id: String
+    let imageUrl: String
+    let beforeImageUrl: String?
+    let isBeforeAfter: Bool
+    let category: String?
+    let costMin: Int?
+    let costMax: Int?
+    let projectId: String
+    let title: String
+    let business: FeedBusiness
+
+    var costText: String? {
+        switch (costMin, costMax) {
+        case let (lo?, hi?): return "$\(lo.formatted()) – $\(hi.formatted())"
+        case let (lo?, nil): return "From $\(lo.formatted())"
+        case let (nil, hi?): return "Up to $\(hi.formatted())"
+        default: return nil
+        }
+    }
+}
+
+struct FeedBusiness: Codable {
+    let id: String
+    let companyName: String
+    let logoUrl: String?
+    let city: String
+    let state: String
+    let verified: Bool?
+    var isVerified: Bool { verified ?? false }
+}
+
+struct FeedResponse: Codable {
+    let items: [FeedItem]
+    let page: Int
+    let limit: Int
+    let hasMore: Bool
+}
+
 struct ChatMessage: Codable, Identifiable {
     let id: String
     let conversationId: String
@@ -346,6 +389,7 @@ struct PortfolioProject: Codable, Identifiable {
     let costMax: Int?
     let durationWeeks: Int?
     let imageUrls: [String]
+    var beforeImageUrls: [String]?
     let featured: Bool
 
     // Admin approval — optional because the public API only includes it for

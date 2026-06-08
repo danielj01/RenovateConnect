@@ -221,6 +221,12 @@ struct PortfolioEditorSheet: View {
     @State private var picker: [PhotosPickerItem] = []
     @State private var uploading = false
 
+    // Optional "before" photos for a Before & After. Paired by order with the
+    // result photos above.
+    @State private var beforeImageUrls: [String]
+    @State private var beforePicker: [PhotosPickerItem] = []
+    @State private var uploadingBefore = false
+
     // For NEW projects there's no projectId to upload against yet, so picked
     // photos are staged here as JPEG data and uploaded right after the project
     // is created (see `save()`).
@@ -243,6 +249,7 @@ struct PortfolioEditorSheet: View {
         _costMax = State(initialValue: project?.costMax.map { "\($0)" } ?? "")
         _weeks = State(initialValue: project?.durationWeeks.map { "\($0)" } ?? "")
         _imageUrls = State(initialValue: project?.imageUrls ?? [])
+        _beforeImageUrls = State(initialValue: project?.beforeImageUrls ?? [])
     }
 
     var body: some View {
@@ -270,6 +277,7 @@ struct PortfolioEditorSheet: View {
                 }
                 if isEditing {
                     photosSection
+                    beforePhotosSection
                 } else {
                     newPhotosSection
                 }
@@ -446,18 +454,69 @@ struct PortfolioEditorSheet: View {
             .disabled(uploading)
             .onChange(of: picker) { _, items in
                 guard !items.isEmpty else { return }
-                Task { await uploadPicked(items) }
+                Task { await uploadPicked(items, type: "after") }
             }
+        }
+    }
+
+    /// Optional Before & After: contractors can add "before" photos that pair
+    /// with the results above, shown as Before & After in their profile + the
+    /// Inspiration feed.
+    private var beforePhotosSection: some View {
+        Section {
+            if !beforeImageUrls.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(beforeImageUrls, id: \.self) { url in
+                            ZStack(alignment: .topTrailing) {
+                                AsyncImage(url: URL(string: url)) { img in
+                                    img.resizable().scaledToFill()
+                                } placeholder: { Color(.systemGray5) }
+                                .frame(width: 96, height: 96)
+                                .clipShape(RoundedRectangle(cornerRadius: 10))
+                                Button {
+                                    Task { await deleteImage(url) }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .font(.title3).foregroundStyle(.white, .black.opacity(0.7))
+                                }
+                                .padding(4)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+            PhotosPicker(selection: $beforePicker, maxSelectionCount: 10, matching: .images) {
+                HStack {
+                    Label(uploadingBefore ? "Uploading…" : "Add 'before' photos", systemImage: "photo.badge.plus")
+                    Spacer()
+                    if uploadingBefore { ProgressView() }
+                }
+            }
+            .disabled(uploadingBefore)
+            .onChange(of: beforePicker) { _, items in
+                guard !items.isEmpty else { return }
+                Task { await uploadPicked(items, type: "before") }
+            }
+        } header: {
+            Text("Before & After (optional)")
+        } footer: {
+            Text("Add the \u{201C}before\u{201D} shots that match your results above — before/afters stand out in the Inspiration feed.")
         }
     }
 
     /// Convert PhotosPicker items to JPEG `Data`, upload them in one multipart
     /// POST, and merge the server's updated `imageUrls` into our state. The
     /// onSave callback is also fired so the list view rebinds in place.
-    private func uploadPicked(_ items: [PhotosPickerItem]) async {
+    private func uploadPicked(_ items: [PhotosPickerItem], type: String) async {
         guard let project else { return }
-        uploading = true
-        defer { uploading = false; picker = [] }
+        let isBefore = type == "before"
+        if isBefore { uploadingBefore = true } else { uploading = true }
+        defer {
+            if isBefore { uploadingBefore = false; beforePicker = [] }
+            else { uploading = false; picker = [] }
+        }
 
         var payloads: [Data] = []
         for item in items {
@@ -468,8 +527,8 @@ struct PortfolioEditorSheet: View {
         guard !payloads.isEmpty else { return }
         do {
             let updated = try await APIService.shared.uploadPortfolioImages(
-                businessId: businessId, projectId: project.id, images: payloads)
-            imageUrls = updated.imageUrls
+                businessId: businessId, projectId: project.id, images: payloads, type: type)
+            apply(updated)
             onSave(updated)
         } catch {
             self.error = error.localizedDescription
@@ -481,11 +540,16 @@ struct PortfolioEditorSheet: View {
         do {
             let updated = try await APIService.shared.deletePortfolioImage(
                 businessId: businessId, projectId: project.id, url: url)
-            imageUrls = updated.imageUrls
+            apply(updated)
             onSave(updated)
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    private func apply(_ p: PortfolioProject) {
+        imageUrls = p.imageUrls
+        beforeImageUrls = p.beforeImageUrls ?? []
     }
 
     private func save() async {

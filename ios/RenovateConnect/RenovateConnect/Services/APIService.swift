@@ -177,6 +177,41 @@ final class APIService {
         try await request("businesses/\(id)")
     }
 
+    /// Public Inspiration feed of contractor project photos.
+    func feed(page: Int = 1, category: String? = nil) async throws -> FeedResponse {
+        var comps = URLComponents(url: base.appendingPathComponent("feed"), resolvingAgainstBaseURL: false)!
+        var items: [URLQueryItem] = [.init(name: "page", value: "\(page)")]
+        if let category { items.append(.init(name: "category", value: category)) }
+        comps.queryItems = items
+        guard let url = comps.url else { throw APIError.invalidURL }
+        return try await request(url: url)
+    }
+
+    /// Upload before/after photos to a portfolio project (`type` = before/after).
+    func uploadPortfolioImages(businessId: String, projectId: String, images: [Data], type: String) async throws -> PortfolioProject {
+        let url = base.appendingPathComponent("businesses/\(businessId)/portfolio/\(projectId)/images")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let boundary = UUID().uuidString
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var payload = Data()
+        func append(_ s: String) { payload.append(s.data(using: .utf8)!) }
+        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"type\"\r\n\r\n\(type)\r\n")
+        for (i, img) in images.enumerated() {
+            append("--\(boundary)\r\nContent-Disposition: form-data; name=\"images\"; filename=\"img\(i).jpg\"\r\nContent-Type: image/jpeg\r\n\r\n")
+            payload.append(img)
+            append("\r\n")
+        }
+        append("--\(boundary)--\r\n")
+        req.httpBody = payload
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.requestFailed((response as? HTTPURLResponse)?.statusCode ?? 0, "Upload failed")
+        }
+        return try JSONDecoder().decode(PortfolioProject.self, from: data)
+    }
+
     /// Create the signed-in contractor's business profile. Optional fields left
     /// nil are omitted from the request so server-side validation (e.g. the URL
     /// check on `website`) only runs on values the user actually provided.

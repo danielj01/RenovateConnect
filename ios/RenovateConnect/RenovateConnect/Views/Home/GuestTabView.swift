@@ -31,9 +31,13 @@ struct GuestTabView: View {
                 .tabItem { Label("Estimate", systemImage: "camera.viewfinder") }
                 .tag(TabRouter.estimate)
 
+            InspirationView()
+                .tabItem { Label("Inspiration", systemImage: "photo.on.rectangle.angled") }
+                .tag(TabRouter.aiChat)
+
             GuestSignInTab()
                 .tabItem { Label("Sign In", systemImage: "person.crop.circle") }
-                .tag(TabRouter.aiChat)
+                .tag(TabRouter.profile)
         }
         .environmentObject(favorites)
         .environmentObject(router)
