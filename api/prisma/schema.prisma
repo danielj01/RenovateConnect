@@ -193,6 +193,16 @@ model Business {
   chargesEnabled   Boolean   @default(false)
   payoutsEnabled   Boolean   @default(false)
 
+  // "Pro" subscription ($5/mo, 90-day free trial) — the contractor pays the
+  // PLATFORM (a normal Stripe subscription, distinct from the Connect account
+  // above). While trialing/active they're eligible for the clearly-labeled
+  // "Sponsored" slot in search. Mirrored from Stripe via subscription webhooks.
+  stripeCustomerId    String?
+  proSubscriptionId   String?
+  proStatus           String?   // Stripe sub status: trialing | active | past_due | canceled | …
+  proTrialEndsAt      DateTime?
+  proCurrentPeriodEnd DateTime?
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 

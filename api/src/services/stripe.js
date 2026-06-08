@@ -168,6 +168,47 @@ async function createRefund(paymentIntentId) {
   });
 }
 
+// --- "Pro" subscription (contractor pays the platform) ------------------------
+//
+// A normal recurring subscription billed TO the contractor BY the platform —
+// NOT a Connect charge. $5/mo with a 90-day free trial. `payment_method_collection:
+// 'if_required'` lets the trial start with no card, so signup is frictionless;
+// Stripe collects a card before the trial ends. The subscription's businessId
+// metadata lets the webhook map status changes back to the right business.
+
+const PRO_PRICE_CENTS = () => parseInt(process.env.PRO_PRICE_CENTS || '500', 10);
+const PRO_TRIAL_DAYS = () => parseInt(process.env.PRO_TRIAL_DAYS || '90', 10);
+
+async function createProCheckoutSession({ businessId, customerId, customerEmail }) {
+  return stripe.checkout.sessions.create({
+    mode: 'subscription',
+    ...(customerId ? { customer: customerId } : { customer_email: customerEmail || undefined }),
+    payment_method_collection: 'if_required',
+    line_items: [{
+      quantity: 1,
+      price_data: {
+        currency: 'usd',
+        product_data: { name: 'RenovateConnect Pro' },
+        unit_amount: PRO_PRICE_CENTS(),
+        recurring: { interval: 'month' },
+      },
+    }],
+    subscription_data: {
+      trial_period_days: PRO_TRIAL_DAYS(),
+      metadata: { businessId },
+    },
+    client_reference_id: businessId,
+    metadata: { businessId, kind: 'pro_subscription' },
+    success_url: `${APP_BASE_URL()}/billing/return?status=success&pro=1`,
+    cancel_url: `${APP_BASE_URL()}/billing/return?status=cancel`,
+  });
+}
+
+// Cancel at period end so the contractor keeps Pro until they've paid through.
+async function cancelProSubscription(subscriptionId) {
+  return stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+}
+
 module.exports = {
   constructWebhookEvent,
   // Connect / deposits
@@ -182,4 +223,7 @@ module.exports = {
   createMilestoneCheckoutSession,
   createMilestoneTransfer,
   createMilestoneRefund,
+  // Pro subscription
+  createProCheckoutSession,
+  cancelProSubscription,
 };

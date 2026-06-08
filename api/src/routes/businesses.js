@@ -70,6 +70,27 @@ router.get('/', async (req, res, next) => {
       },
     };
 
+    // Sponsored slot (Pro subscribers): a small, clearly-labeled set surfaced
+    // ABOVE organic results — it never reorders the organic list, so the
+    // verification/rating ranking (and its trust signal) stays intact. Shown on
+    // the first page only; rotated for fairness among eligible Pro businesses.
+    const SPONSORED_CAP = 3;
+    let sponsored = [];
+    if (pageNum === 1) {
+      const pool = await db.business.findMany({
+        where: { ...where, proStatus: { in: ['trialing', 'active'] } },
+        include,
+        take: 12,
+        orderBy: { averageRating: 'desc' },
+      });
+      // Shuffle so the same few don't always lead.
+      for (let i = pool.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      sponsored = pool.slice(0, SPONSORED_CAP).map((b) => ({ ...b, sponsored: true }));
+    }
+
     // "Near me" mode — viewer coordinates provided. Rank by distance instead of
     // verified/rating. Done in JS (no PostGIS): fine at launch scale; we cap the
     // candidate set so it never fans out unbounded.
@@ -104,7 +125,7 @@ router.get('/', async (req, res, next) => {
           data: { searchImpressions: { increment: 1 } },
         }).catch(() => {});
       }
-      return res.json({ businesses: pageItems, total: filtered.length, page: pageNum, limit: take });
+      return res.json({ businesses: pageItems, total: filtered.length, page: pageNum, limit: take, sponsored });
     }
 
     const [businesses, total] = await Promise.all([
@@ -129,7 +150,7 @@ router.get('/', async (req, res, next) => {
       }).catch(() => {});
     }
 
-    return res.json({ businesses, total, page: pageNum, limit: take });
+    return res.json({ businesses, total, page: pageNum, limit: take, sponsored });
   } catch (err) {
     return next(err);
   }

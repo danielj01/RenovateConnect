@@ -10,7 +10,16 @@ const {
   retrieveAccount,
   createDepositCheckoutSession,
   createRefund,
+  createProCheckoutSession,
+  cancelProSubscription,
 } = require('../services/stripe');
+
+// A business counts as "Pro" (eligible for the Sponsored slot) while trialing or
+// actively paying.
+const PRO_ACTIVE_STATUSES = ['trialing', 'active'];
+function isProActive(business) {
+  return PRO_ACTIVE_STATUSES.includes(business?.proStatus);
+}
 
 // --- Contractor onboarding (Stripe Connect) ----------------------------------
 
@@ -65,6 +74,61 @@ router.get('/connect/status', authMiddleware, requireRole('BUSINESS'), async (re
       chargesEnabled,
       payoutsEnabled,
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Pro subscription (contractor pays the platform) -------------------------
+
+// POST /payments/pro/subscribe — start a hosted Checkout for the $5/mo Pro plan
+// (90-day free trial). Returns a URL the app opens in a web auth session.
+router.post('/pro/subscribe', authMiddleware, requireRole('BUSINESS'), async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({ where: { id: req.user.id } });
+    const business = await db.business.findUnique({ where: { userId: req.user.id } });
+    if (!business) return res.status(404).json({ error: 'No business profile found' });
+    if (isProActive(business)) {
+      return res.status(409).json({ error: 'You already have an active Pro subscription' });
+    }
+
+    const session = await createProCheckoutSession({
+      businessId: business.id,
+      customerId: business.stripeCustomerId || undefined,
+      customerEmail: user.email,
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /payments/pro/status — the contractor's Pro state for the upsell/manage UI.
+router.get('/pro/status', authMiddleware, requireRole('BUSINESS'), async (req, res, next) => {
+  try {
+    const business = await db.business.findUnique({ where: { userId: req.user.id } });
+    if (!business) return res.status(404).json({ error: 'No business profile found' });
+    res.json({
+      isPro: isProActive(business),
+      status: business.proStatus || null,
+      trialEndsAt: business.proTrialEndsAt,
+      currentPeriodEnd: business.proCurrentPeriodEnd,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /payments/pro/cancel — cancel at period end (keep access until paid through).
+router.post('/pro/cancel', authMiddleware, requireRole('BUSINESS'), async (req, res, next) => {
+  try {
+    const business = await db.business.findUnique({ where: { userId: req.user.id } });
+    if (!business) return res.status(404).json({ error: 'No business profile found' });
+    if (!business.proSubscriptionId) {
+      return res.status(409).json({ error: 'No active subscription to cancel' });
+    }
+    await cancelProSubscription(business.proSubscriptionId);
+    res.json({ ok: true });
   } catch (err) {
     next(err);
   }
