@@ -20,6 +20,15 @@ final class AuthStore: ObservableObject {
         promptSignIn = true
     }
 
+    /// After a successful sign-in, land on the first tab (Explore for homeowners,
+    /// Dashboard for contractors) rather than wherever the shared tab router was
+    /// left — e.g. the guest "Sign In" tab, which would otherwise drop the user
+    /// on Profile.
+    private func landOnFirstTab() {
+        guard currentUser != nil else { return }
+        TabRouter.shared.selection = TabRouter.explore
+    }
+
     init() {
         if UserDefaults.standard.string(forKey: "authToken") != nil {
             Task { await loadMe() }
@@ -37,6 +46,7 @@ final class AuthStore: ObservableObject {
             // flipping to the logged-in UI, so contractors land on their tab bar
             // and not momentarily on the "set up your business" screen.
             await loadMe()
+            landOnFirstTab()
         } catch {
             self.error = Self.signInMessage(for: error)
         }
@@ -50,6 +60,7 @@ final class AuthStore: ObservableObject {
             let resp = try await APIService.shared.register(email: email, password: password, name: name, role: role)
             UserDefaults.standard.set(resp.token, forKey: "authToken")
             await loadMe()
+            landOnFirstTab()
         } catch {
             self.error = Self.registerMessage(for: error)
         }
@@ -70,6 +81,7 @@ final class AuthStore: ObservableObject {
             // Hydrate the full profile (including any linked business) the same
             // way login/register do, rather than trusting the lean auth payload.
             await loadMe()
+            landOnFirstTab()
         } catch {
             self.error = "We couldn't sign you in with Apple. Please try again."
         }
