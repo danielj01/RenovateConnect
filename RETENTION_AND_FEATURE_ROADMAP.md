@@ -102,9 +102,22 @@ Our differentiator (AI estimation) wins **Day 1**. But we have **nothing that wi
 ### 🔵 Future Enhancements (strategic, post-liquidity)
 1. **Gamification** — contractor response-time badges, "Level 3 Verified," homeowner project milestones.
 2. **Membership/loyalty perks** (+27% ARPU lever; ties to monetization plan).
-3. **In-app payments / escrow** (Stripe Connect) — unlocks transaction take-rate + verified reviews.
+3. **In-app payments / escrow** (Stripe Connect) — unlocks transaction take-rate + verified reviews. ✅ *Shipped.*
 4. **Photo reviews + automated post-job review prompts.**
 5. **Referral loops** (two-sided) with deep links.
+6. **Pro "Insights" tier — $10/mo (upsell from the $5 Sponsored tier).** A higher
+   plan giving contractors more market intelligence: demand by area (where
+   homeowners are searching/estimating near them), trending project categories,
+   their profile-view/impression trends, and lead-source analytics.
+   - **Shape it as aggregated/anonymized market data, not raw PII.** Surfacing an
+     individual homeowner's location or personal search history to contractors is
+     a privacy/legal landmine (CCPA/GDPR + App Store privacy rules) and cuts
+     against our "no-spam, you-choose" positioning. Deliver value as heatmaps and
+     trends ("12 kitchen estimates in 94610 this month"), not named individuals.
+   - Builds naturally on existing data: `searchImpressions`, `profileViews`,
+     estimations, saved-search demand, and the new geocoded business/search
+     coordinates. Tier it above the $5 Sponsored plan (`proStatus` →
+     plan/price-id), reusing the subscription plumbing already in place.
 
 ---
 

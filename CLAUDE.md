@@ -6,13 +6,23 @@ iOS marketplace for homeowners to find renovation contractors. Revenue model:
 - **Deposit commission** — when a homeowner accepts a quote and pays the in-app
   deposit, the platform takes a commission (fee-on-top) via Stripe Connect.
   This is the live revenue stream.
-- **Admin verification** — trust signal that earns top search placement (not for
-  sale). Curated by admins; the basis for the future paid-vetting tier.
+- **Pro subscription** — contractors can pay the platform **$5/mo (90-day free
+  trial)** via a Stripe **subscription** (distinct from their Connect payout
+  account). While trialing/active they appear in a clearly-labeled, capped
+  **"Sponsored"** slot shown ABOVE organic search results. Routes:
+  `/payments/pro/*`; status mirrored from Stripe subscription webhooks onto
+  `Business.proStatus`. A saved card on file is expected here (it's a normal
+  subscription) — see the note below.
+- **Admin verification** — trust signal. Organic search placement is earned by
+  verification + rating and is **not for sale**; paid visibility exists ONLY via
+  the disclosed Sponsored slot, which never reorders the organic list.
 
-> Historical note: the project originally monetized via per-lead fees and paid
-> "promoted listings." Both were fully retired (code + DB columns removed) in
-> favor of the transaction + verification model above. Don't reintroduce
-> `isPromoted`, lead-fee billing, or saved-card-on-file concepts.
+> Monetization guardrails: **per-lead fees stay retired** (don't reintroduce
+> lead-fee billing). The OLD silent **`isPromoted`** boolean that reordered
+> organic results also stays retired — paid placement must remain a *separate,
+> clearly-labeled* Sponsored slot, never a secret bump in organic ranking.
+> Saved-card-on-file is now intentionally used for the Pro subscription (it was
+> previously avoided); that's expected, not a regression.
 
 ## Architecture
 
