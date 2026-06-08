@@ -275,11 +275,37 @@ struct BusinessSearchResponse: Codable {
 /// Contractor "Pro" subscription state (GET /payments/pro/status).
 struct ProStatus: Codable {
     let isPro: Bool
+    var plan: String?
+    var hasInsights: Bool?
     let status: String?
     let trialEndsAt: String?
     let currentPeriodEnd: String?
 
     var isTrialing: Bool { status == "trialing" }
+    var insights: Bool { hasInsights ?? false }
+}
+
+/// Aggregated, de-identified market demand for the Pro Insights tier
+/// (GET /payments/pro/insights). Never contains homeowner PII.
+struct ProInsights: Codable {
+    let demandByCategory: [DemandBucket]
+    let demandByProjectType: [DemandBucket]
+    let demandByArea: [DemandBucket]
+    let minBucket: Int
+    let performance: InsightsPerformance
+}
+
+struct DemandBucket: Codable, Identifiable {
+    let label: String
+    let count: Int
+    var id: String { label }
+}
+
+struct InsightsPerformance: Codable {
+    let profileViews: Int
+    let searchImpressions: Int
+    let totalLeads: Int
+    let conversionRate: Int
 }
 
 // MARK: - Saved searches

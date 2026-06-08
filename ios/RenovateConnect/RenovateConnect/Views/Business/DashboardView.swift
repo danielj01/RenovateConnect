@@ -13,6 +13,7 @@ struct DashboardView: View {
     @State private var proCheckoutURL: URL?
     @State private var proLoading = false
     @State private var showCancelPro = false
+    @State private var showPlanDialog = false
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
@@ -49,6 +50,7 @@ struct DashboardView: View {
                     earningsLink
                     shareProfileCard
                     proCard
+                    insightsLink
 
                     if isLoading {
                         ProgressView().padding(.top, 60)
@@ -96,6 +98,13 @@ struct DashboardView: View {
                 Button("Keep Pro", role: .cancel) {}
             } message: {
                 Text("You'll keep Pro until the end of your current period, then stop being featured.")
+            }
+            .confirmationDialog("Choose your plan", isPresented: $showPlanDialog, titleVisibility: .visible) {
+                Button("Sponsored — $5/mo") { Task { await startPro(plan: "sponsored") } }
+                Button("Insights — $10/mo") { Task { await startPro(plan: "insights") } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Both include the Sponsored search slot and a 3-month free trial. Insights adds aggregated market demand data.")
             }
         }
     }
@@ -176,7 +185,7 @@ struct DashboardView: View {
         if auth.currentUser?.business != nil {
             let isPro = pro?.isPro == true
             Button {
-                if isPro { showCancelPro = true } else { Task { await startPro() } }
+                if isPro { showCancelPro = true } else { showPlanDialog = true }
             } label: {
                 RCCard {
                     HStack(spacing: 14) {
@@ -206,11 +215,41 @@ struct DashboardView: View {
     }
 
     private func proSubtitle(_ isPro: Bool) -> String {
-        guard isPro else { return "$5/mo · first 3 months free. Appear in the Sponsored slot." }
+        guard isPro else { return "Get featured + market insights. From $5/mo · 3 months free." }
+        let tier = pro?.insights == true ? "Insights" : "Sponsored"
         if pro?.isTrialing == true, let ends = pro?.trialEndsAt?.shortDate {
-            return "Free trial active · renews \(ends). Tap to manage."
+            return "\(tier) · free trial, renews \(ends). Tap to manage."
         }
-        return "Active · you're featured in search. Tap to manage."
+        return "\(tier) · active. Tap to manage."
+    }
+
+    // Insights tier ($10) gets a dedicated market-data screen.
+    @ViewBuilder
+    private var insightsLink: some View {
+        if pro?.insights == true {
+            NavigationLink {
+                InsightsView()
+            } label: {
+                RCCard {
+                    HStack(spacing: 14) {
+                        Image(systemName: "chart.bar.xaxis")
+                            .font(.title2).foregroundStyle(.purple)
+                            .frame(width: 40, height: 40)
+                            .background(Color.purple.opacity(0.15)).clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Market Insights").font(.subheadline.weight(.semibold))
+                            Text("See aggregated demand by category, project type, and area.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                    .padding(16)
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     private func metricsGrid(_ s: DashboardStats) -> some View {
@@ -284,10 +323,10 @@ struct DashboardView: View {
         pro = try? await APIService.shared.proStatus()
     }
 
-    private func startPro() async {
+    private func startPro(plan: String) async {
         proLoading = true
         defer { proLoading = false }
-        proCheckoutURL = try? await APIService.shared.proSubscribeURL()
+        proCheckoutURL = try? await APIService.shared.proSubscribeURL(plan: plan)
     }
 
     private func cancelPro() async {
