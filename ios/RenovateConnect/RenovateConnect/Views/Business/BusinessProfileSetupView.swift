@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 /// First-run setup for a contractor who has registered but hasn't created their
 /// business profile yet. Without a profile the dashboard/leads/portfolio tabs
@@ -136,6 +137,10 @@ struct BusinessProfileSetupView: View {
         defer { isSaving = false }
         do {
             let trimmedWebsite = website.trimmed
+            // Geocode the address so the new contractor appears in "near me" search.
+            let coord = await Geocoder.coordinate(
+                address: address.trimmed.isEmpty ? nil : address.trimmed,
+                city: city.trimmed, state: state.trimmed, zip: zipCode.trimmed)
             _ = try await APIService.shared.createBusiness(
                 companyName: companyName.trimmed,
                 description: description.trimmed,
@@ -146,7 +151,9 @@ struct BusinessProfileSetupView: View {
                 yearsInBusiness: Int(yearsInBusiness.trimmed),
                 licenseNumber: licenseNumber.trimmed.isEmpty ? nil : licenseNumber.trimmed,
                 website: trimmedWebsite.isEmpty ? nil : trimmedWebsite,
-                address: address.trimmed.isEmpty ? nil : address.trimmed
+                address: address.trimmed.isEmpty ? nil : address.trimmed,
+                lat: coord?.latitude,
+                lng: coord?.longitude
             )
             // Re-hydrate the user so currentUser.business is populated; MainTabView
             // then swaps this setup screen for the full contractor tab bar.

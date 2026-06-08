@@ -82,7 +82,22 @@ struct Business: Codable, Identifiable {
     // Public shareable profile URL (server-provided on the detail payload).
     var shareUrl: String?
 
+    // Geocoded location (set from the contractor's address) + distance from the
+    // viewer when searching "near me" (server-computed, only present then).
+    var lat: Double?
+    var lng: Double?
+    var distanceMiles: Double?
+
     var isVerified: Bool { verified ?? false }
+
+    /// Short distance label for cards, e.g. "0.8 mi" / "12 mi" / "Nearby".
+    var distanceText: String? {
+        guard let distanceMiles else { return nil }
+        if distanceMiles < 0.1 { return "Nearby" }
+        return distanceMiles < 10
+            ? String(format: "%.1f mi", distanceMiles)
+            : "\(Int(distanceMiles.rounded())) mi"
+    }
 
     /// The link a contractor shares (site/IG/cards) to send customers to their
     /// profile. Prefers the server value; falls back to the canonical format so

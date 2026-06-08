@@ -155,12 +155,19 @@ final class APIService {
     }
 
     // Businesses
-    func searchBusinesses(specialty: String? = nil, city: String? = nil, q: String? = nil, page: Int = 1) async throws -> BusinessSearchResponse {
+    func searchBusinesses(specialty: String? = nil, city: String? = nil, q: String? = nil, page: Int = 1,
+                          lat: Double? = nil, lng: Double? = nil, radiusMiles: Double? = nil) async throws -> BusinessSearchResponse {
         var comps = URLComponents(url: base.appendingPathComponent("businesses"), resolvingAgainstBaseURL: false)!
         var items: [URLQueryItem] = [.init(name: "page", value: "\(page)")]
         if let specialty { items.append(.init(name: "specialty", value: specialty)) }
         if let city { items.append(.init(name: "city", value: city)) }
         if let q { items.append(.init(name: "q", value: q)) }
+        // "Near me": viewer coordinates make the API rank by distance.
+        if let lat, let lng {
+            items.append(.init(name: "lat", value: "\(lat)"))
+            items.append(.init(name: "lng", value: "\(lng)"))
+            if let radiusMiles { items.append(.init(name: "radiusMiles", value: "\(radiusMiles)")) }
+        }
         comps.queryItems = items
         guard let url = comps.url else { throw APIError.invalidURL }
         return try await request(url: url)
@@ -175,7 +182,8 @@ final class APIService {
     /// check on `website`) only runs on values the user actually provided.
     func createBusiness(companyName: String, description: String, city: String, state: String,
                         zipCode: String, specialties: [String], yearsInBusiness: Int?,
-                        licenseNumber: String?, website: String?, address: String?) async throws -> Business {
+                        licenseNumber: String?, website: String?, address: String?,
+                        lat: Double? = nil, lng: Double? = nil) async throws -> Business {
         struct Body: Encodable {
             let companyName: String
             let description: String
@@ -187,17 +195,21 @@ final class APIService {
             let licenseNumber: String?
             let website: String?
             let address: String?
+            let lat: Double?
+            let lng: Double?
         }
         return try await request("businesses", method: "POST",
                                  body: Body(companyName: companyName, description: description,
                                             city: city, state: state, zipCode: zipCode,
                                             specialties: specialties, yearsInBusiness: yearsInBusiness,
-                                            licenseNumber: licenseNumber, website: website, address: address))
+                                            licenseNumber: licenseNumber, website: website, address: address,
+                                            lat: lat, lng: lng))
     }
 
     func updateBusiness(id: String, companyName: String, description: String, city: String, state: String,
                         zipCode: String, specialties: [String], yearsInBusiness: Int?,
-                        licenseNumber: String?, website: String?, address: String?) async throws -> Business {
+                        licenseNumber: String?, website: String?, address: String?,
+                        lat: Double? = nil, lng: Double? = nil) async throws -> Business {
         struct Body: Encodable {
             let companyName: String
             let description: String
@@ -209,12 +221,15 @@ final class APIService {
             let licenseNumber: String?
             let website: String?
             let address: String?
+            let lat: Double?
+            let lng: Double?
         }
         return try await request("businesses/\(id)", method: "PUT",
                                  body: Body(companyName: companyName, description: description,
                                             city: city, state: state, zipCode: zipCode,
                                             specialties: specialties, yearsInBusiness: yearsInBusiness,
-                                            licenseNumber: licenseNumber, website: website, address: address))
+                                            licenseNumber: licenseNumber, website: website, address: address,
+                                            lat: lat, lng: lng))
     }
 
     // Business dashboard

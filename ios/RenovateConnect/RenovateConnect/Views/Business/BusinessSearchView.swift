@@ -1,7 +1,9 @@
 import SwiftUI
+import CoreLocation
 
 struct BusinessSearchView: View {
     @EnvironmentObject private var auth: AuthStore
+    @StateObject private var location = LocationManager()
     @State private var query = ""
     @State private var selectedSpecialty: String? = nil
     @State private var businesses: [Business] = []
@@ -9,6 +11,8 @@ struct BusinessSearchView: View {
     @State private var error: String?
     @State private var showSavedSearches = false
     @State private var saveState: SaveState = .idle
+    @State private var nearMe = false
+    @State private var showLocationDenied = false
 
     /// Tracks the inline "save this search" button across taps so the homeowner
     /// gets feedback without a disruptive alert.
@@ -34,9 +38,22 @@ struct BusinessSearchView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
 
-                    // Specialty filter chips
+                    // Specialty filter chips (preceded by the "Near me" toggle)
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
+                            Button {
+                                Task { await toggleNearMe() }
+                            } label: {
+                                Label("Near me",
+                                      systemImage: location.isResolving ? "location.circle" : (nearMe ? "location.fill" : "location"))
+                                    .font(.subheadline.weight(.medium))
+                                    .padding(.horizontal, 14).padding(.vertical, 9)
+                                    .background(nearMe ? Theme.primary : Color(.systemGray6))
+                                    .foregroundStyle(nearMe ? .white : Color(.label))
+                                    .clipShape(Capsule())
+                            }
+                            .disabled(location.isResolving)
+
                             ForEach(specialties, id: \.0) { name, icon in
                                 Button {
                                     withAnimation(.spring(duration: 0.25)) {
@@ -164,6 +181,11 @@ struct BusinessSearchView: View {
                 }
             }
             .task { await search() }
+            .alert("Location access is off", isPresented: $showLocationDenied) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("Turn on location for RenovateConnect in Settings to sort contractors by distance.")
+            }
         }
     }
 
@@ -210,15 +232,35 @@ struct BusinessSearchView: View {
     private func search() async {
         isLoading = true; error = nil
         defer { isLoading = false }
+        let coord = nearMe ? location.coordinate : nil
         do {
             let resp = try await APIService.shared.searchBusinesses(
                 specialty: selectedSpecialty,
-                q: query.isEmpty ? nil : query
+                q: query.isEmpty ? nil : query,
+                lat: coord?.latitude,
+                lng: coord?.longitude
             )
             businesses = resp.businesses
         } catch {
             self.error = error.localizedDescription
         }
+    }
+
+    /// Toggle "near me": off → on requests location (and re-searches on success);
+    /// on → off clears the distance ranking. Denied permission surfaces an alert.
+    private func toggleNearMe() async {
+        if nearMe {
+            nearMe = false
+            await search()
+            return
+        }
+        let coord = await location.requestLocation()
+        if coord != nil {
+            nearMe = true
+        } else {
+            showLocationDenied = location.denied
+        }
+        await search()
     }
 }
 
@@ -366,6 +408,11 @@ struct BusinessListCard: View {
                                 .foregroundStyle(Theme.primary.opacity(0.8)).font(.caption2)
                             Text("\(business.city), \(business.state)")
                                 .font(.subheadline).foregroundStyle(.secondary)
+                            if let distance = business.distanceText {
+                                Text("· \(distance)")
+                                    .font(.subheadline.weight(.medium))
+                                    .foregroundStyle(Theme.primary)
+                            }
                         }
 
                         HStack(spacing: 10) {

@@ -26,13 +26,30 @@ const profileSchema = z.object({
   licenseNumber: z.string().optional(),
   website: z.string().url().optional(),
   address: z.string().optional(),
+  // Geocoded on the client (contractor's device) from their address so the API
+  // stays free of a geocoding dependency. Powers "near me" distance search.
+  lat: z.number().min(-90).max(90).optional(),
+  lng: z.number().min(-180).max(180).optional(),
 });
+
+// Great-circle distance in miles between two lat/lng points (Haversine).
+function milesBetween(lat1, lng1, lat2, lng2) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const R = 3958.8; // Earth radius in miles
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 // Public: search businesses
 router.get('/', async (req, res, next) => {
   try {
-    const { specialty, city, state, q, page = '1', limit = '20' } = req.query;
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const { specialty, city, state, q, page = '1', limit = '20', lat, lng, radiusMiles } = req.query;
+    const pageNum = parseInt(page);
+    const take = parseInt(limit);
+    const skip = (pageNum - 1) * take;
 
     // Public search shows only admin-approved listings. Pending/rejected
     // businesses are visible only to their owner (via /dashboard) and admins.
@@ -42,24 +59,63 @@ router.get('/', async (req, res, next) => {
     if (specialty) where.specialties = { has: specialty };
     if (q) where.companyName = { contains: q, mode: 'insensitive' };
 
+    const include = {
+      reviews: { take: 3, orderBy: { createdAt: 'desc' } },
+      // One hero project (featured first, approved only) so list cards can
+      // render real project imagery rather than a bare logo.
+      portfolio: {
+        where: { approvalStatus: 'APPROVED' },
+        take: 1,
+        orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }],
+      },
+    };
+
+    // "Near me" mode — viewer coordinates provided. Rank by distance instead of
+    // verified/rating. Done in JS (no PostGIS): fine at launch scale; we cap the
+    // candidate set so it never fans out unbounded.
+    const viewerLat = lat !== undefined ? parseFloat(lat) : null;
+    const viewerLng = lng !== undefined ? parseFloat(lng) : null;
+    const distanceMode = Number.isFinite(viewerLat) && Number.isFinite(viewerLng);
+
+    if (distanceMode) {
+      const radius = radiusMiles !== undefined ? parseFloat(radiusMiles) : null;
+      const candidates = await db.business.findMany({
+        where, include, take: 500, orderBy: [{ verified: 'desc' }, { averageRating: 'desc' }],
+      });
+
+      const withDistance = candidates.map((b) => ({
+        ...b,
+        distanceMiles: (b.lat != null && b.lng != null)
+          ? Math.round(milesBetween(viewerLat, viewerLng, b.lat, b.lng) * 10) / 10
+          : null,
+      }));
+
+      // Within radius (if given) drops coordless businesses; otherwise they sort
+      // last so "near me" still shows everything when geocoding is incomplete.
+      const filtered = radius != null
+        ? withDistance.filter((b) => b.distanceMiles != null && b.distanceMiles <= radius)
+        : withDistance;
+      filtered.sort((a, b) => (a.distanceMiles ?? Infinity) - (b.distanceMiles ?? Infinity));
+
+      const pageItems = filtered.slice(skip, skip + take);
+      if (pageItems.length > 0) {
+        db.business.updateMany({
+          where: { id: { in: pageItems.map((b) => b.id) } },
+          data: { searchImpressions: { increment: 1 } },
+        }).catch(() => {});
+      }
+      return res.json({ businesses: pageItems, total: filtered.length, page: pageNum, limit: take });
+    }
+
     const [businesses, total] = await Promise.all([
       db.business.findMany({
         where,
         skip,
-        take: parseInt(limit),
+        take,
         // Admin-verified businesses surface first (our curated trust signal),
         // then by rating. (Paid promotion no longer affects ranking.)
         orderBy: [{ verified: 'desc' }, { averageRating: 'desc' }],
-        include: {
-          reviews: { take: 3, orderBy: { createdAt: 'desc' } },
-          // One hero project (featured first, approved only) so list cards can
-          // render real project imagery rather than a bare logo.
-          portfolio: {
-            where: { approvalStatus: 'APPROVED' },
-            take: 1,
-            orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }],
-          },
-        },
+        include,
       }),
       db.business.count({ where }),
     ]);
@@ -73,9 +129,9 @@ router.get('/', async (req, res, next) => {
       }).catch(() => {});
     }
 
-    res.json({ businesses, total, page: parseInt(page), limit: parseInt(limit) });
+    return res.json({ businesses, total, page: pageNum, limit: take });
   } catch (err) {
-    next(err);
+    return next(err);
   }
 });
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 /// Lets a contractor edit their existing business profile. Mirrors
 /// BusinessProfileSetupView but pre-fills from the current profile and PUTs the
@@ -129,6 +130,10 @@ struct EditBusinessProfileView: View {
         defer { isSaving = false }
         do {
             let trimmedWebsite = website.trimmed
+            // Geocode the address so the contractor shows up in "near me" search.
+            let coord = await Geocoder.coordinate(
+                address: address.trimmed.isEmpty ? nil : address.trimmed,
+                city: city.trimmed, state: state.trimmed, zip: zipCode.trimmed)
             _ = try await APIService.shared.updateBusiness(
                 id: business.id,
                 companyName: companyName.trimmed,
@@ -140,7 +145,9 @@ struct EditBusinessProfileView: View {
                 yearsInBusiness: Int(yearsInBusiness.trimmed),
                 licenseNumber: licenseNumber.trimmed.isEmpty ? nil : licenseNumber.trimmed,
                 website: trimmedWebsite.isEmpty ? nil : trimmedWebsite,
-                address: address.trimmed.isEmpty ? nil : address.trimmed
+                address: address.trimmed.isEmpty ? nil : address.trimmed,
+                lat: coord?.latitude,
+                lng: coord?.longitude
             )
             await auth.loadMe()
             dismiss()
