@@ -1,0 +1,67 @@
+name: Discord — build notification
+
+# Posts a message to the #builds Discord channel on every push.
+# Setup (one-time, done by a human — see the bottom of this file):
+#   1. In Discord: #builds → Edit Channel → Integrations → Webhooks → New
+#      Webhook → Copy Webhook URL.
+#   2. In GitHub: repo Settings → Secrets and variables → Actions → New
+#      repository secret named DISCORD_WEBHOOK_URL with that URL.
+# Until the secret exists, this workflow runs and safely no-ops.
+
+on:
+  push:
+    branches: ['**']
+
+jobs:
+  notify:
+    name: Notify Discord
+    runs-on: ubuntu-latest
+    steps:
+      - name: Post push to Discord
+        # Pass everything via env (never interpolate ${{ }} into the script) so a
+        # crafted commit message can't inject shell commands. jq --arg also
+        # JSON-escapes the values safely.
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REPO: ${{ github.repository }}
+          BRANCH: ${{ github.ref_name }}
+          PUSHER: ${{ github.actor }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          COMMIT_SHA: ${{ github.sha }}
+          COMPARE_URL: ${{ github.event.compare }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL not set — skipping Discord notification."
+            exit 0
+          fi
+
+          short_sha="${COMMIT_SHA:0:7}"
+          # First line of the commit message as the title; full message as body.
+          title_line="$(printf '%s' "$COMMIT_MSG" | head -n1)"
+
+          payload=$(jq -n \
+            --arg repo "$REPO" \
+            --arg branch "$BRANCH" \
+            --arg pusher "$PUSHER" \
+            --arg title "$title_line" \
+            --arg msg "$COMMIT_MSG" \
+            --arg url "${COMMIT_URL:-$COMPARE_URL}" \
+            --arg sha "$short_sha" \
+            '{
+              username: "RenovateConnect Builds",
+              embeds: [{
+                title: ("🚀 " + $title),
+                description: ("Pushed to **" + $repo + "** (`" + $branch + "`)"),
+                url: $url,
+                color: 5814783,
+                fields: [
+                  { name: "Author", value: $pusher, inline: true },
+                  { name: "Commit", value: $sha, inline: true }
+                ]
+              }]
+            }')
+
+          curl -sf -H "Content-Type: application/json" -X POST -d "$payload" "$DISCORD_WEBHOOK_URL" \
+            && echo "Posted to Discord." \
+            || { echo "Discord post failed."; exit 1; }
