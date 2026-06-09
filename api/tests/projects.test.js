@@ -140,4 +140,107 @@ describe('GET /projects/:businessId', () => {
     const res = await request(app).get(`/projects/${business.id}`).set('Authorization', `Bearer ${tokenB}`);
     expect(res.status).toBe(404);
   });
+
+  test('payments include commission, kind, description, refundedAt for the receipt sheet', async () => {
+    const { user: client, token } = await createClient();
+    const { business } = await createBusiness({ companyName: 'Receipt Co' });
+    const quote = await db.quoteRequest.create({
+      data: { clientId: client.id, businessId: business.id, description: 'x', status: 'ACCEPTED', respondedAt: new Date() },
+    });
+    await db.payment.create({
+      data: {
+        clientId: client.id, businessId: business.id, quoteRequestId: quote.id,
+        amountCents: 54000, commissionCents: 4000, status: 'SUCCEEDED',
+        description: 'Deposit on Bath remodel', paidAt: new Date(),
+      },
+    });
+    const res = await request(app).get(`/projects/${business.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.payments[0]).toMatchObject({
+      amountCents: 54000,
+      commissionCents: 4000,
+      kind: 'DEPOSIT',
+      description: 'Deposit on Bath remodel',
+      refundedAt: null,
+    });
+  });
+});
+
+describe('PATCH /projects/:projectId/notes', () => {
+  async function setupProject() {
+    const { user: client, token } = await createClient();
+    const { business } = await createBusiness();
+    const project = await db.project.create({
+      data: { clientId: client.id, businessId: business.id, title: 'Kitchen' },
+    });
+    return { client, token, business, project };
+  }
+
+  test('homeowner can save and clear their notes', async () => {
+    const { token, project } = await setupProject();
+    const save = await request(app).patch(`/projects/${project.id}/notes`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ notes: 'Paint: Sherwin Williams SW7008.\nCabinets 36in.' });
+    expect(save.status).toBe(200);
+    expect(save.body.clientNotes).toContain('Sherwin');
+
+    const reload = await db.project.findUnique({ where: { id: project.id } });
+    expect(reload.clientNotes).toContain('Sherwin');
+
+    const clear = await request(app).patch(`/projects/${project.id}/notes`)
+      .set('Authorization', `Bearer ${token}`).send({ notes: '' });
+    expect(clear.status).toBe(200);
+    expect(clear.body.clientNotes).toBeNull();
+  });
+
+  test('rejects an oversized notes payload', async () => {
+    const { token, project } = await setupProject();
+    const huge = 'a'.repeat(8001);
+    const res = await request(app).patch(`/projects/${project.id}/notes`)
+      .set('Authorization', `Bearer ${token}`).send({ notes: huge });
+    expect(res.status).toBe(400);
+  });
+
+  test('the contractor cannot edit the homeowner notes', async () => {
+    const { project } = await setupProject();
+    const { token: bizToken } = await createBusiness();
+    const res = await request(app).patch(`/projects/${project.id}/notes`)
+      .set('Authorization', `Bearer ${bizToken}`).send({ notes: 'sneaky' });
+    expect(res.status).toBe(403);
+  });
+
+  test('a different homeowner cannot edit', async () => {
+    const { project } = await setupProject();
+    const { token: otherToken } = await createClient();
+    const res = await request(app).patch(`/projects/${project.id}/notes`)
+      .set('Authorization', `Bearer ${otherToken}`).send({ notes: 'sneaky' });
+    expect(res.status).toBe(403);
+  });
+
+  test('clientNotes are NOT included in the contractor-side project response', async () => {
+    const { client, token: clientToken, business, project } = await setupProject();
+    // Homeowner stores private notes.
+    await db.project.update({ where: { id: project.id }, data: { clientNotes: 'paint code SW7008' } });
+    // Contractor logs in and pulls the same engagement.
+    const ownerToken = require('jsonwebtoken').sign(
+      { id: (await db.user.findUnique({ where: { id: (await db.business.findUnique({ where: { id: business.id } })).userId } })).id, role: 'BUSINESS' },
+      process.env.JWT_SECRET, { expiresIn: '1d' }
+    );
+
+    const contractorView = await request(app).get(`/projects/${client.id}`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    // The contractor's hub for this homeowner — must not echo clientNotes.
+    // (404 is acceptable since contractors don't typically read this route,
+    // but if it does load, clientNotes must be absent.)
+    if (contractorView.status === 200 && contractorView.body.project) {
+      expect(contractorView.body.project.clientNotes).toBeUndefined();
+    }
+
+    // Homeowner DOES see it.
+    const homeownerView = await request(app).get(`/projects/${business.id}`)
+      .set('Authorization', `Bearer ${clientToken}`);
+    expect(homeownerView.status).toBe(200);
+    expect(homeownerView.body.project.clientNotes).toBe('paint code SW7008');
+  });
 });

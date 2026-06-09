@@ -86,6 +86,9 @@ struct ProjectRecord: Codable {
     let title: String
     let status: String
     let quoteRequestId: String?
+    /// Homeowner-only scratchpad surfaced in the project hub. Server omits the
+    /// field for the contractor side.
+    var clientNotes: String?
     let createdAt: String
     let milestones: [Milestone]
 }
@@ -139,9 +142,28 @@ struct ProjectAppointment: Codable, Identifiable {
 struct ProjectPayment: Codable, Identifiable {
     let id: String
     let amountCents: Int
+    /// Platform fee charged on top of the contractor's portion. Surfaced on
+    /// the receipt sheet so the homeowner can see the line-item breakdown.
+    var commissionCents: Int?
+    /// "DEPOSIT" for a quote-acceptance payment, "MILESTONE" for an escrow
+    /// stage. Drives the receipt copy ("Deposit on…" vs "Milestone funded").
+    var kind: String?
+    var description: String?
     let status: PaymentStatus
     let paidAt: String?
+    var refundedAt: String?
     let createdAt: String
+
+    var totalText: String { "$\(Int(Double(amountCents) / 100).formatted())" }
+    var commissionText: String? {
+        guard let c = commissionCents else { return nil }
+        return "$\(Int(Double(c) / 100).formatted())"
+    }
+    var contractorPortionText: String? {
+        guard let c = commissionCents else { return nil }
+        let portion = amountCents - c
+        return "$\(Int(Double(portion) / 100).formatted())"
+    }
 }
 
 // MARK: - Unified timeline

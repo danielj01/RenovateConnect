@@ -286,7 +286,7 @@ router.get('/:businessId', authMiddleware, async (req, res, next) => {
       business,
       conversationId: convo?.id ?? null,
       unreadCount: unreadCount(convo, req.user.id, role),
-      project: persisted ? serializeProject(persisted) : null,
+      project: persisted ? serializeProject(persisted, { includeClientNotes: isClient }) : null,
       quotes: quotes.map((q) => ({
         id: q.id,
         category: q.category,
@@ -308,8 +308,14 @@ router.get('/:businessId', authMiddleware, async (req, res, next) => {
       payments: payments.map((p) => ({
         id: p.id,
         amountCents: p.amountCents,
+        commissionCents: p.commissionCents,
+        // Distinguishes a quote-deposit from a milestone-funded payment so the
+        // receipt sheet can label and link to the right artifact.
+        kind: p.milestoneId ? 'MILESTONE' : 'DEPOSIT',
+        description: p.description,
         status: p.status,
         paidAt: p.paidAt,
+        refundedAt: p.refundedAt,
         createdAt: p.createdAt,
       })),
     });
@@ -318,13 +324,15 @@ router.get('/:businessId', authMiddleware, async (req, res, next) => {
   }
 });
 
-// Shape a persisted Project + milestones for the API.
-function serializeProject(project) {
+// Shape a persisted Project + milestones for the API. `includeClientNotes`
+// gates the homeowner-only scratchpad — contractors never see it.
+function serializeProject(project, { includeClientNotes = false } = {}) {
   return {
     id: project.id,
     title: project.title,
     status: project.status,
     quoteRequestId: project.quoteRequestId,
+    ...(includeClientNotes ? { clientNotes: project.clientNotes ?? null } : {}),
     createdAt: project.createdAt,
     milestones: (project.milestones || []).map((m) => ({
       id: m.id,
@@ -339,6 +347,31 @@ function serializeProject(project) {
     })),
   };
 }
+
+// PATCH /projects/:projectId/notes — homeowner-only scratchpad. Free-form
+// text capped at 8000 chars (enough for a wall of contractor notes without
+// turning the column into an attack surface). Empty string clears.
+router.patch('/:projectId/notes', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
+  try {
+    const { notes } = z.object({
+      notes: z.string().max(8000),
+    }).strict().parse(req.body);
+
+    const project = await db.project.findUnique({ where: { id: req.params.projectId } });
+    if (!project) return res.status(404).json({ error: 'Not found' });
+    if (project.clientId !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const updated = await db.project.update({
+      where: { id: project.id },
+      data: { clientNotes: notes.length ? notes : null },
+    });
+    res.json({ clientNotes: updated.clientNotes });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // How long after a contractor submits work before funds auto-release if the
 // homeowner doesn't respond. Protects contractors from being ghosted.
@@ -371,7 +404,7 @@ router.post('/', authMiddleware, async (req, res, next) => {
       where: { clientId_businessId: { clientId: quote.clientId, businessId: quote.business.id } },
       include: { milestones: { orderBy: { createdAt: 'asc' } } },
     });
-    if (existing) return res.status(200).json(serializeProject(existing));
+    if (existing) return res.status(200).json(serializeProject(existing, { includeClientNotes: isClient }));
 
     const project = await db.project.create({
       data: {
@@ -382,7 +415,7 @@ router.post('/', authMiddleware, async (req, res, next) => {
       },
       include: { milestones: true },
     });
-    res.status(201).json(serializeProject(project));
+    res.status(201).json(serializeProject(project, { includeClientNotes: isClient }));
   } catch (err) {
     next(err);
   }

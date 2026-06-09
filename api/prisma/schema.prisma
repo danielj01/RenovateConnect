@@ -622,6 +622,10 @@ model Project {
   quoteRequestId String?       @unique
   title          String
   status         ProjectStatus @default(ACTIVE)
+  // Homeowner-only scratchpad — measurements, paint colors, contractor notes,
+  // anything they want to remember between sessions. Not visible to the
+  // contractor. Kept inline on the project so the hub view is a single fetch.
+  clientNotes    String?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

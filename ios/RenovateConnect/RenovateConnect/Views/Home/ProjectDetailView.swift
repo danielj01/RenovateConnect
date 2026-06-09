@@ -22,6 +22,8 @@ struct ProjectDetailView: View {
     @State private var showAddMilestone = false
     @State private var submitTarget: Milestone?
     @State private var disputeTarget: MilestoneRef?
+    @State private var notesTarget: NotesEditorTarget?
+    @State private var receiptTarget: ProjectPayment?
 
     private var isContractor: Bool { auth.isBusiness }
 
@@ -45,6 +47,10 @@ struct ProjectDetailView: View {
             showAddMilestone: $showAddMilestone,
             submitTarget: $submitTarget,
             disputeTarget: $disputeTarget,
+            notesTarget: $notesTarget,
+            receiptTarget: $receiptTarget,
+            initialNotes: detail?.project?.clientNotes ?? "",
+            businessName: companyName,
             projectId: detail?.project?.id,
             reload: { Task { await load() } }
         ))
@@ -54,13 +60,53 @@ struct ProjectDetailView: View {
     private func content(_ detail: ProjectDetail) -> some View {
         VStack(spacing: 16) {
             header(detail)
+            ProjectProgressBar(detail: detail)
+                .padding(.horizontal, 16)
             if let err = actionError {
                 Text(err).font(.caption).foregroundStyle(.red).padding(.horizontal, 16)
+            }
+            if !isContractor, let project = detail.project {
+                notesCard(project)
             }
             milestonesSection(detail)
             timeline(detail)
         }
         .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private func notesCard(_ project: ProjectRecord) -> some View {
+        let notes = (project.clientNotes ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        Button {
+            notesTarget = NotesEditorTarget(projectId: project.id)
+        } label: {
+            RCCard {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "note.text")
+                            .foregroundStyle(Theme.primary)
+                        Text("My notes").font(.subheadline.weight(.semibold))
+                        Spacer()
+                        Image(systemName: notes.isEmpty ? "plus" : "pencil")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    if notes.isEmpty {
+                        Text("Jot down measurements, paint colors, or contractor notes. Only you can see this.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Text(notes)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                            .lineLimit(6)
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 16)
     }
 
     // MARK: - Header
@@ -201,9 +247,23 @@ struct ProjectDetailView: View {
                     .font(.headline)
                     .padding(.horizontal, 16).padding(.bottom, 8).padding(.top, 8)
                 ForEach(Array(events.enumerated()), id: \.element.id) { idx, event in
-                    TimelineRow(event: event, isLast: idx == events.count - 1)
+                    timelineEvent(event, isLast: idx == events.count - 1)
                 }
             }
+        }
+    }
+
+    /// Wraps a timeline event in a Button when it's a payment (so the homeowner
+    /// can tap to open the receipt). All other event kinds render as plain rows.
+    @ViewBuilder
+    private func timelineEvent(_ event: ProjectTimelineEvent, isLast: Bool) -> some View {
+        if case let .payment(p) = event.kind, !isContractor {
+            Button { receiptTarget = p } label: {
+                TimelineRow(event: event, isLast: isLast)
+            }
+            .buttonStyle(.plain)
+        } else {
+            TimelineRow(event: event, isLast: isLast)
         }
     }
 
@@ -287,6 +347,12 @@ struct MilestoneRef: Identifiable {
     var id: String { milestone.id }
 }
 
+/// Identifiable wrapper so the notes editor can be opened via `.sheet(item:)`.
+struct NotesEditorTarget: Identifiable {
+    let projectId: String
+    var id: String { projectId }
+}
+
 /// Bundles the four milestone-related sheets (fund Stripe Checkout,
 /// add-milestone, submit-work, dispute) in one ViewModifier so the project
 /// detail body stays under the SwiftUI type-checker's complexity budget.
@@ -295,6 +361,10 @@ private struct MilestoneSheetsModifier: ViewModifier {
     @Binding var showAddMilestone: Bool
     @Binding var submitTarget: Milestone?
     @Binding var disputeTarget: MilestoneRef?
+    @Binding var notesTarget: NotesEditorTarget?
+    @Binding var receiptTarget: ProjectPayment?
+    let initialNotes: String
+    let businessName: String
     let projectId: String?
     let reload: () -> Void
 
@@ -315,6 +385,14 @@ private struct MilestoneSheetsModifier: ViewModifier {
             }
             .sheet(item: $disputeTarget) { ref in
                 DisputeSheet(projectId: ref.projectId, milestone: ref.milestone) { reload() }
+            }
+            .sheet(item: $notesTarget) { target in
+                ProjectNotesEditor(projectId: target.projectId, initialText: initialNotes) { _ in
+                    reload()
+                }
+            }
+            .sheet(item: $receiptTarget) { payment in
+                PaymentReceiptSheet(payment: payment, businessName: businessName)
             }
     }
 }

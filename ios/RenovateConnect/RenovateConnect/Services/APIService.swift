@@ -701,6 +701,17 @@ final class APIService {
         try await request("projects/\(businessId)")
     }
 
+    /// Save the homeowner's project notes (free-form scratchpad). Pass an
+    /// empty string to clear. Returns the persisted value.
+    func updateProjectNotes(projectId: String, notes: String) async throws -> String? {
+        struct Body: Encodable { let notes: String }
+        struct Resp: Decodable { let clientNotes: String? }
+        let resp: Resp = try await request("projects/\(projectId)/notes",
+                                           method: "PATCH",
+                                           body: Body(notes: notes))
+        return resp.clientNotes
+    }
+
     // MARK: - Milestone escrow
 
     /// Create (or fetch) the persistent Project for an accepted quote, so staged
