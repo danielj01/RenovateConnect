@@ -4,6 +4,7 @@ const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const { sendPush } = require('../services/push');
 const { recordActivity } = require('../services/activity');
+const { areBlocked, blockedUserIds } = require('../services/moderation');
 const upload = require('../middleware/upload');
 const { uploadImage } = require('../services/storage');
 
@@ -39,13 +40,20 @@ router.get('/', authMiddleware, async (req, res, next) => {
     const conversations = await db.conversation.findMany({
       where,
       include: {
-        business: { select: { id: true, companyName: true, logoUrl: true, city: true } },
+        business: { select: { id: true, companyName: true, logoUrl: true, city: true, userId: true } },
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
       orderBy: { updatedAt: 'desc' },
     });
 
-    const withUnread = await Promise.all(conversations.map(async (conv) => {
+    // Hide threads to/from anyone we've blocked or who has blocked us.
+    const blocked = await blockedUserIds(req.user.id);
+    const visible = conversations.filter((c) => {
+      const otherSide = req.user.role === 'CLIENT' ? c.business?.userId : c.clientId;
+      return otherSide && !blocked.has(otherSide);
+    });
+
+    const withUnread = await Promise.all(visible.map(async (conv) => {
       const lastRead = lastReadFor(conv, req.user);
       const unreadCount = await db.message.count({
         where: {
@@ -133,6 +141,15 @@ router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) =
       businessId: z.string().min(1).max(64),
       message: z.string().min(1).max(5000),
     }).strict().parse(req.body);
+
+    // Refuse contact when the contractor's owner has blocked this client (or
+    // vice versa). 403 deliberately doesn't disclose which side did the block.
+    const businessOwner = await db.business.findUnique({
+      where: { id: businessId }, select: { userId: true },
+    });
+    if (businessOwner?.userId && await areBlocked(req.user.id, businessOwner.userId)) {
+      return res.status(403).json({ error: 'Cannot message this user' });
+    }
 
     const isFirstContact = !(await db.conversation.findUnique({
       where: { clientId_businessId: { clientId: req.user.id, businessId } },
@@ -242,6 +259,11 @@ router.post('/:id/messages', authMiddleware, upload.array('images', 5), async (r
     const business = await db.business.findUnique({ where: { id: conv.businessId } });
     if (!isMember(conv, business?.userId, req.user)) {
       return res.status(403).json({ error: 'Forbidden' });
+    }
+    // Either side can have blocked the other since this thread was created.
+    const otherSide = req.user.id === conv.clientId ? business?.userId : conv.clientId;
+    if (otherSide && await areBlocked(req.user.id, otherSide)) {
+      return res.status(403).json({ error: 'Cannot message this user' });
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;

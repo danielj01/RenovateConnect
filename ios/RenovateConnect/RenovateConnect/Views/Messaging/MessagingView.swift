@@ -11,9 +11,20 @@ struct MessagingView: View {
     @State private var pickerItems: [PhotosPickerItem] = []
     @State private var attachments: [Data] = []
     @State private var zoomed: ZoomedImage?
+    @State private var reportTarget: ReportTargetSpec?
+    @State private var showBlockConfirm = false
+    @State private var blockError: String?
+    @State private var didBlock = false
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var inbox: InboxStore
     @EnvironmentObject private var notifications: NotificationManager
+
+    /// The user id on the other side of this thread. CLIENT viewers see the
+    /// business owner's userId; BUSINESS viewers see the homeowner's clientId.
+    private var otherUserId: String? {
+        guard let me = auth.currentUser else { return nil }
+        return me.role == .business ? conversation.clientId : conversation.business?.userId
+    }
 
     /// The last message the current user sent (receipts only apply to your own).
     private var myLastMessage: ChatMessage? {
@@ -81,6 +92,53 @@ struct MessagingView: View {
         }
         .navigationTitle(conversation.business?.companyName ?? "Conversation")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if otherUserId != nil {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button(role: .destructive) {
+                            if let uid = otherUserId {
+                                reportTarget = ReportTargetSpec(type: .user, targetId: uid)
+                            }
+                        } label: {
+                            Label("Report this user", systemImage: "flag")
+                        }
+                        Button(role: .destructive) {
+                            showBlockConfirm = true
+                        } label: {
+                            Label("Block this user", systemImage: "hand.raised")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .foregroundStyle(Color(.label))
+                    }
+                    .accessibilityLabel("More options")
+                }
+            }
+        }
+        .sheet(item: $reportTarget) { spec in
+            ReportSheet(targetType: spec.type, targetId: spec.targetId)
+        }
+        .confirmationDialog("Block this user?",
+                            isPresented: $showBlockConfirm,
+                            titleVisibility: .visible) {
+            Button("Block", role: .destructive) {
+                Task { await performBlock() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("They won't be able to message you, and this conversation will disappear from both sides.")
+        }
+        .alert("Couldn't block", isPresented: Binding(
+            get: { blockError != nil },
+            set: { if !$0 { blockError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(blockError ?? "") }
+        .alert("User blocked", isPresented: $didBlock) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("You can unblock them later from Profile → Blocked Users.")
+        }
         .fullScreenCover(item: $zoomed) { z in
             ImageZoomView(url: z.url) { zoomed = nil }
         }
@@ -245,6 +303,24 @@ struct MessagingView: View {
             await refreshReceipt()
         }
     }
+
+    private func performBlock() async {
+        guard let uid = otherUserId else { return }
+        do {
+            try await APIService.shared.block(userId: uid)
+            await inbox.refresh()
+            didBlock = true
+        } catch {
+            blockError = error.localizedDescription
+        }
+    }
+}
+
+/// Identifies what's being reported, for `.sheet(item:)` presentation.
+struct ReportTargetSpec: Identifiable {
+    let type: ReportSheet.TargetType
+    let targetId: String
+    var id: String { "\(type.rawValue)-\(targetId)" }
 }
 
 /// Wrapper so an image URL can drive `.fullScreenCover(item:)`.

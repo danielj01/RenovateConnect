@@ -125,6 +125,83 @@ model User {
   quoteRequests    QuoteRequest[] @relation("ClientQuoteRequests")
   payments         Payment[]      @relation("ClientPayments")
   projects         Project[]      @relation("ClientProjects")
+  reportsFiled     Report[]       @relation("ReportsFiled")
+  reportsResolved  Report[]       @relation("ReportsResolved")
+  blocking         Block[]        @relation("Blocker")
+  blockedBy        Block[]        @relation("Blocked")
+}
+
+// User-generated-content moderation — App Store guideline 1.2 requires a way
+// for users to report objectionable content and other users. We keep the
+// target polymorphic (a userId, messageId, reviewId, etc.) and let admins
+// review the queue. RESOLVED = action taken (warn/hide/ban); DISMISSED = no
+// action. The reporter is kept set-null on user delete so the audit trail
+// survives an account deletion.
+enum ReportTargetType {
+  USER
+  MESSAGE
+  REVIEW
+  PORTFOLIO
+  FEED
+  BUSINESS
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  HATE
+  SEXUAL
+  VIOLENCE
+  SCAM
+  IMPERSONATION
+  OFF_PLATFORM
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
+
+model Report {
+  id           String           @id @default(cuid())
+  reporterId   String?
+  targetType   ReportTargetType
+  targetId     String
+  reason       ReportReason
+  details      String?
+  status       ReportStatus     @default(PENDING)
+  resolvedById String?
+  resolvedAt   DateTime?
+  resolution   String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  reporter   User? @relation("ReportsFiled",    fields: [reporterId],   references: [id], onDelete: SetNull)
+  resolvedBy User? @relation("ReportsResolved", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@index([reporterId])
+}
+
+// One-way "I don't want to see this person again". Symmetric enforcement —
+// when A blocks B, neither side can open a new conversation or send messages
+// to the other, and B's reviews/portfolio/feed entries are hidden from A.
+// Unique on (blockerId, blockedId); deleting either user removes the row.
+model Block {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+
+  blocker User @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked User @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
 }
 
 model DeviceToken {

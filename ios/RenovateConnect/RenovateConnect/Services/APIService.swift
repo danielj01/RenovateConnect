@@ -906,5 +906,36 @@ final class APIService {
         let resp: Resp = try await request("chat", method: "POST", body: Body(message: message, history: history))
         return (resp.reply, resp.mentioned ?? [])
     }
+
+    // MARK: - Reports & Blocks (App Store guideline 1.2 — UGC moderation)
+
+    /// File a report on a user, message, review, portfolio item, feed photo,
+    /// or business. Server-side queue is reviewed by admins.
+    func report(targetType: String, targetId: String, reason: String, details: String?) async throws -> ReportRecord {
+        struct Body: Encodable {
+            let targetType: String
+            let targetId: String
+            let reason: String
+            let details: String?
+        }
+        return try await request("reports", method: "POST",
+                                 body: Body(targetType: targetType, targetId: targetId,
+                                            reason: reason, details: details))
+    }
+
+    /// Block another user. Symmetric in effect — once blocked, neither side can
+    /// message the other and shared threads disappear from both inboxes.
+    func block(userId: String) async throws {
+        struct Body: Encodable { let userId: String }
+        _ = try await request("blocks", method: "POST", body: Body(userId: userId)) as BlockedUser
+    }
+
+    func unblock(userId: String) async throws {
+        try await requestNoContent("blocks/\(userId)", method: "DELETE")
+    }
+
+    func blockedUsers() async throws -> [BlockedUser] {
+        try await request("blocks")
+    }
 }
 

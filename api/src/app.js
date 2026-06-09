@@ -28,6 +28,8 @@ const projectRoutes = require('./routes/projects');
 const adminRoutes = require('./routes/admin');
 const internalRoutes = require('./routes/internal');
 const feedRoutes = require('./routes/feed');
+const reportRoutes = require('./routes/reports');
+const blockRoutes = require('./routes/blocks');
 
 const { assertStorageConfigured } = require('./services/storage');
 
@@ -87,6 +89,8 @@ app.use('/projects', projectRoutes);
 app.use('/admin', adminRoutes);
 app.use('/internal', internalRoutes);
 app.use('/feed', feedRoutes);
+app.use('/reports', reportRoutes);
+app.use('/blocks', blockRoutes);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 

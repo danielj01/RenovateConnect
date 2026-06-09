@@ -304,6 +304,27 @@ struct ProfileView: View {
                                     .padding(16)
                                 }
                                 .buttonStyle(.plain)
+
+                                Divider().padding(.horizontal, 16)
+
+                                NavigationLink {
+                                    BlockedUsersView()
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "hand.raised.fill")
+                                            .foregroundStyle(Theme.primary).frame(width: 28)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Blocked Users").font(.subheadline)
+                                            Text("Manage who can't contact you")
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption2).foregroundStyle(.secondary)
+                                    }
+                                    .padding(16)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 16)

@@ -171,6 +171,7 @@ struct Review: Codable, Identifiable {
 struct Conversation: Codable, Identifiable, Hashable {
     let id: String
     let businessId: String
+    var clientId: String?
     let business: BusinessSummary?
     let updatedAt: String
     let messages: [ChatMessage]?
@@ -197,6 +198,34 @@ struct BusinessSummary: Codable {
     // Present on quote payloads: whether the contractor can accept in-app
     // deposits. Optional because other endpoints don't select it.
     let payoutsEnabled: Bool?
+    // Owner user id — present on conversation payloads so the homeowner can
+    // block the contractor's owner from the thread view. Optional elsewhere.
+    var userId: String?
+}
+
+/// One entry from GET /blocks — a user the current user has blocked.
+struct BlockedUser: Codable, Identifiable {
+    let id: String
+    let blockerId: String
+    let blockedId: String
+    let createdAt: String
+    let blocked: BlockedUserSummary
+}
+
+struct BlockedUserSummary: Codable {
+    let id: String
+    let name: String
+    let avatarUrl: String?
+}
+
+/// A submitted report (server returns the row on POST /reports).
+struct ReportRecord: Codable, Identifiable {
+    let id: String
+    let targetType: String
+    let targetId: String
+    let reason: String
+    let status: String
+    let createdAt: String
 }
 
 // MARK: - Inspiration feed

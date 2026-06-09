@@ -15,6 +15,7 @@ struct BusinessDetailView: View {
     @State private var showHoursEditor = false
     @State private var respondingTo: Review?
     @State private var verifying = false
+    @State private var showReportSheet = false
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var favorites: FavoritesStore
 
@@ -96,6 +97,26 @@ struct BusinessDetailView: View {
                     }
                     .accessibilityLabel(favorites.isSaved(biz.id) ? "Remove from saved" : "Save contractor")
                 }
+            }
+            if business != nil, auth.isLoggedIn {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button(role: .destructive) {
+                            showReportSheet = true
+                        } label: {
+                            Label("Report this business", systemImage: "flag")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .foregroundStyle(Color(.label))
+                    }
+                    .accessibilityLabel("More options")
+                }
+            }
+        }
+        .sheet(isPresented: $showReportSheet) {
+            if let biz = business {
+                ReportSheet(targetType: .business, targetId: biz.id)
             }
         }
         .task { await load() }
