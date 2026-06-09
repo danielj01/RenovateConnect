@@ -16,21 +16,21 @@ function shareUrlFor(id) {
 }
 
 const profileSchema = z.object({
-  companyName: z.string().min(1),
-  description: z.string().min(1),
-  city: z.string(),
+  companyName: z.string().min(1).max(120),
+  description: z.string().min(1).max(5000),
+  city: z.string().min(1).max(100),
   state: z.string().length(2),
-  zipCode: z.string(),
-  specialties: z.array(z.string()).min(1),
-  yearsInBusiness: z.number().int().min(0).optional(),
-  licenseNumber: z.string().optional(),
-  website: z.string().url().optional(),
-  address: z.string().optional(),
+  zipCode: z.string().min(3).max(12),
+  specialties: z.array(z.string().min(1).max(40)).min(1).max(20),
+  yearsInBusiness: z.number().int().min(0).max(200).optional(),
+  licenseNumber: z.string().max(60).optional(),
+  website: z.string().url().max(2000).optional(),
+  address: z.string().max(200).optional(),
   // Geocoded on the client (contractor's device) from their address so the API
   // stays free of a geocoding dependency. Powers "near me" distance search.
   lat: z.number().min(-90).max(90).optional(),
   lng: z.number().min(-180).max(180).optional(),
-});
+}).strict();
 
 // Great-circle distance in miles between two lat/lng points (Haversine).
 function milesBetween(lat1, lng1, lat2, lng2) {
@@ -284,7 +284,7 @@ router.put('/:id', authMiddleware, requireRole('BUSINESS'), async (req, res, nex
 // client can render a dynamic "Verified · checked {date}" badge.
 router.patch('/:id/verify', authMiddleware, requireRole('ADMIN'), async (req, res, next) => {
   try {
-    const { verified } = z.object({ verified: z.boolean() }).parse(req.body);
+    const { verified } = z.object({ verified: z.boolean() }).strict().parse(req.body);
     const existing = await db.business.findUnique({ where: { id: req.params.id } });
     if (!existing) return res.status(404).json({ error: 'Not found' });
 
@@ -307,13 +307,13 @@ const hoursDaySchema = z.object({
   openMinute: z.number().int().min(0).max(1439),
   closeMinute: z.number().int().min(1).max(1440),
   closed: z.boolean().optional(),
-}).refine((d) => d.closed === true || d.closeMinute > d.openMinute, {
+}).strict().refine((d) => d.closed === true || d.closeMinute > d.openMinute, {
   message: 'closeMinute must be after openMinute',
 });
 
 const hoursSchema = z.object({
   hours: z.array(hoursDaySchema).max(7),
-});
+}).strict();
 
 // Public: a business's weekly hours, ordered Sunday→Saturday.
 router.get('/:id/hours', async (req, res, next) => {
@@ -375,15 +375,15 @@ router.put('/:id/hours', authMiddleware, requireRole('BUSINESS', 'ADMIN'), async
 // ---------------------------------------------------------------------------
 
 const portfolioSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
-  category: z.string().optional(),
-  costMin: z.number().int().min(0).optional(),
-  costMax: z.number().int().min(0).optional(),
-  durationWeeks: z.number().int().min(0).optional(),
-  imageUrls: z.array(z.string()).optional(),
+  title: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  category: z.string().max(60).optional(),
+  costMin: z.number().int().min(0).max(100000000).optional(),
+  costMax: z.number().int().min(0).max(100000000).optional(),
+  durationWeeks: z.number().int().min(0).max(520).optional(),
+  imageUrls: z.array(z.string().url().max(2000)).max(30).optional(),
   featured: z.boolean().optional(),
-});
+}).strict();
 
 // Ensure the signed-in user owns the business in the route param.
 async function requireBusinessOwner(req, res) {
@@ -519,7 +519,7 @@ router.delete(
     try {
       const business = await requireBusinessOwner(req, res);
       if (!business) return;
-      const { url } = z.object({ url: z.string().min(1) }).parse(req.body);
+      const { url } = z.object({ url: z.string().min(1).max(2000) }).strict().parse(req.body);
       const existing = await db.portfolioProject.findUnique({ where: { id: req.params.projectId } });
       if (!existing || existing.businessId !== business.id) {
         return res.status(404).json({ error: 'Not found' });

@@ -37,10 +37,10 @@ router.get('/mine', authMiddleware, async (req, res, next) => {
 router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
   try {
     const { businessId, rating, body } = z.object({
-      businessId: z.string(),
+      businessId: z.string().min(1).max(64),
       rating: z.number().int().min(1).max(5),
       body: z.string().max(2000).optional(),
-    }).parse(req.body);
+    }).strict().parse(req.body);
 
     const business = await db.business.findUnique({ where: { id: businessId } });
     if (!business) return res.status(404).json({ error: 'Business not found' });
@@ -90,7 +90,7 @@ router.patch('/:id', authMiddleware, async (req, res, next) => {
     const { rating, body } = z.object({
       rating: z.number().int().min(1).max(5).optional(),
       body: z.string().max(2000).optional(),
-    }).parse(req.body);
+    }).strict().parse(req.body);
 
     const review = await db.review.findUnique({ where: { id: req.params.id } });
     if (!review) return res.status(404).json({ error: 'Review not found' });
@@ -116,7 +116,7 @@ router.put('/:id/response', authMiddleware, requireRole('BUSINESS', 'ADMIN'), as
   try {
     const { response } = z.object({
       response: z.string().min(1).max(2000),
-    }).parse(req.body);
+    }).strict().parse(req.body);
 
     const review = await db.review.findUnique({ where: { id: req.params.id } });
     if (!review) return res.status(404).json({ error: 'Review not found' });

@@ -43,12 +43,9 @@ router.post('/guest', guestEstimateLimiter, upload.array('images', 5), async (re
       return res.status(400).json({ error: 'At least one image is required' });
     }
 
+    const { roomType, description } = estimateInputSchema.parse(req.body);
     const imageBase64Array = req.files.map((f) => f.buffer.toString('base64'));
-    const result = await estimateRenovationCost({
-      imageBase64Array,
-      roomType: req.body.roomType,
-      description: req.body.description,
-    });
+    const result = await estimateRenovationCost({ imageBase64Array, roomType, description });
 
     res.status(200).json({ result });
   } catch (err) {
@@ -65,6 +62,13 @@ const shareLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: () => process.env.NODE_ENV === 'test',
+});
+
+// Bound the free-text that gets sent into the AI model (cost + abuse control).
+// Multipart may carry only these text fields; images are handled via req.files.
+const estimateInputSchema = z.object({
+  roomType: z.string().max(60).optional(),
+  description: z.string().max(2000).optional(),
 });
 
 const shareSchema = z.object({
@@ -122,21 +126,12 @@ router.post('/', authMiddleware, upload.array('images', 5), async (req, res, nex
       req.files.map((f) => uploadImage(f.buffer, f.mimetype))
     );
 
+    const { roomType, description } = estimateInputSchema.parse(req.body);
     const imageBase64Array = req.files.map((f) => f.buffer.toString('base64'));
-    const result = await estimateRenovationCost({
-      imageBase64Array,
-      roomType: req.body.roomType,
-      description: req.body.description,
-    });
+    const result = await estimateRenovationCost({ imageBase64Array, roomType, description });
 
     const estimation = await db.estimation.create({
-      data: {
-        userId: req.user.id,
-        imageUrls,
-        roomType: req.body.roomType,
-        description: req.body.description,
-        result,
-      },
+      data: { userId: req.user.id, imageUrls, roomType, description, result },
     });
 
     res.status(201).json(estimation);

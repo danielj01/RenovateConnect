@@ -4,9 +4,9 @@ const db = require('../services/db');
 const { authMiddleware } = require('../middleware/auth');
 
 const registerSchema = z.object({
-  token: z.string().min(1),
-  platform: z.string().optional(),
-});
+  token: z.string().min(1).max(500),
+  platform: z.string().max(20).optional(),
+}).strict();
 
 // POST /devices — register (or re-claim) an APNs device token for the user.
 // Idempotent: the same token re-registering just moves it to the current user

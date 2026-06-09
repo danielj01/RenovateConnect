@@ -9,11 +9,12 @@ router.use(authMiddleware, requireRole('CLIENT'));
 const createSchema = z
   .object({
     name: z.string().min(1).max(80).optional(),
-    specialty: z.string().min(1).optional(),
-    city: z.string().min(1).optional(),
+    specialty: z.string().min(1).max(60).optional(),
+    city: z.string().min(1).max(100).optional(),
     state: z.string().length(2).optional(),
-    q: z.string().min(1).optional(),
+    q: z.string().min(1).max(120).optional(),
   })
+  .strict()
   // An all-empty search would match every business — require a real filter.
   .refine((d) => d.specialty || d.city || d.state || d.q, {
     message: 'Provide at least one search criterion',

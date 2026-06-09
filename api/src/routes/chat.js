@@ -5,10 +5,17 @@ const { chatWithAssistant } = require('../services/ai');
 const { extractMentions } = require('../utils/mentions');
 const db = require('../services/db');
 
+// Cap message + history (length and turn count) — this is free text fed into
+// the AI model, so bound cost/abuse.
 const chatSchema = z.object({
   message: z.string().min(1).max(1000),
-  history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })).optional(),
-});
+  history: z.array(
+    z.object({
+      role: z.enum(['user', 'assistant']),
+      content: z.string().max(4000),
+    }).strict(),
+  ).max(50).optional(),
+}).strict();
 
 router.post('/', authMiddleware, async (req, res, next) => {
   try {

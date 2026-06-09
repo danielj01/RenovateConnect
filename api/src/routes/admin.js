@@ -43,7 +43,7 @@ router.get('/pending', async (_req, res, next) => {
 
 const decisionSchema = z.object({
   reason: z.string().max(500).optional(),
-});
+}).strict();
 
 function decide(target) {
   // target is the model accessor, e.g. db.business or db.portfolioProject.

@@ -16,11 +16,11 @@ const appointmentInclude = {
 router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
   try {
     const { businessId, scheduledAt, durationMin, note } = z.object({
-      businessId: z.string(),
+      businessId: z.string().min(1).max(64),
       scheduledAt: z.coerce.date(),
       durationMin: z.number().int().positive().max(24 * 60).optional(),
       note: z.string().max(1000).optional(),
-    }).parse(req.body);
+    }).strict().parse(req.body);
 
     const business = await db.business.findUnique({ where: { id: businessId } });
     if (!business) return res.status(404).json({ error: 'Not found' });
@@ -91,7 +91,7 @@ router.patch('/:id', authMiddleware, async (req, res, next) => {
   try {
     const { status } = z.object({
       status: z.enum(['CONFIRMED', 'DECLINED', 'CANCELLED']),
-    }).parse(req.body);
+    }).strict().parse(req.body);
 
     const appointment = await db.appointment.findUnique({
       where: { id: req.params.id },

@@ -27,18 +27,28 @@ function base64urlDecode(str) {
   return Buffer.from(b64.padEnd(b64.length + (4 - (b64.length % 4)) % 4, '='), 'base64').toString();
 }
 
+// .strict() rejects unexpected fields (defense against mass-assignment + junk
+// input). Lengths are capped to bound storage + cost (e.g. bcrypt input).
 const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  name: z.string().min(1),
+  email: z.string().email().max(254),
+  password: z.string().min(8).max(128),
+  name: z.string().min(1).max(100),
   role: z.enum(['CLIENT', 'BUSINESS']),
-  phone: z.string().optional(),
-});
+  phone: z.string().max(30).optional(),
+}).strict();
 
 const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
-});
+  email: z.string().email().max(254),
+  password: z.string().min(1).max(128),
+}).strict();
+
+// Apple sign-in payload (was previously read off req.body unvalidated).
+const appleSchema = z.object({
+  identityToken: z.string().min(1).max(8000),
+  givenName: z.string().max(100).nullish(),
+  familyName: z.string().max(100).nullish(),
+  email: z.string().email().max(254).nullish(),
+}).strict();
 
 function signToken(user) {
   return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -74,8 +84,7 @@ router.post('/login', authLimiter, async (req, res, next) => {
 // Sign in with Apple
 router.post('/apple', authLimiter, async (req, res, next) => {
   try {
-    const { identityToken, givenName, familyName, email } = req.body;
-    if (!identityToken) return res.status(400).json({ error: 'identityToken required' });
+    const { identityToken, givenName, familyName, email } = appleSchema.parse(req.body);
 
     // Decode JWT header to find the key id (kid)
     const [headerB64] = identityToken.split('.');
@@ -133,15 +142,15 @@ router.get('/me', authMiddleware, async (req, res, next) => {
 });
 
 const updateMeSchema = z.object({
-  name: z.string().min(1).optional(),
-  phone: z.string().nullable().optional(),
-  avatarUrl: z.string().url().nullable().optional(),
+  name: z.string().min(1).max(100).optional(),
+  phone: z.string().max(30).nullable().optional(),
+  avatarUrl: z.string().url().max(2000).nullable().optional(),
   pushEnabled: z.boolean().optional(),
   notifyLeads: z.boolean().optional(),
   notifyMessages: z.boolean().optional(),
   notifyAppointments: z.boolean().optional(),
   notifyReviews: z.boolean().optional(),
-});
+}).strict();
 
 // PATCH /me — update the current user's editable profile fields / preferences.
 router.patch('/me', authMiddleware, async (req, res, next) => {

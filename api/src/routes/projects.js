@@ -349,7 +349,7 @@ const AUTO_RELEASE_DAYS = () => parseInt(process.env.MILESTONE_AUTO_RELEASE_DAYS
 // business) pair so a second call returns the existing project.
 router.post('/', authMiddleware, async (req, res, next) => {
   try {
-    const { quoteRequestId } = z.object({ quoteRequestId: z.string() }).parse(req.body);
+    const { quoteRequestId } = z.object({ quoteRequestId: z.string().min(1).max(64) }).strict().parse(req.body);
 
     const quote = await db.quoteRequest.findUnique({
       where: { id: quoteRequestId },
@@ -412,8 +412,8 @@ router.post('/:projectId/milestones', authMiddleware, requireRole('BUSINESS', 'A
   try {
     const data = z.object({
       title: z.string().min(1).max(200),
-      amountCents: z.number().int().min(100), // at least $1
-    }).parse(req.body);
+      amountCents: z.number().int().min(100).max(100000000), // $1 … $1M
+    }).strict().parse(req.body);
 
     const loaded = await loadProjectParticipant(req, res);
     if (!loaded) return;

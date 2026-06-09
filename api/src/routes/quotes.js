@@ -36,14 +36,14 @@ function notify(recipientId, { title, body, quoteId }) {
 router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
   try {
     const data = z.object({
-      businessId: z.string(),
+      businessId: z.string().min(1).max(64),
       description: z.string().min(1).max(4000),
       category: z.string().max(120).optional(),
-      budgetMin: z.number().int().min(0).optional(),
-      budgetMax: z.number().int().min(0).optional(),
+      budgetMin: z.number().int().min(0).max(100000000).optional(),
+      budgetMax: z.number().int().min(0).max(100000000).optional(),
       timeline: z.string().max(120).optional(),
-      imageUrls: z.array(z.string()).max(12).optional(),
-    }).parse(req.body);
+      imageUrls: z.array(z.string().url().max(2000)).max(12).optional(),
+    }).strict().parse(req.body);
 
     const business = await db.business.findUnique({ where: { id: data.businessId } });
     if (!business) return res.status(404).json({ error: 'Not found' });
@@ -130,10 +130,10 @@ router.patch('/:id', authMiddleware, async (req, res, next) => {
   try {
     const body = z.object({
       status: z.enum(['QUOTED', 'DECLINED', 'ACCEPTED', 'WITHDRAWN']),
-      quoteLow: z.number().int().min(0).optional(),
-      quoteHigh: z.number().int().min(0).optional(),
+      quoteLow: z.number().int().min(0).max(100000000).optional(),
+      quoteHigh: z.number().int().min(0).max(100000000).optional(),
       responseNote: z.string().max(2000).optional(),
-    }).parse(req.body);
+    }).strict().parse(req.body);
 
     const loaded = await loadOwnedQuote(req, res);
     if (!loaded) return;

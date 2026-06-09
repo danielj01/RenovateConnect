@@ -5,9 +5,9 @@ const db = require('../services/db');
 
 const leadUpdateSchema = z.object({
   status: z.enum(['NEW', 'CONTACTED', 'CONVERTED', 'CLOSED']).optional(),
-  notes: z.string().optional(),
-  estimatedValue: z.number().int().min(0).nullable().optional(),
-});
+  notes: z.string().max(2000).optional(),
+  estimatedValue: z.number().int().min(0).max(100000000).nullable().optional(),
+}).strict();
 
 // Business: view your leads
 router.get('/', authMiddleware, requireRole('BUSINESS', 'ADMIN'), async (req, res, next) => {

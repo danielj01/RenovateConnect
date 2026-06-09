@@ -130,9 +130,9 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
 router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
   try {
     const { businessId, message } = z.object({
-      businessId: z.string(),
-      message: z.string().min(1),
-    }).parse(req.body);
+      businessId: z.string().min(1).max(64),
+      message: z.string().min(1).max(5000),
+    }).strict().parse(req.body);
 
     const isFirstContact = !(await db.conversation.findUnique({
       where: { clientId_businessId: { clientId: req.user.id, businessId } },
@@ -228,7 +228,9 @@ router.get('/:id/messages', authMiddleware, async (req, res, next) => {
 router.post('/:id/messages', authMiddleware, upload.array('images', 5), async (req, res, next) => {
   try {
     // Body is optional when at least one image is attached.
-    const { body } = z.object({ body: z.string().trim().optional() }).parse(req.body);
+    // Multipart route: body is one text field alongside file uploads, so don't
+    // .strict() here. Cap the length.
+    const { body } = z.object({ body: z.string().trim().max(5000).optional() }).parse(req.body);
     const hasImages = Boolean(req.files?.length);
     if (!body && !hasImages) {
       return res.status(400).json({ error: 'A message or an image is required' });

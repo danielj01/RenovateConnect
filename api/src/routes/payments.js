@@ -102,7 +102,7 @@ router.post('/pro/subscribe', authMiddleware, requireRole('BUSINESS'), async (re
   try {
     const { plan } = z.object({
       plan: z.enum(['sponsored', 'insights']).optional(),
-    }).parse(req.body || {});
+    }).strict().parse(req.body || {});
     const user = await db.user.findUnique({ where: { id: req.user.id } });
     const business = await db.business.findUnique({ where: { userId: req.user.id } });
     if (!business) return res.status(404).json({ error: 'No business profile found' });
@@ -216,7 +216,7 @@ router.post('/pro/cancel', authMiddleware, requireRole('BUSINESS'), async (req, 
 // abandoned checkout can be retried.
 router.post('/deposit', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
   try {
-    const { quoteRequestId } = z.object({ quoteRequestId: z.string() }).parse(req.body);
+    const { quoteRequestId } = z.object({ quoteRequestId: z.string().min(1).max(64) }).strict().parse(req.body);
 
     const quote = await db.quoteRequest.findUnique({
       where: { id: quoteRequestId },
