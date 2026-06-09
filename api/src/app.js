@@ -7,7 +7,7 @@ const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const rateLimit = require('express-rate-limit');
+const { globalLimiter } = require('./middleware/rateLimit');
 
 const authRoutes = require('./routes/auth');
 const businessRoutes = require('./routes/businesses');
@@ -64,8 +64,10 @@ app.use(express.json({ limit: '10mb' }));
 // Mounted before the rate limiter so loading images doesn't burn the quota.
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
-app.use(limiter);
+// Baseline API rate limit (per-user when authed, per-IP otherwise). Stripe
+// webhooks are mounted above this so Stripe is never throttled. Stricter
+// per-endpoint limiters (auth, AI estimator) layer on top in their routers.
+app.use(globalLimiter);
 
 app.use('/auth', authRoutes);
 app.use('/businesses', businessRoutes);

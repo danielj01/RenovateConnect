@@ -6,6 +6,7 @@ const { createPublicKey } = require('crypto');
 const https = require('https');
 const db = require('../services/db');
 const { authMiddleware } = require('../middleware/auth');
+const { authLimiter } = require('../middleware/rateLimit');
 const upload = require('../middleware/upload');
 const { uploadImage } = require('../services/storage');
 
@@ -43,7 +44,7 @@ function signToken(user) {
   return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
 }
 
-router.post('/register', async (req, res, next) => {
+router.post('/register', authLimiter, async (req, res, next) => {
   try {
     const data = registerSchema.parse(req.body);
     const passwordHash = await bcrypt.hash(data.password, 12);
@@ -57,7 +58,7 @@ router.post('/register', async (req, res, next) => {
   }
 });
 
-router.post('/login', async (req, res, next) => {
+router.post('/login', authLimiter, async (req, res, next) => {
   try {
     const { email, password } = loginSchema.parse(req.body);
     const user = await db.user.findUnique({ where: { email } });
@@ -71,7 +72,7 @@ router.post('/login', async (req, res, next) => {
 });
 
 // Sign in with Apple
-router.post('/apple', async (req, res, next) => {
+router.post('/apple', authLimiter, async (req, res, next) => {
   try {
     const { identityToken, givenName, familyName, email } = req.body;
     if (!identityToken) return res.status(400).json({ error: 'identityToken required' });
