@@ -48,3 +48,37 @@ describe('input validation hardening', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('5xx responses do not leak internals', () => {
+  // Errors with status >= 500 must never echo err.message — Prisma's
+  // KnownRequestError includes the absolute file path of the call site and
+  // a snippet of source code, which would leak straight to the client.
+  // We simulate that by making the underlying Prisma call throw the kind of
+  // message Prisma actually produces, then assert the wire response is
+  // sanitized.
+  const jwt = require('jsonwebtoken');
+  const { createClient } = require('./helpers');
+
+  test('500 body is a generic message, no path or source snippet', async () => {
+    const { token } = await createClient();
+    const original = db.block.findMany;
+    db.block.findMany = () => Promise.reject(new Error(
+      'Invalid `db.block.findMany()` invocation in ' +
+      '/Users/secret/path/api/src/routes/blocks.js:57:35\n' +
+      '  The table `public.Block` does not exist in the current database.',
+    ));
+
+    try {
+      const res = await request(app).get('/blocks')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(500);
+      expect(res.body.error).toBe('Internal server error');
+      const body = JSON.stringify(res.body);
+      expect(body).not.toContain('/Users/');
+      expect(body).not.toContain('findMany');
+    } finally {
+      db.block.findMany = original;
+    }
+    expect(jwt).toBeTruthy(); // silence the unused-import linter
+  });
+});

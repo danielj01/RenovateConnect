@@ -120,7 +120,15 @@ app.use((err, _req, res, _next) => {
   }
   console.error(err);
   const status = err.status || 500;
-  res.status(status).json({ error: err.message || 'Internal server error' });
+  // Client-error messages (4xx) are intentional — surface them. Server errors
+  // (5xx) often leak internals: Prisma's `*KnownRequestError.message` includes
+  // absolute file paths and source snippets; Stripe/Node errors can echo
+  // request bodies. Replace 5xx bodies with a generic message so the client
+  // never sees the stack — the real error is in the log + Sentry.
+  if (status >= 500) {
+    return res.status(status).json({ error: 'Internal server error' });
+  }
+  res.status(status).json({ error: err.message || 'Request failed' });
 });
 
 const PORT = process.env.PORT || 3000;
