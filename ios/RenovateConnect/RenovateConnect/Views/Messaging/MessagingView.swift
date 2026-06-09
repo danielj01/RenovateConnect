@@ -92,53 +92,14 @@ struct MessagingView: View {
         }
         .navigationTitle(conversation.business?.companyName ?? "Conversation")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if otherUserId != nil {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button(role: .destructive) {
-                            if let uid = otherUserId {
-                                reportTarget = ReportTargetSpec(type: .user, targetId: uid)
-                            }
-                        } label: {
-                            Label("Report this user", systemImage: "flag")
-                        }
-                        Button(role: .destructive) {
-                            showBlockConfirm = true
-                        } label: {
-                            Label("Block this user", systemImage: "hand.raised")
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                            .foregroundStyle(Color(.label))
-                    }
-                    .accessibilityLabel("More options")
-                }
-            }
-        }
-        .sheet(item: $reportTarget) { spec in
-            ReportSheet(targetType: spec.type, targetId: spec.targetId)
-        }
-        .confirmationDialog("Block this user?",
-                            isPresented: $showBlockConfirm,
-                            titleVisibility: .visible) {
-            Button("Block", role: .destructive) {
-                Task { await performBlock() }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("They won't be able to message you, and this conversation will disappear from both sides.")
-        }
-        .alert("Couldn't block", isPresented: Binding(
-            get: { blockError != nil },
-            set: { if !$0 { blockError = nil } })) {
-            Button("OK", role: .cancel) {}
-        } message: { Text(blockError ?? "") }
-        .alert("User blocked", isPresented: $didBlock) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("You can unblock them later from Profile → Blocked Users.")
-        }
+        .modifier(ModerationModifier(
+            otherUserId: otherUserId,
+            reportTarget: $reportTarget,
+            showBlockConfirm: $showBlockConfirm,
+            blockError: $blockError,
+            didBlock: $didBlock,
+            performBlock: { await performBlock() }
+        ))
         .fullScreenCover(item: $zoomed) { z in
             ImageZoomView(url: z.url) { zoomed = nil }
         }
@@ -321,6 +282,65 @@ struct ReportTargetSpec: Identifiable {
     let type: ReportSheet.TargetType
     let targetId: String
     var id: String { "\(type.rawValue)-\(targetId)" }
+}
+
+/// Bundles the toolbar/menu + report sheet + block confirm/alerts in a
+/// single ViewModifier so the body of MessagingView doesn't blow past the
+/// SwiftUI type checker's complexity budget.
+private struct ModerationModifier: ViewModifier {
+    let otherUserId: String?
+    @Binding var reportTarget: ReportTargetSpec?
+    @Binding var showBlockConfirm: Bool
+    @Binding var blockError: String?
+    @Binding var didBlock: Bool
+    let performBlock: () async -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .toolbar { toolbarContent }
+            .sheet(item: $reportTarget) { spec in
+                ReportSheet(targetType: spec.type, targetId: spec.targetId)
+            }
+            .confirmationDialog("Block this user?",
+                                isPresented: $showBlockConfirm,
+                                titleVisibility: .visible) {
+                Button("Block", role: .destructive) { Task { await performBlock() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("They won't be able to message you, and this conversation will disappear from both sides.")
+            }
+            .alert("Couldn't block",
+                   isPresented: Binding(get: { blockError != nil },
+                                        set: { if !$0 { blockError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: { Text(blockError ?? "") }
+            .alert("User blocked", isPresented: $didBlock) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("You can unblock them later from Profile → Blocked Users.")
+            }
+    }
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        if let uid = otherUserId {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button(role: .destructive) {
+                        reportTarget = ReportTargetSpec(type: .user, targetId: uid)
+                    } label: {
+                        Label("Report this user", systemImage: "flag")
+                    }
+                    Button(role: .destructive) { showBlockConfirm = true } label: {
+                        Label("Block this user", systemImage: "hand.raised")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle").foregroundStyle(Color(.label))
+                }
+                .accessibilityLabel("More options")
+            }
+        }
+    }
 }
 
 /// Wrapper so an image URL can drive `.fullScreenCover(item:)`.
