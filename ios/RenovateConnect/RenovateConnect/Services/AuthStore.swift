@@ -30,7 +30,7 @@ final class AuthStore: ObservableObject {
     }
 
     init() {
-        if UserDefaults.standard.string(forKey: "authToken") != nil {
+        if AuthToken.value != nil {
             Task { await loadMe() }
         }
     }
@@ -41,7 +41,7 @@ final class AuthStore: ObservableObject {
         defer { isLoading = false }
         do {
             let resp = try await APIService.shared.login(email: email, password: password)
-            UserDefaults.standard.set(resp.token, forKey: "authToken")
+            AuthToken.set(resp.token)
             // Hydrate the full profile (includes the linked business) before
             // flipping to the logged-in UI, so contractors land on their tab bar
             // and not momentarily on the "set up your business" screen.
@@ -58,7 +58,7 @@ final class AuthStore: ObservableObject {
         defer { isLoading = false }
         do {
             let resp = try await APIService.shared.register(email: email, password: password, name: name, role: role)
-            UserDefaults.standard.set(resp.token, forKey: "authToken")
+            AuthToken.set(resp.token)
             await loadMe()
             landOnFirstTab()
         } catch {
@@ -77,7 +77,7 @@ final class AuthStore: ObservableObject {
                 familyName: familyName,
                 email: email
             )
-            UserDefaults.standard.set(resp.token, forKey: "authToken")
+            AuthToken.set(resp.token)
             // Hydrate the full profile (including any linked business) the same
             // way login/register do, rather than trusting the lean auth payload.
             await loadMe()
@@ -125,7 +125,7 @@ final class AuthStore: ObservableObject {
     func logout() {
         // Unregister this device from push before dropping the session.
         Task { await NotificationManager.shared.unregisterCurrentDevice() }
-        UserDefaults.standard.removeObject(forKey: "authToken")
+        AuthToken.clear()
         // Drop locally-persisted AI chat history so the next account on this
         // device doesn't inherit the previous user's conversation.
         UserDefaults.standard.removeObject(forKey: "aiChatHistory")
@@ -179,7 +179,7 @@ final class AuthStore: ObservableObject {
         } catch {
             // Only sign out if we don't already have a session (e.g. cold start with a stale token).
             if currentUser == nil {
-                UserDefaults.standard.removeObject(forKey: "authToken")
+                AuthToken.clear()
             }
         }
     }

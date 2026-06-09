@@ -24,7 +24,8 @@ final class APIService {
     private let base = URL(string: "http://192.168.11.212:3000")!
 
     private var token: String? {
-        UserDefaults.standard.string(forKey: "authToken")
+        // Stored in the Keychain (encrypted), not UserDefaults. See Keychain.swift.
+        AuthToken.value
     }
 
     private func request<T: Decodable>(_ path: String, method: String = "GET", body: Encodable? = nil) async throws -> T {
