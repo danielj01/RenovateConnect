@@ -83,8 +83,32 @@ enum MilestoneStatus {
   PENDING    // created by the contractor, not yet funded
   FUNDED     // homeowner paid; funds held on the platform balance
   SUBMITTED  // contractor marked the work done and attached proof
+  DISPUTED   // homeowner raised a dispute — auto-release is paused, admin reviews
   APPROVED   // released — funds transferred to the contractor
   REFUNDED   // funded then refunded back to the homeowner
+}
+
+// A homeowner-raised dispute on a milestone. While OPEN, the milestone sits in
+// DISPUTED status: the auto-release sweep skips it and neither side can manually
+// approve/refund without an admin. Resolution writes the chosen action and
+// flips the milestone (RELEASE → APPROVED + transfer; REFUND → REFUNDED via the
+// existing milestone refund path). WITHDRAWN restores the milestone's prior
+// status so normal flow resumes.
+enum DisputeStatus {
+  OPEN
+  RESOLVED_RELEASE
+  RESOLVED_REFUND
+  WITHDRAWN
+}
+
+enum DisputeReason {
+  WORK_NOT_DONE
+  WORK_INCOMPLETE
+  WORK_LOW_QUALITY
+  NOT_AS_AGREED
+  DAMAGE
+  WRONG_AMOUNT
+  OTHER
 }
 
 model User {
@@ -576,13 +600,37 @@ model Milestone {
   fundedAt         DateTime?
   submittedAt      DateTime?
   approvedAt       DateTime?
+  // The milestone's status right before a dispute was opened, so withdrawing
+  // a dispute can put the row back where it was (FUNDED or SUBMITTED).
+  preDisputeStatus MilestoneStatus?
   createdAt        DateTime        @default(now())
   updatedAt        DateTime        @updatedAt
 
-  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  payment  Payment?
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  payment   Payment?
+  disputes  Dispute[]
 
   @@index([projectId])
+}
+
+model Dispute {
+  id            String        @id @default(cuid())
+  milestoneId   String
+  raisedById    String        // the homeowner who raised it
+  reason        DisputeReason
+  details       String
+  status        DisputeStatus @default(OPEN)
+  resolvedById  String?       // the admin who resolved it
+  resolvedAt    DateTime?
+  resolutionNote String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  milestone  Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  @@index([milestoneId])
+  @@index([status, createdAt])
+  @@index([raisedById])
 }
 
 model Estimation {

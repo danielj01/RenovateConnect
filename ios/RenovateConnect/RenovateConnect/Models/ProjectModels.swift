@@ -53,6 +53,7 @@ enum MilestoneStatus: String, Codable {
     case pending = "PENDING"
     case funded = "FUNDED"
     case submitted = "SUBMITTED"
+    case disputed = "DISPUTED"
     case approved = "APPROVED"
     case refunded = "REFUNDED"
 
@@ -61,6 +62,7 @@ enum MilestoneStatus: String, Codable {
         case .pending: return "Not funded"
         case .funded: return "In escrow"
         case .submitted: return "Awaiting your approval"
+        case .disputed: return "Disputed — under review"
         case .approved: return "Released"
         case .refunded: return "Refunded"
         }
@@ -71,6 +73,7 @@ enum MilestoneStatus: String, Codable {
         case .pending: return "circle.dashed"
         case .funded: return "lock.fill"
         case .submitted: return "photo.on.rectangle.angled"
+        case .disputed: return "exclamationmark.triangle.fill"
         case .approved: return "checkmark.seal.fill"
         case .refunded: return "arrow.uturn.backward.circle.fill"
         }

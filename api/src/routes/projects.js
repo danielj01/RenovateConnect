@@ -588,6 +588,9 @@ router.post('/:projectId/milestones/:milestoneId/approve', authMiddleware, requi
     if (!loaded) return;
     const { project, isClient, milestone } = loaded;
     if (!isClient) return res.status(403).json({ error: 'Only the homeowner can release a milestone.' });
+    if (milestone.status === 'DISPUTED') {
+      return res.status(409).json({ error: 'This milestone is under dispute. Withdraw the dispute first.' });
+    }
     if (!['FUNDED', 'SUBMITTED'].includes(milestone.status)) {
       return res.status(409).json({ error: 'This milestone isn\'t awaiting release.' });
     }
@@ -613,7 +616,10 @@ router.post('/:projectId/milestones/:milestoneId/refund', authMiddleware, async 
     if (!isOwner && req.user.role !== 'ADMIN') {
       return res.status(403).json({ error: 'Only the contractor or an admin can refund.' });
     }
-    if (!['FUNDED', 'SUBMITTED'].includes(milestone.status)) {
+    if (milestone.status === 'DISPUTED' && req.user.role !== 'ADMIN') {
+      return res.status(409).json({ error: 'A disputed milestone can only be refunded by an admin via the dispute queue.' });
+    }
+    if (!['FUNDED', 'SUBMITTED', 'DISPUTED'].includes(milestone.status)) {
       return res.status(409).json({ error: 'Only a funded milestone can be refunded.' });
     }
 
@@ -624,6 +630,110 @@ router.post('/:projectId/milestones/:milestoneId/refund', authMiddleware, async 
 
     await createMilestoneRefund(payment.stripePaymentIntentId);
     res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ─── DISPUTES ─────────────────────────────────────────────────────────────────
+//
+// A homeowner can dispute a FUNDED or SUBMITTED milestone before the auto-
+// release fires. Opening flips status to DISPUTED, which the sweep and the
+// homeowner-approve route both refuse to touch. Withdrawal restores the
+// prior status; admin resolution flips to APPROVED (release) or REFUNDED.
+
+const DISPUTE_REASONS = [
+  'WORK_NOT_DONE', 'WORK_INCOMPLETE', 'WORK_LOW_QUALITY', 'NOT_AS_AGREED',
+  'DAMAGE', 'WRONG_AMOUNT', 'OTHER',
+];
+
+// POST /projects/:projectId/milestones/:milestoneId/dispute — homeowner opens
+// a dispute. Pauses auto-release until withdrawn or admin-resolved.
+router.post('/:projectId/milestones/:milestoneId/dispute', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
+  try {
+    const { reason, details } = z.object({
+      reason: z.enum(DISPUTE_REASONS),
+      details: z.string().trim().min(10).max(2000),
+    }).strict().parse(req.body);
+
+    const loaded = await loadMilestone(req, res);
+    if (!loaded) return;
+    const { project, isClient, milestone } = loaded;
+    if (!isClient) return res.status(403).json({ error: 'Only the homeowner can dispute a milestone.' });
+    if (!['FUNDED', 'SUBMITTED'].includes(milestone.status)) {
+      return res.status(409).json({ error: 'Only a funded milestone can be disputed.' });
+    }
+
+    // One open dispute per milestone at a time.
+    const existing = await db.dispute.findFirst({
+      where: { milestoneId: milestone.id, status: 'OPEN' },
+    });
+    if (existing) return res.status(409).json({ error: 'This milestone is already under dispute.' });
+
+    const [dispute] = await db.$transaction([
+      db.dispute.create({
+        data: {
+          milestoneId: milestone.id,
+          raisedById: req.user.id,
+          reason,
+          details,
+        },
+      }),
+      db.milestone.update({
+        where: { id: milestone.id },
+        data: { status: 'DISPUTED', preDisputeStatus: milestone.status },
+      }),
+    ]);
+
+    // Notify the contractor and the admin team.
+    await notifyPayment(project.business.userId, {
+      title: 'Milestone disputed ⚠️',
+      body: `The homeowner has opened a dispute on "${milestone.title}". Funds are paused until it's resolved.`,
+      data: { projectId: project.id, milestoneId: milestone.id, disputeId: dispute.id },
+    });
+
+    res.status(201).json(dispute);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /projects/:projectId/milestones/:milestoneId/dispute/withdraw — homeowner
+// withdraws their own open dispute. Restores the milestone's pre-dispute status.
+router.post('/:projectId/milestones/:milestoneId/dispute/withdraw', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
+  try {
+    const loaded = await loadMilestone(req, res);
+    if (!loaded) return;
+    const { project, isClient, milestone } = loaded;
+    if (!isClient) return res.status(403).json({ error: 'Only the homeowner can withdraw their dispute.' });
+    if (milestone.status !== 'DISPUTED') {
+      return res.status(409).json({ error: 'No open dispute on this milestone.' });
+    }
+
+    const open = await db.dispute.findFirst({
+      where: { milestoneId: milestone.id, status: 'OPEN', raisedById: req.user.id },
+    });
+    if (!open) return res.status(404).json({ error: 'No open dispute to withdraw.' });
+
+    const restoredStatus = milestone.preDisputeStatus || 'FUNDED';
+    await db.$transaction([
+      db.dispute.update({
+        where: { id: open.id },
+        data: { status: 'WITHDRAWN', resolvedAt: new Date() },
+      }),
+      db.milestone.update({
+        where: { id: milestone.id },
+        data: { status: restoredStatus, preDisputeStatus: null },
+      }),
+    ]);
+
+    await notifyPayment(project.business.userId, {
+      title: 'Dispute withdrawn ✅',
+      body: `The homeowner withdrew the dispute on "${milestone.title}".`,
+      data: { projectId: project.id, milestoneId: milestone.id },
+    });
+
+    res.json({ ok: true, milestoneStatus: restoredStatus });
   } catch (err) {
     next(err);
   }
@@ -664,3 +774,6 @@ async function autoReleaseStaleMilestones({ now = new Date() } = {}) {
 
 module.exports = router;
 module.exports.autoReleaseStaleMilestones = autoReleaseStaleMilestones;
+// Shared by admin.js for resolving disputes with a RELEASE action.
+module.exports.releaseMilestone = releaseMilestone;
+module.exports.notifyPayment = notifyPayment;

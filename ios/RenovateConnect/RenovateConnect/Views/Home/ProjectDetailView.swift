@@ -21,6 +21,7 @@ struct ProjectDetailView: View {
     @State private var creatingProject = false
     @State private var showAddMilestone = false
     @State private var submitTarget: Milestone?
+    @State private var disputeTarget: MilestoneRef?
 
     private var isContractor: Bool { auth.isBusiness }
 
@@ -39,19 +40,14 @@ struct ProjectDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { await load() }
         .refreshable { await load() }
-        .sheet(item: $fundURL, onDismiss: { Task { await load() } }) { url in
-            SafariView(url: url).ignoresSafeArea()
-        }
-        .sheet(isPresented: $showAddMilestone) {
-            if let project = detail?.project {
-                AddMilestoneSheet(projectId: project.id) { Task { await load() } }
-            }
-        }
-        .sheet(item: $submitTarget) { milestone in
-            if let project = detail?.project {
-                SubmitMilestoneSheet(projectId: project.id, milestone: milestone) { Task { await load() } }
-            }
-        }
+        .modifier(MilestoneSheetsModifier(
+            fundURL: $fundURL,
+            showAddMilestone: $showAddMilestone,
+            submitTarget: $submitTarget,
+            disputeTarget: $disputeTarget,
+            projectId: detail?.project?.id,
+            reload: { Task { await load() } }
+        ))
     }
 
     @ViewBuilder
@@ -146,7 +142,9 @@ struct ProjectDetailView: View {
                             isBusy: busyMilestoneId == milestone.id,
                             onFund: { Task { await fund(project.id, milestone) } },
                             onApprove: { Task { await approve(project.id, milestone) } },
-                            onSubmit: { submitTarget = milestone }
+                            onSubmit: { submitTarget = milestone },
+                            onDispute: { disputeTarget = MilestoneRef(projectId: project.id, milestone: milestone) },
+                            onWithdrawDispute: { Task { await withdrawDispute(project.id, milestone) } }
                         )
                         .padding(.horizontal, 16)
                     }
@@ -268,6 +266,57 @@ struct ProjectDetailView: View {
             actionError = error.localizedDescription
         }
     }
+
+    private func withdrawDispute(_ projectId: String, _ milestone: Milestone) async {
+        busyMilestoneId = milestone.id
+        actionError = nil
+        defer { busyMilestoneId = nil }
+        do {
+            try await APIService.shared.withdrawDispute(projectId: projectId, milestoneId: milestone.id)
+            await load()
+        } catch {
+            actionError = error.localizedDescription
+        }
+    }
+}
+
+/// Pairs a project id with a milestone for `.sheet(item:)` presentation.
+struct MilestoneRef: Identifiable {
+    let projectId: String
+    let milestone: Milestone
+    var id: String { milestone.id }
+}
+
+/// Bundles the four milestone-related sheets (fund Stripe Checkout,
+/// add-milestone, submit-work, dispute) in one ViewModifier so the project
+/// detail body stays under the SwiftUI type-checker's complexity budget.
+private struct MilestoneSheetsModifier: ViewModifier {
+    @Binding var fundURL: URL?
+    @Binding var showAddMilestone: Bool
+    @Binding var submitTarget: Milestone?
+    @Binding var disputeTarget: MilestoneRef?
+    let projectId: String?
+    let reload: () -> Void
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(item: $fundURL, onDismiss: reload) { url in
+                SafariView(url: url).ignoresSafeArea()
+            }
+            .sheet(isPresented: $showAddMilestone) {
+                if let projectId {
+                    AddMilestoneSheet(projectId: projectId) { reload() }
+                }
+            }
+            .sheet(item: $submitTarget) { milestone in
+                if let projectId {
+                    SubmitMilestoneSheet(projectId: projectId, milestone: milestone) { reload() }
+                }
+            }
+            .sheet(item: $disputeTarget) { ref in
+                DisputeSheet(projectId: ref.projectId, milestone: ref.milestone) { reload() }
+            }
+    }
 }
 
 // MARK: - Milestone card
@@ -279,6 +328,8 @@ private struct MilestoneCard: View {
     let onFund: () -> Void
     let onApprove: () -> Void
     let onSubmit: () -> Void
+    let onDispute: () -> Void
+    let onWithdrawDispute: () -> Void
 
     var body: some View {
         RCCard {
@@ -318,39 +369,73 @@ private struct MilestoneCard: View {
         if isBusy {
             ProgressView().frame(maxWidth: .infinity)
         } else if isContractor {
-            switch milestone.status {
-            case .funded:
-                Button(action: onSubmit) {
-                    Label("Submit completed work", systemImage: "paperplane.fill").fontWeight(.semibold)
-                }
-                .buttonStyle(.borderedProminent).tint(Theme.primary)
-            case .pending:
-                Text("Waiting for the homeowner to fund this milestone.")
-                    .font(.caption2).foregroundStyle(.secondary)
-            case .submitted:
-                Text("Submitted — awaiting the homeowner's approval.")
-                    .font(.caption2).foregroundStyle(.secondary)
-            default:
-                EmptyView()
-            }
+            contractorAction
         } else {
-            switch milestone.status {
-            case .pending:
-                Button(action: onFund) {
-                    Label("Fund — held in escrow", systemImage: "lock.fill").fontWeight(.semibold)
-                }
-                .buttonStyle(.borderedProminent).tint(Theme.success)
-            case .funded:
+            homeownerAction
+        }
+    }
+
+    @ViewBuilder
+    private var contractorAction: some View {
+        switch milestone.status {
+        case .funded:
+            Button(action: onSubmit) {
+                Label("Submit completed work", systemImage: "paperplane.fill").fontWeight(.semibold)
+            }
+            .buttonStyle(.borderedProminent).tint(Theme.primary)
+        case .pending:
+            Text("Waiting for the homeowner to fund this milestone.")
+                .font(.caption2).foregroundStyle(.secondary)
+        case .submitted:
+            Text("Submitted — awaiting the homeowner's approval.")
+                .font(.caption2).foregroundStyle(.secondary)
+        case .disputed:
+            Text("The homeowner opened a dispute. Funds are paused while our team reviews.")
+                .font(.caption2).foregroundStyle(.orange)
+        default:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var homeownerAction: some View {
+        switch milestone.status {
+        case .pending:
+            Button(action: onFund) {
+                Label("Fund — held in escrow", systemImage: "lock.fill").fontWeight(.semibold)
+            }
+            .buttonStyle(.borderedProminent).tint(Theme.success)
+        case .funded:
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Funds held in escrow. Waiting for the contractor to submit completed work.")
                     .font(.caption2).foregroundStyle(.secondary)
-            case .submitted:
+                Button(role: .destructive, action: onDispute) {
+                    Label("Raise a dispute", systemImage: "exclamationmark.bubble")
+                }
+                .font(.caption)
+            }
+        case .submitted:
+            VStack(alignment: .leading, spacing: 8) {
                 Button(action: onApprove) {
                     Label("Approve & release payment", systemImage: "checkmark.seal.fill").fontWeight(.semibold)
                 }
                 .buttonStyle(.borderedProminent).tint(Theme.success)
-            default:
-                EmptyView()
+                Button(role: .destructive, action: onDispute) {
+                    Label("Something's wrong — dispute", systemImage: "exclamationmark.bubble")
+                }
+                .font(.caption)
             }
+        case .disputed:
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Your dispute is under review. The 7-day auto-release is paused until it's resolved.")
+                    .font(.caption2).foregroundStyle(.orange)
+                Button(action: onWithdrawDispute) {
+                    Label("Withdraw dispute", systemImage: "arrow.uturn.backward")
+                }
+                .font(.caption)
+            }
+        default:
+            EmptyView()
         }
     }
 }

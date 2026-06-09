@@ -5,6 +5,7 @@ const db = require('../src/services/db');
 async function resetDb() {
   await db.report.deleteMany();
   await db.block.deleteMany();
+  await db.dispute.deleteMany();
   await db.payment.deleteMany();
   await db.milestone.deleteMany();
   await db.project.deleteMany();

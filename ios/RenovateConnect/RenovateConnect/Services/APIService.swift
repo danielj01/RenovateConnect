@@ -937,5 +937,24 @@ final class APIService {
     func blockedUsers() async throws -> [BlockedUser] {
         try await request("blocks")
     }
+
+    // MARK: - Milestone disputes
+
+    /// Open a dispute on a FUNDED or SUBMITTED milestone. Pauses the
+    /// auto-release until the homeowner withdraws or an admin resolves.
+    func disputeMilestone(projectId: String, milestoneId: String,
+                          reason: String, details: String) async throws {
+        struct Body: Encodable { let reason: String; let details: String }
+        try await requestNoContent("projects/\(projectId)/milestones/\(milestoneId)/dispute",
+                                   method: "POST",
+                                   body: Body(reason: reason, details: details))
+    }
+
+    /// Withdraw the homeowner's own open dispute; the milestone falls back to
+    /// its pre-dispute status (FUNDED or SUBMITTED).
+    func withdrawDispute(projectId: String, milestoneId: String) async throws {
+        try await requestNoContent("projects/\(projectId)/milestones/\(milestoneId)/dispute/withdraw",
+                                   method: "POST")
+    }
 }
 
