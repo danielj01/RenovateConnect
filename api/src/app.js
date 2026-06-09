@@ -30,6 +30,7 @@ const internalRoutes = require('./routes/internal');
 const feedRoutes = require('./routes/feed');
 const reportRoutes = require('./routes/reports');
 const blockRoutes = require('./routes/blocks');
+const verificationDocumentsRoutes = require('./routes/verificationDocuments');
 
 const { assertStorageConfigured } = require('./services/storage');
 
@@ -72,6 +73,9 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use(globalLimiter);
 
 app.use('/auth', authRoutes);
+// Mount verification docs BEFORE businessRoutes so /:id/verification-documents
+// resolves to the dedicated router instead of falling into a generic handler.
+app.use('/businesses/:id/verification-documents', verificationDocumentsRoutes);
 app.use('/businesses', businessRoutes);
 app.use('/estimations', estimationRoutes);
 app.use('/conversations', messageRoutes);

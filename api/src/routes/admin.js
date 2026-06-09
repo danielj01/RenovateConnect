@@ -111,6 +111,89 @@ router.post('/portfolio/:projectId/reject', async (req, res, next) => {
 
 const projectsModule = require('./projects');
 const { createMilestoneRefund } = require('../services/stripe');
+const { recomputeBusinessVerified } = require('../services/verification');
+
+// ─── VERIFICATION DOCUMENTS ───────────────────────────────────────────────────
+//
+// Admin queue + approve/reject for contractor-uploaded license, insurance,
+// and (optionally) identity documents. Each decision recomputes the parent
+// business's `verified` flag (services/verification.js).
+
+router.get('/verifications', async (req, res, next) => {
+  try {
+    const { status } = z.object({
+      status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'ALL']).optional(),
+    }).parse(req.query);
+
+    const where = !status || status === 'PENDING'
+      ? { status: 'PENDING' }
+      : status === 'ALL'
+        ? {}
+        : { status };
+
+    const docs = await db.verificationDocument.findMany({
+      where,
+      orderBy: { createdAt: 'asc' },
+      take: 200,
+      include: {
+        business: { select: { id: true, companyName: true, city: true, state: true } },
+      },
+    });
+    res.json(docs);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/verifications/:id/approve', async (req, res, next) => {
+  try {
+    const doc = await db.verificationDocument.findUnique({ where: { id: req.params.id } });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+    if (doc.status === 'APPROVED') {
+      return res.status(409).json({ error: 'Already approved.' });
+    }
+
+    const updated = await db.verificationDocument.update({
+      where: { id: doc.id },
+      data: {
+        status: 'APPROVED',
+        rejectionReason: null,
+        reviewedAt: new Date(),
+        reviewedById: req.user.id,
+      },
+    });
+    const nowVerified = await recomputeBusinessVerified(doc.businessId);
+    res.json({ document: updated, businessVerified: nowVerified });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/verifications/:id/reject', async (req, res, next) => {
+  try {
+    const { reason } = z.object({
+      reason: z.string().trim().min(1).max(500),
+    }).strict().parse(req.body);
+
+    const doc = await db.verificationDocument.findUnique({ where: { id: req.params.id } });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    const updated = await db.verificationDocument.update({
+      where: { id: doc.id },
+      data: {
+        status: 'REJECTED',
+        rejectionReason: reason,
+        reviewedAt: new Date(),
+        reviewedById: req.user.id,
+      },
+    });
+    // Rejecting an existing APPROVED doc could drop a business's verified flag.
+    const nowVerified = await recomputeBusinessVerified(doc.businessId);
+    res.json({ document: updated, businessVerified: nowVerified });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /admin/disputes — open disputes by default; ?status=ALL or a specific
 // DisputeStatus to widen. Includes the milestone, project, and the two parties

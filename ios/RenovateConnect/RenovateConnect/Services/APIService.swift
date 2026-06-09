@@ -956,5 +956,58 @@ final class APIService {
         try await requestNoContent("projects/\(projectId)/milestones/\(milestoneId)/dispute/withdraw",
                                    method: "POST")
     }
+
+    // MARK: - Verification documents
+
+    /// List the contractor's uploaded verification documents (owner or admin).
+    func verificationDocuments(businessId: String) async throws -> [VerificationDocument] {
+        try await request("businesses/\(businessId)/verification-documents")
+    }
+
+    /// Upload one verification document (PDF or image). `expiresAt` is an
+    /// ISO-8601 string (e.g. "2027-04-30T00:00:00Z").
+    func uploadVerificationDocument(businessId: String,
+                                    fileData: Data,
+                                    mimeType: String,
+                                    filename: String,
+                                    type: VerificationDocType,
+                                    documentNumber: String?,
+                                    issuer: String?,
+                                    expiresAt: String?) async throws -> VerificationDocument {
+        let url = base.appendingPathComponent("businesses/\(businessId)/verification-documents")
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let boundary = UUID().uuidString
+        req.setValue("multipart/form-data; boundary=\(boundary)",
+                     forHTTPHeaderField: "Content-Type")
+
+        var body = Data()
+        func append(_ s: String) { body.append(s.data(using: .utf8)!) }
+        func field(_ name: String, _ value: String) {
+            append("--\(boundary)\r\nContent-Disposition: form-data; name=\"\(name)\"\r\n\r\n\(value)\r\n")
+        }
+        field("type", type.rawValue)
+        if let documentNumber, !documentNumber.isEmpty { field("documentNumber", documentNumber) }
+        if let issuer,         !issuer.isEmpty         { field("issuer", issuer) }
+        if let expiresAt,      !expiresAt.isEmpty      { field("expiresAt", expiresAt) }
+        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\nContent-Type: \(mimeType)\r\n\r\n")
+        body.append(fileData)
+        append("\r\n--\(boundary)--\r\n")
+        req.httpBody = body
+
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            let msg = (try? JSONDecoder().decode([String: String].self, from: data))?["error"] ?? "Upload failed"
+            throw APIError.requestFailed((response as? HTTPURLResponse)?.statusCode ?? 0, msg)
+        }
+        return try JSONDecoder().decode(VerificationDocument.self, from: data)
+    }
+
+    /// Withdraw a PENDING upload before it's reviewed.
+    func deleteVerificationDocument(businessId: String, docId: String) async throws {
+        try await requestNoContent("businesses/\(businessId)/verification-documents/\(docId)",
+                                   method: "DELETE")
+    }
 }
 

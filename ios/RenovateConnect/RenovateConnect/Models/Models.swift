@@ -228,6 +228,70 @@ struct ReportRecord: Codable, Identifiable {
     let createdAt: String
 }
 
+// MARK: - Verification documents
+
+enum VerificationDocType: String, Codable, CaseIterable, Identifiable {
+    case license   = "LICENSE"
+    case insurance = "INSURANCE"
+    case identity  = "IDENTITY"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .license: return "Business license"
+        case .insurance: return "Insurance certificate"
+        case .identity: return "Government ID"
+        }
+    }
+
+    var helperCopy: String {
+        switch self {
+        case .license:
+            return "A state, county, or city contractor's license. PDF or photo."
+        case .insurance:
+            return "Liability or workers' comp certificate of insurance. Include the expiration date."
+        case .identity:
+            return "Optional. A driver's license or passport speeds up review."
+        }
+    }
+}
+
+enum VerificationDocStatus: String, Codable {
+    case pending  = "PENDING"
+    case approved = "APPROVED"
+    case rejected = "REJECTED"
+
+    var label: String {
+        switch self {
+        case .pending: return "Under review"
+        case .approved: return "Approved"
+        case .rejected: return "Needs attention"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .pending: return "clock.fill"
+        case .approved: return "checkmark.seal.fill"
+        case .rejected: return "exclamationmark.triangle.fill"
+        }
+    }
+}
+
+struct VerificationDocument: Codable, Identifiable {
+    let id: String
+    let type: VerificationDocType
+    let fileUrl: String
+    let documentNumber: String?
+    let issuer: String?
+    let expiresAt: String?
+    let status: VerificationDocStatus
+    let rejectionReason: String?
+    let createdAt: String
+    let reviewedAt: String?
+}
+
 // MARK: - Inspiration feed
 
 /// One photo in the Inspiration feed (GET /feed). Each is a contractor's real

@@ -48,6 +48,7 @@ struct DashboardView: View {
                     }
 
                     earningsLink
+                    verificationLink
                     shareProfileCard
                     proCard
                     insightsLink
@@ -123,6 +124,41 @@ struct DashboardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .clipShape(RoundedRectangle(cornerRadius: 20))
+    }
+
+    // Entry point to the verification center — license + insurance uploads.
+    @ViewBuilder
+    private var verificationLink: some View {
+        if let business = auth.currentUser?.business {
+            NavigationLink {
+                VerificationCenterView(businessId: business.id)
+            } label: {
+                RCCard {
+                    HStack(spacing: 14) {
+                        let verified = business.isVerified
+                        Image(systemName: verified ? "checkmark.seal.fill" : "checkmark.shield")
+                            .font(.title2)
+                            .foregroundStyle(verified ? Theme.success : Theme.primary)
+                            .frame(width: 40, height: 40)
+                            .background((verified ? Theme.success : Theme.primary).opacity(0.15))
+                            .clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(verified ? "You're verified" : "Get verified")
+                                .font(.subheadline.weight(.semibold))
+                            Text(verified
+                                 ? "Manage your license and insurance documents."
+                                 : "Upload your license and insurance to earn the Verified badge.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                    .padding(16)
+                }
+            }
+            .buttonStyle(.plain)
+        }
     }
 
     // Entry point to the full earnings breakdown (released vs. in escrow).

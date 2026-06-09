@@ -32,12 +32,27 @@ function assertStorageConfigured() {
   }
 }
 
-// Persist an image and return a URL that can be loaded back. Prefers S3; falls
+// Map a content-type to a file extension. Defaults to jpg for unknown image
+// payloads so existing image flows keep their previous behaviour.
+function extFor(mimetype) {
+  switch (mimetype) {
+    case 'application/pdf': return 'pdf';
+    case 'image/png':       return 'png';
+    case 'image/gif':       return 'gif';
+    case 'image/webp':      return 'webp';
+    case 'image/heic':      return 'heic';
+    case 'image/jpeg':
+    case 'image/jpg':
+    default:                return 'jpg';
+  }
+}
+
+// Persist a file and return a URL that can be loaded back. Prefers S3; falls
 // back to local disk. `baseUrl` (e.g. "http://192.168.1.5:3000") is used to
 // build an absolute URL for the local fallback so devices on the LAN can fetch
 // it — pass `${req.protocol}://${req.get('host')}` from the route.
-async function uploadImage(buffer, mimetype, baseUrl) {
-  const file = `${crypto.randomUUID()}.jpg`;
+async function uploadFile(buffer, mimetype, baseUrl) {
+  const file = `${crypto.randomUUID()}.${extFor(mimetype)}`;
   const key = `uploads/${file}`;
 
   if (s3Configured()) {
@@ -61,4 +76,8 @@ async function uploadImage(buffer, mimetype, baseUrl) {
   return `${base}/${key}`;
 }
 
-module.exports = { uploadImage, assertStorageConfigured, s3Configured };
+// Backwards-compatible alias — existing image upload callers passed image
+// content types and expected the same return shape.
+const uploadImage = uploadFile;
+
+module.exports = { uploadImage, uploadFile, assertStorageConfigured, s3Configured };

@@ -111,6 +111,22 @@ enum DisputeReason {
   OTHER
 }
 
+// Contractor identity-verification documents (license, insurance, optional ID).
+// Each upload is reviewed by an admin. `Business.verified` is derived: a
+// business is verified when it has at least one APPROVED + unexpired LICENSE
+// and at least one APPROVED + unexpired INSURANCE doc on file.
+enum VerificationDocType {
+  LICENSE
+  INSURANCE
+  IDENTITY
+}
+
+enum VerificationDocStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model User {
   id           String    @id @default(cuid())
   email        String    @unique
@@ -318,6 +334,40 @@ model Business {
   quoteRequests   QuoteRequest[]
   payments        Payment[]
   projects        Project[]
+  verificationDocuments VerificationDocument[]
+}
+
+// One uploaded document a contractor submits to prove their identity, license,
+// or insurance coverage. Stored in S3 (PDF or image). Admin reviews and either
+// APPROVES or REJECTS with a reason. `Business.verified` is recomputed each
+// time we add or change a document — it requires at least one APPROVED +
+// unexpired LICENSE plus at least one APPROVED + unexpired INSURANCE.
+model VerificationDocument {
+  id              String                @id @default(cuid())
+  businessId      String
+  type            VerificationDocType
+  fileUrl         String
+  // Free-form metadata the contractor enters at upload time so admins (and
+  // expired-doc re-uploads) have context: state-issued license number, policy
+  // number, etc., plus the issuing authority (e.g. "California CSLB", "GEICO").
+  documentNumber  String?
+  issuer          String?
+  // For insurance certs (always) and for licenses with an expiration. A doc
+  // past expiresAt is treated as expired even if status = APPROVED, so a
+  // verified business naturally drops the badge when coverage lapses.
+  expiresAt       DateTime?
+  status          VerificationDocStatus @default(PENDING)
+  rejectionReason String?
+  reviewedAt      DateTime?
+  reviewedById    String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([status, createdAt])
+  @@index([expiresAt])
 }
 
 // A homeowner's structured request for a price estimate on a specific project.
