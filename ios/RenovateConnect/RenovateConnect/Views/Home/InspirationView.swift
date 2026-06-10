@@ -166,7 +166,12 @@ private struct FeedCard: View {
 
 private struct FeedDetailView: View {
     let item: FeedItem
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var notifications: NotificationManager
     @State private var showingAfter = true
+    @State private var isQuoting = false
+    @State private var quoteError: String?
+    @State private var quoteSummary: QuoteThisLookResponse?
 
     private var shownURL: String {
         (!showingAfter && item.beforeImageUrl != nil) ? item.beforeImageUrl! : item.imageUrl
@@ -230,20 +235,77 @@ private struct FeedDetailView: View {
                 }
                 .buttonStyle(.plain)
 
-                // Our wedge: inspiration → instant cost → hire.
+                // Flagship: inspiration → AI estimate → pre-filled intro DM
+                // with the contractor in one tap.
                 Button {
-                    TabRouter.shared.selection = TabRouter.estimate
+                    Task { await quoteThisLook() }
                 } label: {
-                    Label("Get an instant estimate for a project like this", systemImage: "wand.and.stars")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity).frame(height: 50)
-                        .foregroundStyle(.white)
-                        .background(Theme.primary, in: RoundedRectangle(cornerRadius: 14))
+                    HStack(spacing: 8) {
+                        if isQuoting {
+                            ProgressView().tint(.white)
+                        } else {
+                            Image(systemName: "wand.and.stars")
+                        }
+                        Text(isQuoting
+                             ? "Estimating and messaging…"
+                             : "Quote this look from \(item.business.companyName)")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity).frame(height: 50)
+                    .foregroundStyle(.white)
+                    .background(Theme.primary, in: RoundedRectangle(cornerRadius: 14))
+                }
+                .disabled(isQuoting)
+
+                Text("We'll run an AI estimate on this photo and start a message with \(item.business.companyName) so they have your project context up front.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+
+                if let err = quoteError {
+                    Text(err).font(.caption).foregroundStyle(.red)
                 }
             }
             .padding(16)
         }
         .navigationTitle(item.business.companyName)
         .navigationBarTitleDisplayMode(.inline)
+        .alert("Message sent",
+               isPresented: Binding(get: { quoteSummary != nil },
+                                    set: { if !$0 { quoteSummary = nil } })) {
+            Button("Open message") {
+                if let id = quoteSummary?.conversationId {
+                    notifications.pendingConversationId = id
+                    TabRouter.shared.selection = TabRouter.messages
+                }
+                quoteSummary = nil
+            }
+            Button("Stay here", role: .cancel) { quoteSummary = nil }
+        } message: {
+            if let range = quoteSummary?.estimateRangeText {
+                Text("Sent the photo and your AI estimate (\(range)) to \(item.business.companyName).")
+            } else {
+                Text("Sent the photo to \(item.business.companyName).")
+            }
+        }
+    }
+
+    private func quoteThisLook() async {
+        guard auth.isLoggedIn else {
+            auth.requireSignIn()
+            return
+        }
+        isQuoting = true
+        quoteError = nil
+        defer { isQuoting = false }
+        do {
+            quoteSummary = try await APIService.shared.quoteThisLook(
+                portfolioProjectId: item.projectId,
+                imageUrl: item.imageUrl
+            )
+        } catch {
+            quoteError = error.localizedDescription
+        }
     }
 }

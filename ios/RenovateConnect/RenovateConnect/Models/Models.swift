@@ -328,6 +328,21 @@ struct FeedBusiness: Codable {
     var isVerified: Bool { verified ?? false }
 }
 
+/// Result of POST /feed/quote-this-look — the flagship one-tap intro.
+struct QuoteThisLookResponse: Codable {
+    let conversationId: String
+    let estimationId: String
+    let estimateLow: Int?
+    let estimateHigh: Int?
+
+    var estimateRangeText: String? {
+        if let lo = estimateLow, let hi = estimateHigh {
+            return "$\(lo.formatted()) – $\(hi.formatted())"
+        }
+        return nil
+    }
+}
+
 struct FeedResponse: Codable {
     let items: [FeedItem]
     let page: Int

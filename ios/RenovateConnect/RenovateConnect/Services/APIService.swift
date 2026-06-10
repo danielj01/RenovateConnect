@@ -178,6 +178,18 @@ final class APIService {
         try await request("businesses/\(id)")
     }
 
+    /// "Quote this look" — one-tap intro from an inspiration photo. Runs the
+    /// AI estimator on the photo server-side, opens (or reuses) the
+    /// homeowner ↔ contractor thread, and posts the photo + a pre-filled
+    /// "I'd love a quote for this" message. Returns the conversation id so
+    /// the client can jump straight to the thread, plus the rough estimate
+    /// range to show in the loading state.
+    func quoteThisLook(portfolioProjectId: String, imageUrl: String) async throws -> QuoteThisLookResponse {
+        struct Body: Encodable { let portfolioProjectId: String; let imageUrl: String }
+        return try await request("feed/quote-this-look", method: "POST",
+                                 body: Body(portfolioProjectId: portfolioProjectId, imageUrl: imageUrl))
+    }
+
     /// Public Inspiration feed of contractor project photos.
     func feed(page: Int = 1, category: String? = nil) async throws -> FeedResponse {
         var comps = URLComponents(url: base.appendingPathComponent("feed"), resolvingAgainstBaseURL: false)!
