@@ -888,6 +888,12 @@ struct FavoritesDigestUnseen: Codable {
 struct DashboardStats: Codable {
     let searchImpressions: Int
     let profileViews: Int
+    // Sponsored-slot performance (Pro). Optional so older cached payloads or
+    // servers without the fields decode cleanly.
+    var sponsoredImpressions: Int?
+    var sponsoredClicks: Int?
+    /// Percent with one decimal, server-computed (e.g. 4.2).
+    var sponsoredCtr: Double?
     let averageRating: Double
     let reviewCount: Int
     let totalLeads: Int

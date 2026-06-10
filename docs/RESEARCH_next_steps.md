@@ -119,13 +119,15 @@ TestFlight or expose us to legal/PR/regulatory risk.)
 
 Ignoring the LAUNCH_READINESS infra/Apple-signing track, which runs in parallel:
 
-1. **Reporting + blocking** (Apple 1.2 blocker — small) — ~1 day
-2. **Disputes on milestones** (biggest unmanaged risk) — ~3 days
-3. **Contractor doc-verification** (defensible "verified" badge) — ~2 days
-4. **Project hub view on iOS** (D30 retention join screen) — ~2 days
-5. **Inspiration → "quote this look" one-tap intro** (flagship flow rework) — ~1 day
-6. **Sponsored disclosure copy + dashboard perf card** (regulatory + churn) — ~half day
-7. **Saved-search → push alerts** (re-engagement) — ~half day
+1. ✅ **Reporting + blocking** (Apple 1.2 blocker) — shipped 2026-06-09
+2. ✅ **Disputes on milestones** — shipped 2026-06-09 (admin iOS queue UI deferred; endpoints live)
+3. ✅ **Contractor doc-verification** — shipped 2026-06-09 (expiry sweep deferred; badge drops on next recompute)
+4. ✅ **Project hub: status bar + receipts + notes** — shipped 2026-06-09
+5. ✅ **Inspiration → "quote this look" one-tap intro** — shipped 2026-06-10
+6. ✅ **Sponsored disclosure + dashboard perf card** — shipped 2026-06-10
+   (ⓘ disclosure sheet on the Sponsored header; sponsoredImpressions/
+   sponsoredClicks/CTR tracked server-side and surfaced on the Pro dashboard)
+7. **Saved-search → push alerts** (re-engagement) — ~half day — NEXT
 
 Deferred until post-launch: quote templates, referrals, SSE messaging upgrade,
 gamification, the Insights $10 tier feature expansion.

@@ -89,6 +89,16 @@ router.get('/', async (req, res, next) => {
         [pool[i], pool[j]] = [pool[j], pool[i]];
       }
       sponsored = pool.slice(0, SPONSORED_CAP).map((b) => ({ ...b, sponsored: true }));
+
+      // Count a sponsored impression for each Pro listing actually shown in
+      // the slot (fire-and-forget, same pattern as organic impressions). This
+      // powers the Pro dashboard's performance card.
+      if (sponsored.length > 0) {
+        db.business.updateMany({
+          where: { id: { in: sponsored.map((b) => b.id) } },
+          data: { sponsoredImpressions: { increment: 1 } },
+        }).catch(() => {});
+      }
     }
 
     // "Near me" mode — viewer coordinates provided. Rank by distance instead of
@@ -179,9 +189,18 @@ router.get('/dashboard', authMiddleware, requireRole('BUSINESS', 'ADMIN'), async
     const totalLeads = leads.length;
     const conversionRate = totalLeads ? Math.round((byStatus.CONVERTED / totalLeads) * 100) : 0;
 
+    // Sponsored slot performance (Pro). CTR is server-computed so every client
+    // renders the same number.
+    const sponsoredCtr = business.sponsoredImpressions > 0
+      ? Math.round((business.sponsoredClicks / business.sponsoredImpressions) * 1000) / 10
+      : 0;
+
     res.json({
       searchImpressions: business.searchImpressions,
       profileViews: business.profileViews,
+      sponsoredImpressions: business.sponsoredImpressions,
+      sponsoredClicks: business.sponsoredClicks,
+      sponsoredCtr, // percent, one decimal (e.g. 4.2)
       averageRating: business.averageRating,
       reviewCount: business.reviewCount,
       totalLeads,
@@ -235,9 +254,19 @@ router.get('/:id', async (req, res, next) => {
       business.portfolio = business.portfolio.filter((p) => p.approvalStatus === 'APPROVED');
     }
 
-    // Count a view unless the owner is looking at their own profile (fire-and-forget).
+    // Count a view unless the owner is looking at their own profile
+    // (fire-and-forget). `?source=sponsored` means the viewer arrived from the
+    // paid Sponsored slot — count the click separately so the Pro dashboard
+    // can report slot CTR. It still counts as a regular profile view too.
     if (!isOwner) {
-      db.business.update({ where: { id: business.id }, data: { profileViews: { increment: 1 } } }).catch(() => {});
+      const fromSponsored = req.query.source === 'sponsored';
+      db.business.update({
+        where: { id: business.id },
+        data: {
+          profileViews: { increment: 1 },
+          ...(fromSponsored ? { sponsoredClicks: { increment: 1 } } : {}),
+        },
+      }).catch(() => {});
     }
 
     res.json({ ...business, shareUrl: shareUrlFor(business.id) });

@@ -15,6 +15,7 @@ struct BusinessSearchView: View {
     @State private var nearMe = false
     @State private var showLocationDenied = false
     @State private var showAIChat = false
+    @State private var showSponsoredDisclosure = false
 
     /// Tracks the inline "save this search" button across taps so the homeowner
     /// gets feedback without a disruptive alert.
@@ -114,13 +115,24 @@ struct BusinessSearchView: View {
                         }
 
                         // Sponsored (Pro) — clearly labeled, shown above organic
-                        // results without reordering them.
+                        // results without reordering them. The ⓘ explains the
+                        // policy (FTC-style ad disclosure).
                         if !sponsored.isEmpty {
                             VStack(alignment: .leading, spacing: 12) {
-                                sectionHeader(icon: "megaphone.fill", title: "Sponsored")
-                                    .padding(.horizontal, 16)
+                                HStack(spacing: 6) {
+                                    sectionHeader(icon: "megaphone.fill", title: "Sponsored")
+                                    Button {
+                                        showSponsoredDisclosure = true
+                                    } label: {
+                                        Image(systemName: "info.circle")
+                                            .font(.footnote)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .accessibilityLabel("About sponsored results")
+                                }
+                                .padding(.horizontal, 16)
                                 ForEach(sponsored) { biz in
-                                    NavigationLink(destination: BusinessDetailView(businessId: biz.id)) {
+                                    NavigationLink(destination: BusinessDetailView(businessId: biz.id, fromSponsored: true)) {
                                         BusinessListCard(business: biz)
                                             .padding(.horizontal, 16)
                                     }
@@ -128,6 +140,12 @@ struct BusinessSearchView: View {
                                 }
                             }
                             .padding(.bottom, 20)
+                            // Attached here (not on the body) to keep the
+                            // already-long body modifier chain type-checkable.
+                            .sheet(isPresented: $showSponsoredDisclosure) {
+                                SponsoredDisclosureSheet()
+                                    .presentationDetents([.medium])
+                            }
                         }
 
                         // All contractors

@@ -2,6 +2,9 @@ import SwiftUI
 
 struct BusinessDetailView: View {
     let businessId: String
+    /// True when the viewer tapped a Sponsored slot to get here — passed to the
+    /// API so the contractor's Pro performance card counts the click.
+    var fromSponsored: Bool = false
     /// When opened from the post-release "leave a review" nudge, auto-present the
     /// review composer once the business has loaded.
     var autoPresentReview: Bool = false
@@ -543,7 +546,8 @@ struct BusinessDetailView: View {
 
     private func load() async {
         defer { isLoading = false }
-        business = try? await APIService.shared.getBusiness(id: businessId)
+        business = try? await APIService.shared.getBusiness(
+            id: businessId, source: fromSponsored ? "sponsored" : nil)
         // Honor a review-nudge deep link, but only for someone who can review
         // (homeowners/guests), and only once after the first successful load.
         if autoPresentReview, business != nil, canActAsClient, !didAutoPresentReview {

@@ -51,6 +51,7 @@ struct DashboardView: View {
                     verificationLink
                     shareProfileCard
                     proCard
+                    if let stats { sponsoredPerformanceCard(stats) }
                     insightsLink
 
                     if isLoading {
@@ -257,6 +258,60 @@ struct DashboardView: View {
             return "\(tier) · free trial, renews \(ends). Tap to manage."
         }
         return "\(tier) · active. Tap to manage."
+    }
+
+    // Sponsored slot performance — the "is the $5 working?" card. Shown only
+    // while the subscription is live; impressions/clicks/CTR come straight from
+    // the dashboard payload so the numbers match what the server counted.
+    @ViewBuilder
+    private func sponsoredPerformanceCard(_ stats: DashboardStats) -> some View {
+        if pro?.isPro == true {
+            RCCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "megaphone.fill")
+                            .foregroundStyle(Theme.primary)
+                        Text("Sponsored performance")
+                            .font(.subheadline.weight(.semibold))
+                        Spacer()
+                    }
+
+                    HStack(spacing: 0) {
+                        sponsoredStat(value: "\((stats.sponsoredImpressions ?? 0).formatted())",
+                                      label: "Times shown")
+                        sponsoredStat(value: "\((stats.sponsoredClicks ?? 0).formatted())",
+                                      label: "Profile opens")
+                        sponsoredStat(value: ctrText(stats),
+                                      label: "Open rate")
+                    }
+
+                    Text(sponsoredFooter(stats))
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                .padding(16)
+            }
+        }
+    }
+
+    private func sponsoredStat(value: String, label: String) -> some View {
+        VStack(spacing: 3) {
+            Text(value).font(.title3.monospacedDigit().weight(.semibold))
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func ctrText(_ stats: DashboardStats) -> String {
+        guard let ctr = stats.sponsoredCtr, (stats.sponsoredImpressions ?? 0) > 0 else { return "—" }
+        return "\(ctr.formatted())%"
+    }
+
+    private func sponsoredFooter(_ stats: DashboardStats) -> String {
+        let impressions = stats.sponsoredImpressions ?? 0
+        if impressions == 0 {
+            return "Your Sponsored placement is live — numbers appear as homeowners search in your categories."
+        }
+        return "Counts since your Sponsored placement went live. Profile opens are homeowners who tapped your Sponsored card."
     }
 
     // Insights tier ($10) gets a dedicated market-data screen.

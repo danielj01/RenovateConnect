@@ -49,3 +49,72 @@ describe('GET /businesses — sponsored slot', () => {
     expect(res.body.sponsored.map((b) => b.companyName)).toEqual(['Roofer']);
   });
 });
+
+describe('Sponsored performance metrics', () => {
+  // The impression/click increments are fire-and-forget; give the event loop a
+  // beat before asserting.
+  const settle = () => new Promise((r) => setTimeout(r, 50));
+
+  test('appearing in the sponsored slot counts a sponsoredImpression (organic listings unaffected)', async () => {
+    const pro = await proBusiness('ImpressionPro');
+    const { business: plain } = await createBusiness({ email: 'imp-plain@t.com', companyName: 'ImpPlain' });
+
+    const res = await request(app).get('/businesses');
+    expect(res.status).toBe(200);
+    await settle();
+
+    const proAfter = await db.business.findUnique({ where: { id: pro.id } });
+    expect(proAfter.sponsoredImpressions).toBe(1);
+    // The pro listing also appeared organically — organic impressions track separately.
+    expect(proAfter.searchImpressions).toBe(1);
+
+    const plainAfter = await db.business.findUnique({ where: { id: plain.id } });
+    expect(plainAfter.sponsoredImpressions).toBe(0);
+    expect(plainAfter.searchImpressions).toBe(1);
+  });
+
+  test('opening a profile with ?source=sponsored counts a click AND a profile view', async () => {
+    const pro = await proBusiness('ClickPro');
+
+    const res = await request(app).get(`/businesses/${pro.id}?source=sponsored`);
+    expect(res.status).toBe(200);
+    await settle();
+
+    const after = await db.business.findUnique({ where: { id: pro.id } });
+    expect(after.sponsoredClicks).toBe(1);
+    expect(after.profileViews).toBe(1);
+  });
+
+  test('a plain profile open does not count a sponsored click', async () => {
+    const pro = await proBusiness('PlainOpenPro');
+    await request(app).get(`/businesses/${pro.id}`);
+    await settle();
+
+    const after = await db.business.findUnique({ where: { id: pro.id } });
+    expect(after.sponsoredClicks).toBe(0);
+    expect(after.profileViews).toBe(1);
+  });
+
+  test('dashboard reports sponsored impressions, clicks, and a server-computed CTR', async () => {
+    const { user, business, token } = await createBusiness({ email: 'dash@t.com', companyName: 'DashCo' });
+    await db.business.update({
+      where: { id: business.id },
+      data: { proStatus: 'active', sponsoredImpressions: 200, sponsoredClicks: 9 },
+    });
+
+    const res = await request(app).get('/businesses/dashboard')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.sponsoredImpressions).toBe(200);
+    expect(res.body.sponsoredClicks).toBe(9);
+    expect(res.body.sponsoredCtr).toBe(4.5);
+    expect(user.id).toBeTruthy();
+  });
+
+  test('CTR is 0 when there are no sponsored impressions', async () => {
+    const { token } = await createBusiness({ email: 'dash0@t.com', companyName: 'Dash0' });
+    const res = await request(app).get('/businesses/dashboard')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.body.sponsoredCtr).toBe(0);
+  });
+});

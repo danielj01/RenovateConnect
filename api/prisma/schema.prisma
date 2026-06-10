@@ -296,11 +296,17 @@ model Business {
   rejectionReason String?
   reviewedAt      DateTime?
 
-  // Analytics — two distinct, real metrics:
-  //   searchImpressions: times this listing appeared in a search-results page
-  //   profileViews:      times someone opened the full profile (excludes the owner)
-  searchImpressions Int     @default(0)
-  profileViews    Int       @default(0)
+  // Analytics — distinct, real metrics:
+  //   searchImpressions:    times this listing appeared in an organic results page
+  //   profileViews:         times someone opened the full profile (excludes the owner)
+  //   sponsoredImpressions: times this listing was shown in the paid Sponsored slot
+  //   sponsoredClicks:      profile opens that came FROM the Sponsored slot
+  // The sponsored pair powers the Pro dashboard's performance card (CTR) so a
+  // paying contractor can see what the subscription is doing for them.
+  searchImpressions    Int  @default(0)
+  profileViews         Int  @default(0)
+  sponsoredImpressions Int  @default(0)
+  sponsoredClicks      Int  @default(0)
 
   // Stripe Connect — the contractor's connected (Express) account, used to
   // receive in-app deposit payouts. `chargesEnabled`/`payoutsEnabled` mirror the

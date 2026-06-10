@@ -174,8 +174,18 @@ final class APIService {
         return try await request(url: url)
     }
 
-    func getBusiness(id: String) async throws -> Business {
-        try await request("businesses/\(id)")
+    /// Fetch one business profile. Pass `source: "sponsored"` when the viewer
+    /// arrived from the paid Sponsored slot so the server can count the click
+    /// for the contractor's Pro performance card.
+    func getBusiness(id: String, source: String? = nil) async throws -> Business {
+        if let source {
+            var comps = URLComponents(url: base.appendingPathComponent("businesses/\(id)"),
+                                      resolvingAgainstBaseURL: false)!
+            comps.queryItems = [.init(name: "source", value: source)]
+            guard let url = comps.url else { throw APIError.invalidURL }
+            return try await request(url: url)
+        }
+        return try await request("businesses/\(id)")
     }
 
     /// "Quote this look" — one-tap intro from an inspiration photo. Runs the
