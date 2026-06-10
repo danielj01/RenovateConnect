@@ -247,7 +247,7 @@ private struct FeedDetailView: View {
                             Image(systemName: "wand.and.stars")
                         }
                         Text(isQuoting
-                             ? "Estimating and messaging…"
+                             ? "Sending your message…"
                              : "Quote this look from \(item.business.companyName)")
                     }
                     .font(.subheadline.weight(.semibold))
@@ -257,7 +257,7 @@ private struct FeedDetailView: View {
                 }
                 .disabled(isQuoting)
 
-                Text("We'll run an AI estimate on this photo and start a message with \(item.business.companyName) so they have your project context up front.")
+                Text("We'll start a message with \(item.business.companyName) so they have your project context up front.")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

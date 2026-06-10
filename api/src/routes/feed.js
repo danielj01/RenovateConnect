@@ -83,7 +83,10 @@ router.get('/', async (req, res, next) => {
 //   6. Records a Lead + push + activity entry on first contact, same as the
 //      organic POST /conversations path.
 //
-// Returns { conversationId, estimationId, estimateLow, estimateHigh }.
+// Returns { conversationId, estimationId, estimateLow, estimateHigh, usedAi }.
+// `estimationId` is null when the contractor's posted cost range was used
+// (no Estimation row written). `usedAi` reflects which source provided the
+// range so the client can render the right "source" copy.
 router.post('/quote-this-look', authMiddleware, requireRole('CLIENT'), async (req, res, next) => {
   try {
     const { portfolioProjectId, imageUrl } = z.object({
@@ -109,33 +112,45 @@ router.post('/quote-this-look', authMiddleware, requireRole('CLIENT'), async (re
       return res.status(403).json({ error: 'Cannot message this user' });
     }
 
-    // Download the image bytes and run the estimator. Claude vision accepts
-    // base64; we fetch our own S3/local URL straight as bytes.
-    let imageBase64;
-    try {
-      const resp = await fetch(imageUrl);
-      if (!resp.ok) throw new Error(`fetch ${resp.status}`);
-      const buf = Buffer.from(await resp.arrayBuffer());
-      imageBase64 = buf.toString('base64');
-    } catch {
-      return res.status(502).json({ error: 'Could not load the inspiration photo' });
+    // Prefer the contractor's own posted range — it's authoritative for their
+    // work and saves a Claude call. Only when the portfolio item is missing a
+    // complete range do we fall back to the AI vision estimator.
+    let low  = Number.isFinite(portfolio.costMin) ? Math.round(portfolio.costMin) : null;
+    let high = Number.isFinite(portfolio.costMax) ? Math.round(portfolio.costMax) : null;
+    let usedAi = false;
+    let estimation = null;
+
+    if (low == null || high == null) {
+      // Download the image bytes and run the estimator. Claude vision accepts
+      // base64; we fetch our own S3/local URL straight as bytes.
+      let imageBase64;
+      try {
+        const resp = await fetch(imageUrl);
+        if (!resp.ok) throw new Error(`fetch ${resp.status}`);
+        const buf = Buffer.from(await resp.arrayBuffer());
+        imageBase64 = buf.toString('base64');
+      } catch {
+        return res.status(502).json({ error: 'Could not load the inspiration photo' });
+      }
+
+      const result = await estimateRenovationCost({
+        imageBase64Array: [imageBase64],
+        roomType: portfolio.category || null,
+        description: `Inspired by "${portfolio.title}" by ${portfolio.business.companyName}`,
+      });
+      usedAi = true;
+      low  = Number.isFinite(result?.totalLow)  ? Math.round(result.totalLow)  : null;
+      high = Number.isFinite(result?.totalHigh) ? Math.round(result.totalHigh) : null;
+      estimation = await db.estimation.create({
+        data: {
+          userId:      req.user.id,
+          imageUrls:   [imageUrl],
+          roomType:    portfolio.category || null,
+          description: `Quote-this-look from "${portfolio.title}"`,
+          result,
+        },
+      });
     }
-
-    const result = await estimateRenovationCost({
-      imageBase64Array: [imageBase64],
-      roomType: portfolio.category || null,
-      description: `Inspired by "${portfolio.title}" by ${portfolio.business.companyName}`,
-    });
-
-    const estimation = await db.estimation.create({
-      data: {
-        userId:      req.user.id,
-        imageUrls:   [imageUrl],
-        roomType:    portfolio.category || null,
-        description: `Quote-this-look from "${portfolio.title}"`,
-        result,
-      },
-    });
 
     // Reuse an open thread if one exists; otherwise open a fresh one.
     const isFirstContact = !(await db.conversation.findUnique({
@@ -147,13 +162,16 @@ router.post('/quote-this-look', authMiddleware, requireRole('CLIENT'), async (re
       update: {},
     });
 
-    // Build the prefill body using the AI estimate when present.
-    const low  = Number.isFinite(result?.totalLow)  ? Math.round(result.totalLow)  : null;
-    const high = Number.isFinite(result?.totalHigh) ? Math.round(result.totalHigh) : null;
-    const range = low != null && high != null
-      ? `Our AI estimator put a project like this at about $${low.toLocaleString()}–$${high.toLocaleString()}.`
-      : 'We used the AI estimator to get a rough cost range.';
-    const body = `Hi ${portfolio.business.companyName}! I love this look from "${portfolio.title}" and would love a quote on something similar. ${range} Are you available?`;
+    // Prefill body — phrase the source honestly. Contractor-posted range
+    // reads as their own; AI-derived range names the estimator so the
+    // contractor knows it isn't being represented as theirs.
+    let range = '';
+    if (low != null && high != null) {
+      range = usedAi
+        ? `Our AI estimator put a project like this at about $${low.toLocaleString()}–$${high.toLocaleString()}.`
+        : `Your listing shows projects like this run about $${low.toLocaleString()}–$${high.toLocaleString()}.`;
+    }
+    const body = `Hi ${portfolio.business.companyName}! I love this look from "${portfolio.title}" and would love a quote on something similar.${range ? ' ' + range : ''} Are you available?`;
 
     await db.message.create({
       data: {
@@ -190,9 +208,10 @@ router.post('/quote-this-look', authMiddleware, requireRole('CLIENT'), async (re
 
     res.status(201).json({
       conversationId: conversation.id,
-      estimationId:   estimation.id,
+      estimationId:   estimation ? estimation.id : null,
       estimateLow:    low,
       estimateHigh:   high,
+      usedAi,
     });
   } catch (err) {
     next(err);

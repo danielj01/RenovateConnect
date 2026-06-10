@@ -57,7 +57,7 @@ async function seedFeed({ approved = true } = {}) {
 }
 
 describe('POST /feed/quote-this-look', () => {
-  test('happy path: runs the estimator, opens a thread, posts a pre-filled first message', async () => {
+  test('AI fallback: portfolio has no cost range → runs the estimator, opens a thread, posts a pre-filled first message', async () => {
     const { client, token, business, portfolio } = await seedFeed();
 
     const res = await request(app).post('/feed/quote-this-look')
@@ -67,13 +67,15 @@ describe('POST /feed/quote-this-look', () => {
     expect(res.body.conversationId).toBeTruthy();
     expect(res.body.estimateLow).toBe(8000);
     expect(res.body.estimateHigh).toBe(14000);
+    expect(res.body.usedAi).toBe(true);
+    expect(res.body.estimationId).toBeTruthy();
 
     // Estimator was called with the project category as roomType.
     expect(ai.estimateRenovationCost).toHaveBeenCalledTimes(1);
     expect(ai.estimateRenovationCost.mock.calls[0][0].roomType).toBe('Bathroom');
 
     // First message carries the image AND a body that mentions the company,
-    // the portfolio title, and the AI range.
+    // the portfolio title, and the AI range with the AI source attribution.
     const conv = await db.conversation.findUnique({
       where: { id: res.body.conversationId },
       include: { messages: true },
@@ -85,12 +87,57 @@ describe('POST /feed/quote-this-look', () => {
     expect(msg.imageUrls).toEqual([portfolio.imageUrls[0]]);
     expect(msg.body).toContain('Tile Pros');
     expect(msg.body).toContain('Modern bath');
+    expect(msg.body).toContain('AI estimator');
     expect(msg.body).toContain('8,000');
     expect(msg.body).toContain('14,000');
 
     // First contact created a Lead.
     const lead = await db.lead.findFirst({ where: { conversationId: conv.id } });
     expect(lead).not.toBeNull();
+  });
+
+  test('uses the contractor-posted range and skips the AI estimator entirely', async () => {
+    const { token, portfolio } = await seedFeed();
+    await db.portfolioProject.update({
+      where: { id: portfolio.id }, data: { costMin: 12000, costMax: 18000 },
+    });
+
+    const res = await request(app).post('/feed/quote-this-look')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ portfolioProjectId: portfolio.id, imageUrl: portfolio.imageUrls[0] });
+    expect(res.status).toBe(201);
+    expect(res.body.usedAi).toBe(false);
+    expect(res.body.estimationId).toBeNull();
+    expect(res.body.estimateLow).toBe(12000);
+    expect(res.body.estimateHigh).toBe(18000);
+
+    // Critical: no Claude call, no image download, no Estimation row.
+    expect(ai.estimateRenovationCost).not.toHaveBeenCalled();
+    expect(global.fetch).not.toHaveBeenCalled();
+    expect(await db.estimation.count()).toBe(0);
+
+    // Message body cites the contractor's listing, not the AI estimator.
+    const msgs = await db.message.findMany({
+      where: { conversationId: res.body.conversationId },
+    });
+    expect(msgs[0].body).toContain('Your listing shows');
+    expect(msgs[0].body).not.toContain('AI estimator');
+    expect(msgs[0].body).toContain('12,000');
+    expect(msgs[0].body).toContain('18,000');
+  });
+
+  test('falls back to AI when the portfolio range is partial (only costMin)', async () => {
+    const { token, portfolio } = await seedFeed();
+    await db.portfolioProject.update({
+      where: { id: portfolio.id }, data: { costMin: 12000 },
+    });
+
+    const res = await request(app).post('/feed/quote-this-look')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ portfolioProjectId: portfolio.id, imageUrl: portfolio.imageUrls[0] });
+    expect(res.status).toBe(201);
+    expect(res.body.usedAi).toBe(true);
+    expect(ai.estimateRenovationCost).toHaveBeenCalledTimes(1);
   });
 
   test('reusing the same photo into an existing thread appends a message; does not double-lead', async () => {

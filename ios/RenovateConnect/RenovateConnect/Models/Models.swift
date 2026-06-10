@@ -331,9 +331,13 @@ struct FeedBusiness: Codable {
 /// Result of POST /feed/quote-this-look — the flagship one-tap intro.
 struct QuoteThisLookResponse: Codable {
     let conversationId: String
-    let estimationId: String
+    /// nil when the contractor's posted range was used (no Estimation row).
+    let estimationId: String?
     let estimateLow: Int?
     let estimateHigh: Int?
+    /// Whether the AI estimator ran (false when the contractor's listing
+    /// already had a complete cost range — we used that instead).
+    var usedAi: Bool?
 
     var estimateRangeText: String? {
         if let lo = estimateLow, let hi = estimateHigh {
