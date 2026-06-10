@@ -117,7 +117,7 @@ router.post('/quote-this-look', authMiddleware, requireRole('CLIENT'), async (re
       if (!resp.ok) throw new Error(`fetch ${resp.status}`);
       const buf = Buffer.from(await resp.arrayBuffer());
       imageBase64 = buf.toString('base64');
-    } catch (err) {
+    } catch {
       return res.status(502).json({ error: 'Could not load the inspiration photo' });
     }
 
