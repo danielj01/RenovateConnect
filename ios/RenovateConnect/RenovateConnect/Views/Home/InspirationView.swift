@@ -17,8 +17,17 @@ struct InspirationView: View {
 
     // Simple two-column waterfall: alternate items by index. Good enough without
     // knowing image dimensions up front; heights vary naturally with each photo.
-    private var leftColumn: [FeedItem] { items.enumerated().filter { $0.offset.isMultiple(of: 2) }.map(\.element) }
-    private var rightColumn: [FeedItem] { items.enumerated().filter { !$0.offset.isMultiple(of: 2) }.map(\.element) }
+    // Split once per items change (via the destructured tuple) so a body
+    // re-render from an unrelated state change (e.g. loadingMore flipping)
+    // doesn't recompute both columns.
+    private var columns: (left: [FeedItem], right: [FeedItem]) {
+        var left: [FeedItem] = []
+        var right: [FeedItem] = []
+        for (i, item) in items.enumerated() {
+            if i.isMultiple(of: 2) { left.append(item) } else { right.append(item) }
+        }
+        return (left, right)
+    }
 
     var body: some View {
         NavigationStack {
@@ -36,17 +45,27 @@ struct InspirationView: View {
                         description: Text("Project photos from contractors will appear here.")
                     ).padding(.top, 60)
                 } else {
+                    let cols = columns
                     HStack(alignment: .top, spacing: 10) {
-                        column(leftColumn)
-                        column(rightColumn)
+                        column(cols.left)
+                        column(cols.right)
                     }
                     .padding(.horizontal, 10)
+                    // Cross-fade when the items array swaps wholesale (category
+                    // change). Without an explicit transition, iOS 17/18 snaps
+                    // the LazyVStack from old → new identities with no easing.
+                    .transition(.opacity)
+                    // Re-establish identity per category so the ScrollView
+                    // doesn't try to diff a totally different list against the
+                    // old one — that diff is what produces the visible jump.
+                    .id(category ?? "all")
 
                     if loadingMore {
                         ProgressView().padding(.vertical, 16)
                     }
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: items.count)
             .navigationTitle("Inspiration")
             .task { if items.isEmpty { await load(reset: true) } }
             .refreshable { await load(reset: true) }
@@ -66,7 +85,14 @@ struct InspirationView: View {
     private func chip(_ label: String, value: String?) -> some View {
         Button {
             guard category != value else { return }
-            category = value
+            // Clear the old grid immediately so the user doesn't see stale
+            // items snap to new ones — the ProgressView covers the gap until
+            // the new page lands. Wrapped in withAnimation so the cross-fade
+            // transition on the items HStack picks it up.
+            withAnimation(.easeInOut(duration: 0.18)) {
+                category = value
+                items = []
+            }
             Task { await load(reset: true) }
         } label: {
             Text(label)
@@ -75,6 +101,9 @@ struct InspirationView: View {
                 .background(category == value ? Theme.primary : Color(.systemGray6))
                 .foregroundStyle(category == value ? .white : Color(.label))
                 .clipShape(Capsule())
+                // Explicit easing on the selected-state swap; iOS 18 dropped
+                // the implicit color animation Button labels used to get.
+                .animation(.easeInOut(duration: 0.18), value: category)
         }
     }
 
@@ -113,7 +142,9 @@ struct InspirationView: View {
         error = nil
         do {
             let resp = try await APIService.shared.feed(page: reset ? 1 : page, category: category)
-            if reset { items = resp.items } else { items += resp.items }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if reset { items = resp.items } else { items += resp.items }
+            }
             hasMore = resp.hasMore
             page = resp.page + 1
         } catch {

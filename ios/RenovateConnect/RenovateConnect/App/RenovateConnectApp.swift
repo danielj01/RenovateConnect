@@ -8,6 +8,21 @@ struct RenovateConnectApp: App {
 
     init() {
         Self.suppressGuestIntroForExistingInstalls()
+        Self.configureImageCache()
+    }
+
+    /// AsyncImage uses URLSession.shared's URLCache, which defaults to ~20 MB
+    /// memory / ~5 MB disk — too small for an image-heavy feed (Inspiration,
+    /// portfolio galleries, before/afters). Without this, switching categories
+    /// in the Inspiration tab re-downloads every photo, the grid flashes blank
+    /// placeholders, and the masonry layout snaps as images decode at
+    /// different rates. Bumping the cache up front keeps recently-viewed
+    /// images instant and the transition smooth.
+    private static func configureImageCache() {
+        let mb = 1024 * 1024
+        URLCache.shared = URLCache(memoryCapacity: 64 * mb,
+                                   diskCapacity:   256 * mb,
+                                   diskPath:       "rc_image_cache")
     }
 
     /// The guest intro should appear only on a genuine fresh install — not when
