@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import AuthenticationServices
 import CryptoKit
 
@@ -14,6 +15,9 @@ import CryptoKit
 /// reversed-client-id scheme, which `ASWebAuthenticationSession` intercepts
 /// directly (no Info.plist URL-scheme registration needed).
 final class GoogleSignInHandler: NSObject, ObservableObject, ASWebAuthenticationPresentationContextProviding {
+    // NSObject subclass with explicit objectWillChange — same synthesis
+    // workaround as AppleSignInHandler.
+    let objectWillChange = PassthroughSubject<Void, Never>()
 
     /// The iOS OAuth client id from Google Cloud Console.
     static let clientID = "YOUR_IOS_CLIENT_ID.apps.googleusercontent.com"
