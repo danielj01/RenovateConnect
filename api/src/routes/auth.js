@@ -2,9 +2,11 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { z } = require('zod');
+const crypto = require('crypto');
 const { createPublicKey } = require('crypto');
 const https = require('https');
 const db = require('../services/db');
+const googleAuth = require('../services/googleAuth');
 const { authMiddleware } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimit');
 const upload = require('../middleware/upload');
@@ -54,6 +56,25 @@ function signToken(user) {
   return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
 }
 
+// Social sign-in accounts never log in with a password, but the column is
+// required — store a hash of high-entropy randomness so the password path can
+// never be used to enter the account.
+function unguessablePasswordHash() {
+  return bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+}
+
+// Find-or-create a user for a social sign-in, keyed on the provider-verified
+// email, and answer with the same token payload as /login.
+async function socialSignIn(res, { email, name }) {
+  let user = await db.user.findUnique({ where: { email } });
+  if (!user) {
+    user = await db.user.create({
+      data: { email, passwordHash: await unguessablePasswordHash(), name, role: 'CLIENT' },
+    });
+  }
+  res.json({ token: signToken(user), user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+}
+
 router.post('/register', authLimiter, async (req, res, next) => {
   try {
     const data = registerSchema.parse(req.body);
@@ -84,7 +105,9 @@ router.post('/login', authLimiter, async (req, res, next) => {
 // Sign in with Apple
 router.post('/apple', authLimiter, async (req, res, next) => {
   try {
-    const { identityToken, givenName, familyName, email } = appleSchema.parse(req.body);
+    // `email` stays in the schema (clients still send it) but is deliberately
+    // not read — see the trust note below.
+    const { identityToken, givenName, familyName } = appleSchema.parse(req.body);
 
     // Decode JWT header to find the key id (kid)
     const [headerB64] = identityToken.split('.');
@@ -95,34 +118,59 @@ router.post('/apple', authLimiter, async (req, res, next) => {
     const jwk = keys.find(k => k.kid === kid);
     if (!jwk) return res.status(401).json({ error: 'Apple public key not found' });
 
+    // Pin the audience to our app's bundle id so an identity token minted for
+    // some other app can't authenticate here. APPLE_BUNDLE_ID falls back to
+    // APNS_BUNDLE_ID (they're the same id); unset in dev skips the check.
+    const appleAudience = process.env.APPLE_BUNDLE_ID || process.env.APNS_BUNDLE_ID;
     let payload;
     try {
       payload = jwt.verify(identityToken, createPublicKey({ key: jwk, format: 'jwk' }), {
         algorithms: ['RS256'],
         issuer: 'https://appleid.apple.com',
+        ...(appleAudience ? { audience: appleAudience } : {}),
       });
     } catch {
       return res.status(401).json({ error: 'Invalid Apple identity token' });
     }
 
-    // Apple only provides email on first sign-in — fall back to relay address
-    const userEmail = email || payload.email || `${payload.sub}@privaterelay.appleid.com`;
+    // Only trust the email inside the VERIFIED token (Apple includes it — real
+    // or private-relay — whenever the user granted the email scope). The
+    // client-supplied `email` is display data at best: keying the account on it
+    // would let any Apple user sign in as an arbitrary existing email.
+    const userEmail = payload.email || `${payload.sub}@privaterelay.appleid.com`;
     const userName = [givenName, familyName].filter(Boolean).join(' ') || 'Apple User';
 
-    // Find existing account or create one
-    let user = await db.user.findUnique({ where: { email: userEmail } });
-    if (!user) {
-      user = await db.user.create({
-        data: {
-          email: userEmail,
-          passwordHash: await bcrypt.hash(payload.sub, 10),
-          name: userName,
-          role: 'CLIENT',
-        },
-      });
+    await socialSignIn(res, { email: userEmail, name: userName });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Sign in with Google. The app obtains an OAuth ID token natively and posts it
+// here; we verify it against Google's JWKS (issuer + audience + verified email)
+// and find-or-create the account exactly like Apple sign-in.
+const googleSchema = z.object({
+  idToken: z.string().min(1).max(8000),
+}).strict();
+
+router.post('/google', authLimiter, async (req, res, next) => {
+  try {
+    const { idToken } = googleSchema.parse(req.body);
+    if (!googleAuth.isConfigured()) {
+      return res.status(503).json({ error: 'Google sign-in is not configured' });
     }
 
-    res.json({ token: signToken(user), user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    let payload;
+    try {
+      payload = await googleAuth.verifyGoogleIdToken(idToken);
+    } catch {
+      return res.status(401).json({ error: 'Invalid Google ID token' });
+    }
+
+    await socialSignIn(res, {
+      email: payload.email,
+      name: payload.name || [payload.given_name, payload.family_name].filter(Boolean).join(' ') || 'Google User',
+    });
   } catch (err) {
     next(err);
   }

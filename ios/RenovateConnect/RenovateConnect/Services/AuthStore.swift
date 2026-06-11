@@ -87,6 +87,20 @@ final class AuthStore: ObservableObject {
         }
     }
 
+    func signInWithGoogle(idToken: String) async {
+        isLoading = true
+        error = nil
+        defer { isLoading = false }
+        do {
+            let resp = try await APIService.shared.googleSignIn(idToken: idToken)
+            AuthToken.set(resp.token)
+            await loadMe()
+            landOnFirstTab()
+        } catch {
+            self.error = "We couldn't sign you in with Google. Please try again."
+        }
+    }
+
     // MARK: - Friendly error messages
 
     /// Turn a raw API error into a short, human sign-in message. We deliberately

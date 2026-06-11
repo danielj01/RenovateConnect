@@ -60,6 +60,7 @@ final class AppleSignInHandler: NSObject, ObservableObject,
 struct LoginView: View {
     @EnvironmentObject private var auth: AuthStore
     @StateObject private var appleHandler = AppleSignInHandler()
+    @StateObject private var googleHandler = GoogleSignInHandler()
 
     @State private var email        = ""
     @State private var password     = ""
@@ -91,6 +92,10 @@ struct LoginView: View {
                 }
             }
             appleHandler.onError = { msg in auth.error = msg }
+            googleHandler.onSuccess = { idToken in
+                Task { await auth.signInWithGoogle(idToken: idToken) }
+            }
+            googleHandler.onError = { msg in auth.error = msg }
         }
         .sheet(isPresented: $showRegister) {
             RegisterView().environmentObject(auth)
@@ -199,6 +204,21 @@ struct LoginView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
             }
 
+            Button { googleHandler.start() } label: {
+                HStack(spacing: 8) {
+                    GoogleLogo(size: 18)
+                    Text("Sign in with Google").font(.system(size: 17, weight: .semibold))
+                }
+                .foregroundStyle(.primary)
+                .frame(maxWidth: .infinity).frame(height: 52)
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 14))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(Color(.systemGray4), lineWidth: 1)
+                )
+            }
+
             Button {
                 showRegister = true
             } label: {
@@ -218,6 +238,55 @@ struct LoginView: View {
 
     private var canSubmit: Bool {
         !auth.isLoading && !email.isEmpty && !password.isEmpty
+    }
+}
+
+// MARK: - Google logo
+
+/// Vector rendition of the four-color Google "G" so the sign-in button doesn't
+/// need a bundled image asset. Segment angles approximate the official mark.
+struct GoogleLogo: View {
+    let size: CGFloat
+
+    private static let blue   = Color(red: 0.259, green: 0.522, blue: 0.957)
+    private static let green  = Color(red: 0.204, green: 0.659, blue: 0.325)
+    private static let yellow = Color(red: 0.984, green: 0.737, blue: 0.020)
+    private static let red    = Color(red: 0.918, green: 0.263, blue: 0.208)
+
+    var body: some View {
+        let stroke = size * 0.21
+        ZStack {
+            segment(from: 20,  to: 90,  color: Self.green,  stroke: stroke)
+            segment(from: 90,  to: 180, color: Self.yellow, stroke: stroke)
+            segment(from: 180, to: 312, color: Self.red,    stroke: stroke)
+            segment(from: 352, to: 20,  color: Self.blue,   stroke: stroke)
+            // The crossbar: center → right edge at mid-height.
+            Rectangle()
+                .fill(Self.blue)
+                .frame(width: size * 0.5 + stroke / 2, height: stroke)
+                .offset(x: size * 0.25)
+        }
+        .frame(width: size, height: size)
+    }
+
+    private func segment(from: Double, to: Double, color: Color, stroke: CGFloat) -> some View {
+        ArcShape(startDegrees: from, endDegrees: to)
+            .stroke(color, lineWidth: stroke)
+            .padding(stroke / 2)
+    }
+
+    private struct ArcShape: Shape {
+        let startDegrees: Double
+        let endDegrees: Double
+        func path(in rect: CGRect) -> Path {
+            var p = Path()
+            p.addArc(center: CGPoint(x: rect.midX, y: rect.midY),
+                     radius: min(rect.width, rect.height) / 2,
+                     startAngle: .degrees(startDegrees),
+                     endAngle: .degrees(endDegrees),
+                     clockwise: false)
+            return p
+        }
     }
 }
 
