@@ -54,7 +54,7 @@ struct LeadsView: View {
                             .font(.callout).foregroundStyle(.secondary).padding(.top, 40)
                     }
                 }
-                .transition(.opacity)
+                .transition(.contentSwap)
                 .id(filter?.rawValue ?? "all")
             }
             .padding(.horizontal, 20)

@@ -51,10 +51,11 @@ struct InspirationView: View {
                         column(cols.right)
                     }
                     .padding(.horizontal, 10)
-                    // Cross-fade when the items array swaps wholesale (category
-                    // change). Without an explicit transition, iOS 17/18 snaps
-                    // the LazyVStack from old → new identities with no easing.
-                    .transition(.opacity)
+                    // Fade-out-then-in on category swap (see Theme.contentSwap).
+                    // Plain .opacity cross-faded both columns simultaneously
+                    // and the previous category's photos visibly bled through
+                    // the new ones at the same grid positions.
+                    .transition(.contentSwap)
                     // Re-establish identity per category so the ScrollView
                     // doesn't try to diff a totally different list against the
                     // old one — that diff is what produces the visible jump.

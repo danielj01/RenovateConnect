@@ -42,7 +42,7 @@ struct MyProjectsView: View {
                     case .estimates: estimatesSection
                     }
                 }
-                .transition(.opacity)
+                .transition(.contentSwap)
                 .id(segment)
             }
             .animation(.easeInOut(duration: 0.2), value: segment)

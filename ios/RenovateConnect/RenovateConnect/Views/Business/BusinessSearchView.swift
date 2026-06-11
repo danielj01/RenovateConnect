@@ -182,7 +182,7 @@ struct BusinessSearchView: View {
                 .transition(.opacity)
         } else {
             resultsPopulated
-                .transition(.opacity)
+                .transition(.contentSwap)
                 .id(selectedSpecialty ?? "all")
         }
     }

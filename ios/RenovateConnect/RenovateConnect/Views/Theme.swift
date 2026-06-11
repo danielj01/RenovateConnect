@@ -188,3 +188,16 @@ struct RCCard<Content: View>: View {
             .shadow(color: Theme.cardShadow, radius: 14, x: 0, y: 5)
     }
 }
+
+extension AnyTransition {
+    /// Fade-out-then-fade-in identity swap. Used on `.id(...)`-keyed content
+    /// containers (filter results, segments) where a plain `.transition(.opacity)`
+    /// cross-fade would render both view trees in the same parent slot at the
+    /// same time and visually overlap their section headers ("Kitchen
+    /// Contractors" bleeding through "Bathroom Contractors" during the swap).
+    /// The removal animates first; the insertion delays until removal is done.
+    static let contentSwap = AnyTransition.asymmetric(
+        insertion: .opacity.animation(.easeIn(duration: 0.18).delay(0.18)),
+        removal:   .opacity.animation(.easeOut(duration: 0.18))
+    )
+}
