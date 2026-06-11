@@ -29,6 +29,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
         {children}
+        <footer className="container muted" style={{ fontSize: 14, paddingTop: 32 }}>
+          <a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Service</a>
+          {' '}· © {new Date().getFullYear()} {siteName}
+        </footer>
       </body>
     </html>
   );

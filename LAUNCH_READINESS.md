@@ -8,7 +8,7 @@
 >
 > Status legend: ✅ done · 🟡 partial / needs config · 🔴 blocking · ⚪ nice-to-have
 
-_Last updated: 2026-06-04_
+_Last updated: 2026-06-11_
 
 ---
 
@@ -19,9 +19,9 @@ To be genuinely live you must clear three gates, in order:
 1. **Backend running in production** — there is currently *no* deployment config
    at all. Plus two design choices silently assume a single instance and an
    ephemeral filesystem that breaks on any PaaS.
-2. **iOS app distributable** — the bundle ID is an invalid placeholder, there's
-   no signing team, and **the Push Notifications capability is missing** (the
-   APNs code can't fire on device without it).
+2. **iOS app distributable** — bundle ID, push entitlements, and the privacy
+   manifest are now fixed in the project; remaining: signing team, the APNs
+   .p8 key, App Store Connect setup + assets.
 3. **Go-live ops** — Stripe live mode, monitoring, backups, legal pages.
 
 Estimated effort to a TestFlight-able, production-backed build: **~3–5 focused
@@ -123,21 +123,19 @@ silently disappear.**
 
 ## 3. iOS: make it distributable
 
-### 3.1 Project identity 🔴
-- [ ] **Bundle ID is invalid**: `-x4-Solutions.RenovateConnect` (leading dash).
-      Set a real reverse-DNS id, e.g. `app.renovateconnect` or
-      `com.renovateconnect.app`. Must match `APNS_BUNDLE_ID` on the server.
+### 3.1 Project identity 🟡
+- [x] **Bundle ID fixed**: now `app.renovateconnect` (was the invalid
+      `-x4-Solutions.RenovateConnect`). Matches the `APNS_BUNDLE_ID` example in
+      `api/.env.example` — keep the server env in sync.
 - [ ] Set `DEVELOPMENT_TEAM` to the Apple Developer account team ID; enable
       automatic signing (or set up manual provisioning profiles for CI).
 
-### 3.2 Push Notifications capability 🔴
-The APNs code exists but the app target has **no `aps-environment` entitlement**
-and **no `remote-notification` background mode** — push will not work on device.
-
-- [ ] Add the **Push Notifications** capability (creates the entitlements file +
-      `aps-environment`).
-- [ ] Add **Background Modes → Remote notifications** if you want silent/
-      background pushes.
+### 3.2 Push Notifications capability 🟡
+- [x] `aps-environment` entitlement added (`RenovateConnect.entitlements`, now
+      wired via `CODE_SIGN_ENTITLEMENTS` — it previously existed but wasn't
+      attached to the target, so associated domains weren't applying either).
+- [x] **Background Modes → Remote notifications**
+      (`INFOPLIST_KEY_UIBackgroundModes`).
 - [ ] In the Apple Developer portal, create an **APNs Auth Key (.p8)**; load its
       contents + Key ID + Team ID into the server's `APNS_*` env, set
       `APNS_PRODUCTION=true` for App Store / TestFlight builds.
@@ -147,12 +145,14 @@ and **no `remote-notification` background mode** — push will not work on devic
       5.1.1(v)). Done: `DELETE /auth/me` deletes the user + cascades their data
       (homeowner and contractor-with-business paths, both tested), with the
       "Delete account" flow in iOS `ProfileView`.
-- [ ] **Privacy Policy + Terms of Service** URLs (host on `renovateconnect.app`).
+- [x] **Privacy Policy + Terms of Service** pages built (`web/app/privacy`,
+      `web/app/terms`, linked from the site footer + sitemap; content derived
+      from `PRIVACY_COMMITMENT.md`) — live once the web app is deployed.
 - [ ] **App Privacy "nutrition label"** answers in App Store Connect (data
       collected: name/email, photos for estimates, payment via Stripe, push
-      token, usage analytics).
-- [ ] **Privacy manifest** (`PrivacyInfo.xcprivacy`) declaring required-reason
-      APIs + any tracking — now required at submission.
+      token, location, usage — mirror `PrivacyInfo.xcprivacy`).
+- [x] **Privacy manifest** (`PrivacyInfo.xcprivacy`) added: no tracking,
+      collected-data types, UserDefaults required-reason (CA92.1).
 - [ ] Confirm payments are correctly framed as **real-world services** (Stripe is
       allowed; this is not digital content, so no IAP needed) — but the review
       notes should make that explicit to avoid a 3.1.1 rejection.
@@ -208,10 +208,11 @@ Ballpark run cost at launch: **~$25–60/mo** + Apple Developer Program ($99/yr)
 6. [ ] Smoke test all flows against staging
 
 **Phase 2 — iOS shippable**
-7. [ ] Fix bundle ID + signing team
-8. [ ] Add Push Notifications + Background Modes capabilities; provision .p8
+7. [x] Fix bundle ID (`app.renovateconnect`); signing team still TODO
+8. [x] Push Notifications + Background Modes capabilities added; .p8 still TODO
 9. [x] Account deletion flow + endpoint
-10. [ ] Privacy policy/terms pages, App Privacy answers, privacy manifest
+10. [x] Privacy policy/terms pages + privacy manifest; App Privacy answers in
+       App Store Connect still TODO
 11. [ ] Icon + screenshots + listing copy
 12. [ ] Archive → TestFlight internal test
 
