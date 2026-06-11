@@ -92,108 +92,7 @@ struct BusinessSearchView: View {
                             .padding(.bottom, 6)
                     }
 
-                    if isLoading {
-                        VStack { ProgressView() }
-                            .frame(maxWidth: .infinity)
-                            .padding(.top, 80)
-                            .transition(.opacity)
-
-                    } else if let error {
-                        ContentUnavailableView(error, systemImage: "exclamationmark.triangle")
-                            .padding(.top, 60)
-                            .transition(.opacity)
-
-                    } else {
-                        // Verified contractors horizontal scroll
-                        if !featured.isEmpty && selectedSpecialty == nil && query.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                sectionHeader(icon: "checkmark.seal.fill", title: "Verified Pros")
-                                    .padding(.horizontal, 16)
-
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 14) {
-                                        ForEach(featured) { biz in
-                                            NavigationLink(destination: BusinessDetailView(businessId: biz.id)) {
-                                                FeaturedBusinessCard(business: biz)
-                                            }
-                                            .buttonStyle(.plain)
-                                        }
-                                    }
-                                    .padding(.horizontal, 16).padding(.bottom, 4)
-                                }
-                            }
-                            .padding(.bottom, 24)
-                        }
-
-                        // Sponsored (Pro) — clearly labeled, shown above organic
-                        // results without reordering them. The ⓘ explains the
-                        // policy (FTC-style ad disclosure).
-                        if !sponsored.isEmpty {
-                            VStack(alignment: .leading, spacing: 12) {
-                                HStack(spacing: 6) {
-                                    sectionHeader(icon: "megaphone.fill", title: "Sponsored")
-                                    Button {
-                                        showSponsoredDisclosure = true
-                                    } label: {
-                                        Image(systemName: "info.circle")
-                                            .font(.footnote)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    .accessibilityLabel("About sponsored results")
-                                }
-                                .padding(.horizontal, 16)
-                                ForEach(sponsored) { biz in
-                                    NavigationLink(destination: BusinessDetailView(businessId: biz.id, fromSponsored: true)) {
-                                        BusinessListCard(business: biz)
-                                            .padding(.horizontal, 16)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                            .padding(.bottom, 20)
-                            // Attached here (not on the body) to keep the
-                            // already-long body modifier chain type-checkable.
-                            .sheet(isPresented: $showSponsoredDisclosure) {
-                                SponsoredDisclosureSheet()
-                                    .presentationDetents([.medium])
-                            }
-                        }
-
-                        // All contractors
-                        VStack(alignment: .leading, spacing: 12) {
-                            sectionHeader(
-                                icon: "building.2.fill",
-                                title: selectedSpecialty.map { "\($0) Contractors" } ?? "All Contractors"
-                            )
-                            .padding(.horizontal, 16)
-
-                            if all.isEmpty {
-                                ContentUnavailableView(
-                                    "No contractors found",
-                                    systemImage: "building.2",
-                                    description: Text("Try a different search or category.")
-                                )
-                                .padding(.top, 24)
-                            } else {
-                                ForEach(all) { biz in
-                                    NavigationLink(destination: BusinessDetailView(businessId: biz.id)) {
-                                        BusinessListCard(business: biz)
-                                            .padding(.horizontal, 16)
-                                    }
-                                    .buttonStyle(.plain)
-                                }
-                            }
-                        }
-
-                        Spacer(minLength: 40)
-                    }
-                    // Cross-fade the result content (featured + sponsored +
-                    // list) when the filter swaps. Combined with the .id keyed
-                    // to selectedSpecialty, SwiftUI treats this as a clean
-                    // identity boundary instead of trying to diff different
-                    // lists, which is what produced the visible snap.
-                    .transition(.opacity)
-                    .id(selectedSpecialty ?? "all")
+                    resultsContent
                 }
             }
             .background(Color(.systemBackground))
@@ -258,6 +157,121 @@ struct BusinessSearchView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("Turn on location for RenovateConnect in Settings to sort contractors by distance.")
+            }
+        }
+    }
+
+    // MARK: - Results content
+    //
+    // Extracted from `body` to keep the search view inside the SwiftUI
+    // type-checker's complexity budget. Three branches: loading, error, and
+    // the populated results (verified pros + sponsored + organic list). The
+    // .transition(.opacity) + .id(selectedSpecialty) on the populated branch
+    // turns category swaps into a clean cross-fade instead of a snap.
+
+    @ViewBuilder
+    private var resultsContent: some View {
+        if isLoading {
+            VStack { ProgressView() }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 80)
+                .transition(.opacity)
+        } else if let error {
+            ContentUnavailableView(error, systemImage: "exclamationmark.triangle")
+                .padding(.top, 60)
+                .transition(.opacity)
+        } else {
+            resultsPopulated
+                .transition(.opacity)
+                .id(selectedSpecialty ?? "all")
+        }
+    }
+
+    @ViewBuilder
+    private var resultsPopulated: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            featuredCarousel
+            sponsoredSection
+            allContractorsSection
+            Spacer(minLength: 40)
+        }
+    }
+
+    @ViewBuilder
+    private var featuredCarousel: some View {
+        if !featured.isEmpty && selectedSpecialty == nil && query.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader(icon: "checkmark.seal.fill", title: "Verified Pros")
+                    .padding(.horizontal, 16)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(featured) { biz in
+                            NavigationLink(destination: BusinessDetailView(businessId: biz.id)) {
+                                FeaturedBusinessCard(business: biz)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 16).padding(.bottom, 4)
+                }
+            }
+            .padding(.bottom, 24)
+        }
+    }
+
+    @ViewBuilder
+    private var sponsoredSection: some View {
+        if !sponsored.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 6) {
+                    sectionHeader(icon: "megaphone.fill", title: "Sponsored")
+                    Button { showSponsoredDisclosure = true } label: {
+                        Image(systemName: "info.circle")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel("About sponsored results")
+                }
+                .padding(.horizontal, 16)
+                ForEach(sponsored) { biz in
+                    NavigationLink(destination: BusinessDetailView(businessId: biz.id, fromSponsored: true)) {
+                        BusinessListCard(business: biz)
+                            .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.bottom, 20)
+            .sheet(isPresented: $showSponsoredDisclosure) {
+                SponsoredDisclosureSheet()
+                    .presentationDetents([.medium])
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var allContractorsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(
+                icon: "building.2.fill",
+                title: selectedSpecialty.map { "\($0) Contractors" } ?? "All Contractors"
+            )
+            .padding(.horizontal, 16)
+            if all.isEmpty {
+                ContentUnavailableView(
+                    "No contractors found",
+                    systemImage: "building.2",
+                    description: Text("Try a different search or category.")
+                )
+                .padding(.top, 24)
+            } else {
+                ForEach(all) { biz in
+                    NavigationLink(destination: BusinessDetailView(businessId: biz.id)) {
+                        BusinessListCard(business: biz)
+                            .padding(.horizontal, 16)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
