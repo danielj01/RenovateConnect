@@ -41,28 +41,40 @@ struct LeadsView: View {
         ScrollView {
             VStack(spacing: 14) {
                 filterBar
-                ForEach(filtered) { lead in
-                    Button { selected = lead } label: { LeadRow(lead: lead) }
-                        .buttonStyle(.plain)
+                // Group + .id so each filter state gets its own identity tree,
+                // and the .transition gives the swap a clean cross-fade
+                // instead of the abrupt ForEach diff iOS 17/18 produces.
+                Group {
+                    ForEach(filtered) { lead in
+                        Button { selected = lead } label: { LeadRow(lead: lead) }
+                            .buttonStyle(.plain)
+                    }
+                    if filtered.isEmpty {
+                        Text("No \(filter?.label.lowercased() ?? "") leads")
+                            .font(.callout).foregroundStyle(.secondary).padding(.top, 40)
+                    }
                 }
-                if filtered.isEmpty {
-                    Text("No \(filter?.label.lowercased() ?? "") leads")
-                        .font(.callout).foregroundStyle(.secondary).padding(.top, 40)
-                }
+                .transition(.opacity)
+                .id(filter?.rawValue ?? "all")
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
+            .animation(.easeInOut(duration: 0.18), value: filter)
         }
     }
 
     private var filterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                FilterChip(title: "All", count: leads.count, isOn: filter == nil) { filter = nil }
+                FilterChip(title: "All", count: leads.count, isOn: filter == nil) {
+                    withAnimation(.easeInOut(duration: 0.18)) { filter = nil }
+                }
                 ForEach(LeadStatus.allCases) { status in
                     let c = leads.filter { $0.status == status }.count
                     FilterChip(title: status.label, count: c, isOn: filter == status) {
-                        filter = (filter == status) ? nil : status
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            filter = (filter == status) ? nil : status
+                        }
                     }
                 }
             }

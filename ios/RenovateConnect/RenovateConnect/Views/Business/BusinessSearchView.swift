@@ -59,8 +59,17 @@ struct BusinessSearchView: View {
 
                             ForEach(specialties, id: \.0) { name, icon in
                                 Button {
-                                    withAnimation(.spring(duration: 0.25)) {
+                                    // Clear the result lists right away so the
+                                    // user never sees stale results from the
+                                    // PREVIOUS specialty under the new chip —
+                                    // the ProgressView covers the gap until
+                                    // the network round-trip lands. The
+                                    // withAnimation drives the cross-fade
+                                    // transition on the content sections.
+                                    withAnimation(.easeInOut(duration: 0.2)) {
                                         selectedSpecialty = selectedSpecialty == name ? nil : name
+                                        businesses = []
+                                        sponsored = []
                                     }
                                 } label: {
                                     Label(name, systemImage: icon)
@@ -87,10 +96,12 @@ struct BusinessSearchView: View {
                         VStack { ProgressView() }
                             .frame(maxWidth: .infinity)
                             .padding(.top, 80)
+                            .transition(.opacity)
 
                     } else if let error {
                         ContentUnavailableView(error, systemImage: "exclamationmark.triangle")
                             .padding(.top, 60)
+                            .transition(.opacity)
 
                     } else {
                         // Verified contractors horizontal scroll
@@ -176,6 +187,13 @@ struct BusinessSearchView: View {
 
                         Spacer(minLength: 40)
                     }
+                    // Cross-fade the result content (featured + sponsored +
+                    // list) when the filter swaps. Combined with the .id keyed
+                    // to selectedSpecialty, SwiftUI treats this as a clean
+                    // identity boundary instead of trying to diff different
+                    // lists, which is what produced the visible snap.
+                    .transition(.opacity)
+                    .id(selectedSpecialty ?? "all")
                 }
             }
             .background(Color(.systemBackground))
@@ -295,8 +313,12 @@ struct BusinessSearchView: View {
                 lat: coord?.latitude,
                 lng: coord?.longitude
             )
-            businesses = resp.businesses
-            sponsored = resp.sponsored ?? []
+            // Cross-fade the new list in. Without this the array swap is
+            // instant — perceived as a jump on iOS 17/18.
+            withAnimation(.easeInOut(duration: 0.2)) {
+                businesses = resp.businesses
+                sponsored = resp.sponsored ?? []
+            }
         } catch {
             self.error = error.localizedDescription
         }

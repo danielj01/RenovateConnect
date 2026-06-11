@@ -30,12 +30,22 @@ struct MyProjectsView: View {
             .padding(.vertical, 12)
 
             ScrollView {
-                switch segment {
-                case .projects: projectsSection
-                case .saved: savedSection
-                case .estimates: estimatesSection
+                // Group + .id(segment) makes each segment its own identity tree
+                // so SwiftUI doesn't try to diff different lists against each
+                // other; the .transition + .animation(value:) gives the swap a
+                // cross-fade instead of an instant pop. iOS 17/18 stopped
+                // implicitly easing this kind of conditional rebuild.
+                Group {
+                    switch segment {
+                    case .projects: projectsSection
+                    case .saved: savedSection
+                    case .estimates: estimatesSection
+                    }
                 }
+                .transition(.opacity)
+                .id(segment)
             }
+            .animation(.easeInOut(duration: 0.2), value: segment)
         }
         .background(Color(.systemBackground))
         .navigationTitle("My Projects")
