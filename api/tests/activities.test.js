@@ -1,6 +1,6 @@
 const request = require('supertest');
 const app = require('../src/app');
-const { db, resetDb, createClient, createBusiness, tokenFor } = require('./helpers');
+const { db, resetDb, createClient, createBusiness, createAdmin, tokenFor } = require('./helpers');
 
 beforeEach(resetDb);
 afterAll(async () => { await db.$disconnect(); });
@@ -157,8 +157,9 @@ describe('Activity feed', () => {
 
   test('a saved-search match deep-links to the business', async () => {
     const { token: clientToken } = await createClient();
-    // Save a search, then create a matching business through the API route
-    // (that's the path that fires the new-contractor alert).
+    // Save a search, then create + admin-approve a matching business. The
+    // approval transition is what fires the new-contractor alert (new
+    // listings are PENDING and invisible to homeowners until approved).
     await request(app).post('/saved-searches').set('Authorization', `Bearer ${clientToken}`)
       .send({ specialty: 'Kitchen' }).expect(201);
 
@@ -172,6 +173,12 @@ describe('Activity feed', () => {
         city: 'Austin', state: 'TX', zipCode: '78701', specialties: ['Kitchen'],
       });
     expect(created.status).toBe(201);
+
+    const { token: adminToken } = await createAdmin();
+    const approved = await request(app)
+      .post(`/admin/businesses/${created.body.id}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(approved.status).toBe(200);
 
     const res = await request(app).get('/activities').set('Authorization', `Bearer ${clientToken}`);
     const match = res.body.find((a) => a.type === 'SAVED_SEARCH');

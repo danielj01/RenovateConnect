@@ -127,7 +127,13 @@ Ignoring the LAUNCH_READINESS infra/Apple-signing track, which runs in parallel:
 6. ✅ **Sponsored disclosure + dashboard perf card** — shipped 2026-06-10
    (ⓘ disclosure sheet on the Sponsored header; sponsoredImpressions/
    sponsoredClicks/CTR tracked server-side and surfaced on the Pro dashboard)
-7. **Saved-search → push alerts** (re-engagement) — ~half day — NEXT
+7. ✅ **Saved-search → push alerts** — already wired (push + activity feed on
+   `POST /businesses`). Found a real bug while auditing: alerts fired when
+   the contractor *submitted* their profile (PENDING, invisible), so
+   homeowners got "new contractor match" pushes pointing at businesses
+   they couldn't see in search. Moved the trigger to
+   `POST /admin/businesses/:id/approve` and gated it on the transition
+   *into* APPROVED so re-approving doesn't re-spam. Shipped 2026-06-11.
 
 Deferred until post-launch: quote templates, referrals, SSE messaging upgrade,
 gamification, the Insights $10 tier feature expansion.

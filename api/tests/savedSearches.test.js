@@ -1,12 +1,14 @@
 const request = require('supertest');
 const app = require('../src/app');
-const { db, resetDb, createClient, createBusiness } = require('./helpers');
+const { db, resetDb, createClient, createBusiness, createAdmin, tokenFor } = require('./helpers');
 const { matches, notifyMatchingSearches } = require('../src/services/savedSearch');
 
 beforeEach(resetDb);
 afterAll(async () => { await db.$disconnect(); });
 
-// A valid profile body for POST /businesses (triggers the alert path).
+// A valid profile body for POST /businesses. Creating a business no longer
+// fires saved-search alerts on its own (new businesses are PENDING and
+// invisible to homeowners). The alert path now runs through admin approval.
 function profileBody(overrides = {}) {
   return {
     companyName: 'Bright Kitchens',
@@ -17,6 +19,27 @@ function profileBody(overrides = {}) {
     specialties: ['Kitchen'],
     ...overrides,
   };
+}
+
+// Create a business via the public POST /businesses (returns a PENDING row),
+// then drive an admin through POST /admin/businesses/:id/approve to flip it
+// to APPROVED — the path that actually fires saved-search alerts.
+async function createAndApproveBusiness({ ownerEmail, ownerName = 'Owner', body = profileBody() } = {}) {
+  const owner = await db.user.create({
+    data: { email: ownerEmail, passwordHash: 'x', name: ownerName, role: 'BUSINESS' },
+  });
+  const create = await request(app)
+    .post('/businesses')
+    .set('Authorization', `Bearer ${tokenFor(owner)}`)
+    .send(body);
+  expect(create.status).toBe(201);
+
+  const { token: adminToken } = await createAdmin();
+  const approve = await request(app)
+    .post(`/admin/businesses/${create.body.id}/approve`)
+    .set('Authorization', `Bearer ${adminToken}`);
+  expect(approve.status).toBe(200);
+  return { owner, business: approve.body };
 }
 
 describe('Saved searches — CRUD', () => {
@@ -108,19 +131,20 @@ describe('Saved searches — matching', () => {
   });
 });
 
-describe('Saved searches — alerts on new contractor', () => {
-  test('a matching new business notifies the saver (activity + lastNotifiedAt bump)', async () => {
+describe('Saved searches — alerts fire on admin approval (not on creation)', () => {
+  test('creating a business does NOT notify (it is still PENDING and invisible)', async () => {
+    // Regression test: the old wiring fired the push when the contractor
+    // submitted their profile, before admin review. Homeowners ended up with
+    // notifications pointing at businesses they couldn't see in search.
     const saver = await createClient();
     await request(app)
       .post('/saved-searches')
       .set('Authorization', `Bearer ${saver.token}`)
       .send({ specialty: 'Kitchen', city: 'Austin' });
 
-    // A business owner creates a matching profile via the public route.
     const owner = await db.user.create({
-      data: { email: `owner_${Date.now()}@test.com`, passwordHash: 'x', name: 'Owner', role: 'BUSINESS' },
+      data: { email: `pending_${Date.now()}@test.com`, passwordHash: 'x', name: 'Owner', role: 'BUSINESS' },
     });
-    const { tokenFor } = require('./helpers');
     const res = await request(app)
       .post('/businesses')
       .set('Authorization', `Bearer ${tokenFor(owner)}`)
@@ -128,33 +152,96 @@ describe('Saved searches — alerts on new contractor', () => {
     expect(res.status).toBe(201);
 
     const acts = await db.activity.findMany({ where: { userId: saver.user.id } });
+    expect(acts).toHaveLength(0);
+  });
+
+  test('approving a matching business notifies the saver (activity + lastNotifiedAt bump)', async () => {
+    const saver = await createClient();
+    await request(app)
+      .post('/saved-searches')
+      .set('Authorization', `Bearer ${saver.token}`)
+      .send({ specialty: 'Kitchen', city: 'Austin' });
+
+    const { business } = await createAndApproveBusiness({ ownerEmail: `owner_${Date.now()}@test.com` });
+
+    const acts = await db.activity.findMany({ where: { userId: saver.user.id } });
     expect(acts).toHaveLength(1);
     expect(acts[0].type).toBe('SAVED_SEARCH');
-    expect(acts[0].data.businessId).toBe(res.body.id);
+    expect(acts[0].data.businessId).toBe(business.id);
 
     const search = await db.savedSearch.findFirst({ where: { userId: saver.user.id } });
     expect(new Date(search.lastNotifiedAt).getTime()).toBeGreaterThan(new Date(search.createdAt).getTime() - 1000);
   });
 
-  test('a non-matching new business does not notify', async () => {
+  test('a non-matching newly-approved business does not notify', async () => {
     const saver = await createClient();
     await request(app)
       .post('/saved-searches')
       .set('Authorization', `Bearer ${saver.token}`)
       .send({ specialty: 'Roofing' });
 
-    const { tokenFor } = require('./helpers');
-    const owner = await db.user.create({
-      data: { email: `owner2_${Date.now()}@test.com`, passwordHash: 'x', name: 'Owner', role: 'BUSINESS' },
+    await createAndApproveBusiness({
+      ownerEmail: `owner2_${Date.now()}@test.com`,
+      body: profileBody({ specialties: ['Kitchen'] }),
     });
-    const res = await request(app)
-      .post('/businesses')
-      .set('Authorization', `Bearer ${tokenFor(owner)}`)
-      .send(profileBody({ specialties: ['Kitchen'] }));
-    expect(res.status).toBe(201);
 
     const acts = await db.activity.findMany({ where: { userId: saver.user.id } });
     expect(acts).toHaveLength(0);
+  });
+
+  test('re-approving an already-APPROVED business does not re-spam', async () => {
+    const saver = await createClient();
+    await request(app)
+      .post('/saved-searches')
+      .set('Authorization', `Bearer ${saver.token}`)
+      .send({ specialty: 'Kitchen' });
+
+    const { business } = await createAndApproveBusiness({ ownerEmail: `dup_${Date.now()}@test.com` });
+    expect((await db.activity.findMany({ where: { userId: saver.user.id } })).length).toBe(1);
+
+    // Admin calls approve again on the same business — idempotent: no second push.
+    const { token: adminToken } = await createAdmin();
+    const again = await request(app)
+      .post(`/admin/businesses/${business.id}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(again.status).toBe(200);
+
+    const acts = await db.activity.findMany({ where: { userId: saver.user.id } });
+    expect(acts).toHaveLength(1);
+  });
+
+  test('reject → approve recovery notifies (a previously rejected business that gets approved later)', async () => {
+    const saver = await createClient();
+    await request(app)
+      .post('/saved-searches')
+      .set('Authorization', `Bearer ${saver.token}`)
+      .send({ specialty: 'Kitchen' });
+
+    // Create a pending business, admin rejects it, then later approves it.
+    const owner = await db.user.create({
+      data: { email: `recover_${Date.now()}@test.com`, passwordHash: 'x', name: 'Owner', role: 'BUSINESS' },
+    });
+    const create = await request(app).post('/businesses')
+      .set('Authorization', `Bearer ${tokenFor(owner)}`).send(profileBody());
+    expect(create.status).toBe(201);
+
+    const { token: adminToken } = await createAdmin();
+    const reject = await request(app)
+      .post(`/admin/businesses/${create.body.id}/reject`)
+      .set('Authorization', `Bearer ${adminToken}`).send({ reason: 'fix description' });
+    expect(reject.status).toBe(200);
+
+    // Rejection itself does not notify saved-search owners.
+    expect((await db.activity.findMany({ where: { userId: saver.user.id } })).length).toBe(0);
+
+    const approve = await request(app)
+      .post(`/admin/businesses/${create.body.id}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(approve.status).toBe(200);
+
+    // Crossing into APPROVED for the first time → fires.
+    const acts = await db.activity.findMany({ where: { userId: saver.user.id } });
+    expect(acts).toHaveLength(1);
   });
 
   test('respects the recipient muting (allowsType is permissive for SAVED_SEARCH, so it still posts)', async () => {
@@ -173,20 +260,25 @@ describe('Saved searches — alerts on new contractor', () => {
   });
 
   test('does not notify the business owner about their own profile', async () => {
-    // An owner who also saved a search shouldn't be alerted about themselves.
-    const { tokenFor } = require('./helpers');
+    // An owner who also saved a search shouldn't be alerted about themselves
+    // when their own listing gets approved.
     const owner = await db.user.create({
       data: { email: `selfowner_${Date.now()}@test.com`, passwordHash: 'x', name: 'Owner', role: 'CLIENT' },
     });
     await db.savedSearch.create({ data: { userId: owner.id, specialty: 'Kitchen' } });
-
-    // Flip to BUSINESS and create a matching profile.
     await db.user.update({ where: { id: owner.id }, data: { role: 'BUSINESS' } });
-    const res = await request(app)
+
+    const create = await request(app)
       .post('/businesses')
       .set('Authorization', `Bearer ${tokenFor({ ...owner, role: 'BUSINESS' })}`)
       .send(profileBody());
-    expect(res.status).toBe(201);
+    expect(create.status).toBe(201);
+
+    const { token: adminToken } = await createAdmin();
+    const approve = await request(app)
+      .post(`/admin/businesses/${create.body.id}/approve`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(approve.status).toBe(200);
 
     const acts = await db.activity.findMany({ where: { userId: owner.id } });
     expect(acts).toHaveLength(0);

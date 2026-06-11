@@ -47,10 +47,12 @@ const decisionSchema = z.object({
 
 function decide(target) {
   // target is the model accessor, e.g. db.business or db.portfolioProject.
+  // Returns { existing, updated } so callers can detect the transition (e.g.
+  // saved-search alerts only fire when a business crosses INTO 'APPROVED').
   return async (status, id, reason) => {
     const existing = await target.findUnique({ where: { id } });
     if (!existing) return null;
-    return target.update({
+    const updated = await target.update({
       where: { id },
       data: {
         approvalStatus: status,
@@ -58,14 +60,22 @@ function decide(target) {
         reviewedAt: new Date(),
       },
     });
+    return { existing, updated };
   };
 }
 
+const { notifyMatchingSearches } = require('../services/savedSearch');
+
 router.post('/businesses/:id/approve', async (req, res, next) => {
   try {
-    const updated = await decide(db.business)('APPROVED', req.params.id);
-    if (!updated) return res.status(404).json({ error: 'Not found' });
-    res.json(updated);
+    const result = await decide(db.business)('APPROVED', req.params.id);
+    if (!result) return res.status(404).json({ error: 'Not found' });
+    // Saved-search alerts fire only on the transition INTO 'APPROVED'. A
+    // re-approval of an already-approved business does not re-spam.
+    if (result.existing.approvalStatus !== 'APPROVED') {
+      await notifyMatchingSearches(result.updated);
+    }
+    res.json(result.updated);
   } catch (err) {
     next(err);
   }
@@ -74,9 +84,9 @@ router.post('/businesses/:id/approve', async (req, res, next) => {
 router.post('/businesses/:id/reject', async (req, res, next) => {
   try {
     const { reason } = decisionSchema.parse(req.body || {});
-    const updated = await decide(db.business)('REJECTED', req.params.id, reason);
-    if (!updated) return res.status(404).json({ error: 'Not found' });
-    res.json(updated);
+    const result = await decide(db.business)('REJECTED', req.params.id, reason);
+    if (!result) return res.status(404).json({ error: 'Not found' });
+    res.json(result.updated);
   } catch (err) {
     next(err);
   }
@@ -84,9 +94,9 @@ router.post('/businesses/:id/reject', async (req, res, next) => {
 
 router.post('/portfolio/:projectId/approve', async (req, res, next) => {
   try {
-    const updated = await decide(db.portfolioProject)('APPROVED', req.params.projectId);
-    if (!updated) return res.status(404).json({ error: 'Not found' });
-    res.json(updated);
+    const result = await decide(db.portfolioProject)('APPROVED', req.params.projectId);
+    if (!result) return res.status(404).json({ error: 'Not found' });
+    res.json(result.updated);
   } catch (err) {
     next(err);
   }
@@ -95,9 +105,9 @@ router.post('/portfolio/:projectId/approve', async (req, res, next) => {
 router.post('/portfolio/:projectId/reject', async (req, res, next) => {
   try {
     const { reason } = decisionSchema.parse(req.body || {});
-    const updated = await decide(db.portfolioProject)('REJECTED', req.params.projectId, reason);
-    if (!updated) return res.status(404).json({ error: 'Not found' });
-    res.json(updated);
+    const result = await decide(db.portfolioProject)('REJECTED', req.params.projectId, reason);
+    if (!result) return res.status(404).json({ error: 'Not found' });
+    res.json(result.updated);
   } catch (err) {
     next(err);
   }

@@ -2,7 +2,6 @@ const router = require('express').Router();
 const { z } = require('zod');
 const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
-const { notifyMatchingSearches } = require('../services/savedSearch');
 const upload = require('../middleware/upload');
 const { uploadImage } = require('../services/storage');
 
@@ -280,9 +279,10 @@ router.post('/', authMiddleware, requireRole('BUSINESS'), async (req, res, next)
   try {
     const data = profileSchema.parse(req.body);
     const business = await db.business.create({ data: { ...data, userId: req.user.id } });
-    // Alert homeowners whose saved searches match this new contractor. Awaited so
-    // it's deterministic under test; the service swallows its own errors.
-    await notifyMatchingSearches(business);
+    // Saved-search alerts intentionally do NOT fire here — new businesses
+    // are created PENDING and hidden from public search/profile until an
+    // admin approves. They fire from /admin/businesses/:id/approve so the
+    // notification points at a contractor the recipient can actually see.
     res.status(201).json(business);
   } catch (err) {
     // A user can only have one business profile (unique userId). A double-submit
