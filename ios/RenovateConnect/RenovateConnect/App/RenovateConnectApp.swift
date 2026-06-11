@@ -60,6 +60,9 @@ struct RenovateConnectApp: App {
             MainTabView()
                 .environmentObject(auth)
                 .environmentObject(notifications)
+                // Re-sync the APNs token for this account on every signed-in
+                // launch/sign-in (logout removed it server-side; tokens rotate).
+                .task { await notifications.registerIfAuthorized() }
         } else {
             // Signed-out visitors get a full browse + estimate experience, not a
             // login wall. Sign-in is prompted only when they reach for an

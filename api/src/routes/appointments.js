@@ -17,7 +17,8 @@ router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) =
   try {
     const { businessId, scheduledAt, durationMin, note } = z.object({
       businessId: z.string().min(1).max(64),
-      scheduledAt: z.coerce.date(),
+      scheduledAt: z.coerce.date()
+        .refine((d) => d.getTime() > Date.now(), { message: 'Appointment time must be in the future' }),
       durationMin: z.number().int().positive().max(24 * 60).optional(),
       note: z.string().max(1000).optional(),
     }).strict().parse(req.body);

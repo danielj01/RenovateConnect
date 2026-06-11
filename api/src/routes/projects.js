@@ -593,14 +593,41 @@ router.post(
 // Release a funded milestone to the contractor (shared by manual approval and
 // the auto-release job). Transfers the contractor's portion; commission stays.
 async function releaseMilestone(project, milestone) {
-  const transfer = await createMilestoneTransfer({
-    amountCents: milestone.amountCents,
-    connectedAccountId: project.business.stripeAccountId,
-    metadata: { milestoneId: milestone.id, projectId: project.id },
+  // Atomically claim the release first: only one caller can win the flip to
+  // APPROVED, so a double-tapped approve (or an approve racing the auto-release
+  // sweep) can't create two Stripe transfers for the same milestone. DISPUTED
+  // is claimable too — admins release via the dispute queue.
+  const claimed = await db.milestone.updateMany({
+    where: { id: milestone.id, status: { in: ['FUNDED', 'SUBMITTED', 'DISPUTED'] } },
+    data: { status: 'APPROVED', approvedAt: new Date() },
   });
+  if (claimed.count === 0) {
+    const err = new Error('This milestone has already been released.');
+    err.status = 409;
+    throw err;
+  }
+
+  let transfer;
+  try {
+    transfer = await createMilestoneTransfer({
+      amountCents: milestone.amountCents,
+      connectedAccountId: project.business.stripeAccountId,
+      metadata: { milestoneId: milestone.id, projectId: project.id },
+    });
+  } catch (err) {
+    // Transfer failed — release the claim so the funds aren't marked released
+    // when no money moved. (Best effort; the row still has no transfer id, so
+    // a stuck APPROVED-without-transfer is detectable.)
+    await db.milestone.update({
+      where: { id: milestone.id },
+      data: { status: milestone.status, approvedAt: null },
+    }).catch(() => {});
+    throw err;
+  }
+
   const updated = await db.milestone.update({
     where: { id: milestone.id },
-    data: { status: 'APPROVED', approvedAt: new Date(), stripeTransferId: transfer.id },
+    data: { stripeTransferId: transfer.id },
   });
   await notifyPayment(project.business.userId, {
     title: 'Milestone released 💰',

@@ -70,6 +70,17 @@ final class NotificationManager: NSObject, ObservableObject {
         showPriming = false
     }
 
+    /// Re-register with APNs when permission is already granted. Apple's
+    /// guidance is to call this on every launch: tokens can rotate, and logout
+    /// deletes the token server-side — without this, a user who signs back in
+    /// (or a second account on the device) silently never gets push again.
+    func registerIfAuthorized() async {
+        await refreshStatus()
+        if authorizationStatus == .authorized || authorizationStatus == .provisional {
+            UIApplication.shared.registerForRemoteNotifications()
+        }
+    }
+
     /// On logout, drop the token server-side so the previous user stops getting pushes.
     func unregisterCurrentDevice() async {
         guard let token = UserDefaults.standard.string(forKey: tokenKey) else { return }

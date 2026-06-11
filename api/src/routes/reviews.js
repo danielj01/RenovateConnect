@@ -71,12 +71,22 @@ router.post('/', authMiddleware, requireRole('CLIENT'), async (req, res, next) =
 
     await recomputeAggregate(businessId);
 
+    const title = `New ${rating}-star review`;
+    const preview = body?.slice(0, 140) || `${user.name} left a ${rating}-star review.`;
     await recordActivity(business.userId, {
       type: 'REVIEW',
-      title: `New ${rating}-star review`,
-      body: body?.slice(0, 140) || `${user.name} left a ${rating}-star review.`,
+      title,
+      body: preview,
       data: { businessId },
     });
+    // Reviews are high-signal for contractors (and the reply flow boosts the
+    // profile) — push it like the response path does, best-effort.
+    sendPush(business.userId, {
+      type: 'REVIEW',
+      title,
+      body: preview,
+      data: { type: 'review', businessId },
+    }).catch(console.error);
 
     res.status(201).json(review);
   } catch (err) {

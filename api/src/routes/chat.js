@@ -21,8 +21,11 @@ router.post('/', authMiddleware, async (req, res, next) => {
   try {
     const { message, history } = chatSchema.parse(req.body);
 
-    // Load all active businesses so the AI can recommend specific ones
+    // Load all approved businesses so the AI can recommend specific ones.
+    // Pending/rejected listings are excluded — they 404 for clients, so a
+    // recommendation pointing at one would dead-end the conversation.
     const businesses = await db.business.findMany({
+      where: { approvalStatus: 'APPROVED' },
       select: { id: true, companyName: true, city: true, state: true, specialties: true, averageRating: true },
     });
 

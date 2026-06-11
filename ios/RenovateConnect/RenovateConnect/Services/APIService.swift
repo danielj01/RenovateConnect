@@ -19,9 +19,15 @@ enum APIError: LocalizedError {
 final class APIService {
     static let shared = APIService()
 
+    #if DEBUG
     // Simulator: http://localhost:3000
     // Physical device: use your Mac's local IP (must be on same WiFi)
     private let base = URL(string: "http://192.168.11.212:3000")!
+    #else
+    // Production API (Render service from render.yaml). Point this at the
+    // custom domain (e.g. https://api.renovateconnect.app) once DNS is set up.
+    private let base = URL(string: "https://renovate-connect-api.onrender.com")!
+    #endif
 
     private var token: String? {
         // Stored in the Keychain (encrypted), not UserDefaults. See Keychain.swift.
@@ -153,6 +159,10 @@ final class APIService {
         }
         return try await request("auth/apple", method: "POST",
                                  body: Body(identityToken: identityToken, givenName: givenName, familyName: familyName, email: email))
+    }
+
+    func googleSignIn(idToken: String) async throws -> AuthResponse {
+        try await request("auth/google", method: "POST", body: ["idToken": idToken])
     }
 
     // Businesses
