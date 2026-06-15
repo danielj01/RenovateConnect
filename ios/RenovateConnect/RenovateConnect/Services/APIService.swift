@@ -22,7 +22,7 @@ final class APIService {
     #if DEBUG
     // Simulator: http://localhost:3000
     // Physical device: use your Mac's local IP (must be on same WiFi)
-    private let base = URL(string: "http://192.168.11.212:3000")!
+    private let base = URL(string: "http://10.0.0.152:3000")!
     #else
     // Production API (Render service from render.yaml). Point this at the
     // custom domain (e.g. https://api.renovateconnect.app) once DNS is set up.

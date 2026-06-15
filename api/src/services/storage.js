@@ -72,7 +72,12 @@ async function uploadFile(buffer, mimetype, baseUrl) {
 
   fs.mkdirSync(LOCAL_DIR, { recursive: true });
   fs.writeFileSync(path.join(LOCAL_DIR, file), buffer);
-  const base = (baseUrl || process.env.PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+  // PUBLIC_BASE_URL wins over the request-derived host so the stored URL
+  // doesn't bake in the Mac's current LAN IP. Set it in .env to your dev IP
+  // (e.g. http://10.0.0.152:3000) and you can hop between WiFi networks
+  // without re-uploading every image — or, better, point it at the deployed
+  // staging URL.
+  const base = (process.env.PUBLIC_BASE_URL || baseUrl || '').replace(/\/+$/, '');
   return `${base}/${key}`;
 }
 
