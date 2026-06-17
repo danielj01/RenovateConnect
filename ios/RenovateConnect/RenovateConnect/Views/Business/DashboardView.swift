@@ -324,9 +324,9 @@ struct DashboardView: View {
                 RCCard {
                     HStack(spacing: 14) {
                         Image(systemName: "chart.bar.xaxis")
-                            .font(.title2).foregroundStyle(.purple)
+                            .font(.title2).foregroundStyle(.teal)
                             .frame(width: 40, height: 40)
-                            .background(Color.purple.opacity(0.15)).clipShape(Circle())
+                            .background(Color.teal.opacity(0.15)).clipShape(Circle())
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Market Insights").font(.subheadline.weight(.semibold))
                             Text("See aggregated demand by category, project type, and area.")

@@ -196,7 +196,7 @@ private struct PendingProjectCard: View {
                     Label("Project", systemImage: "photo.fill")
                         .font(.caption2.weight(.semibold))
                         .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(Color.purple.opacity(0.15)).foregroundStyle(.purple)
+                        .background(Color.teal.opacity(0.15)).foregroundStyle(.teal)
                         .clipShape(Capsule())
                 }
                 if let desc = project.description, !desc.isEmpty {

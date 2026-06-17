@@ -1,15 +1,16 @@
 import SwiftUI
 
 // MARK: - Brand tokens
-// "Indigo & Coral" — a modern indigo primary with a warm coral accent. Amber is
-// reserved for star ratings, and semantic success/info tokens keep status
+// "Azure & Coral" — a modern royal-blue primary with a warm coral accent. Amber
+// is reserved for star ratings, and semantic success/info tokens keep status
 // colors consistent across the app.
 enum Theme {
-    static let primary      = Color(red: 0.310, green: 0.275, blue: 0.898) // #4F46E5 indigo
-    static let primaryDark  = Color(red: 0.263, green: 0.220, blue: 0.792) // #4338CA
-    static let primaryLight = Color(red: 0.878, green: 0.906, blue: 1.000) // #E0E7FF tint
+    static let primary      = Color(red: 0.145, green: 0.388, blue: 0.922) // #2563EB royal blue
+    static let primaryDark  = Color(red: 0.114, green: 0.306, blue: 0.847) // #1D4ED8
+    static let primaryLight = Color(red: 0.859, green: 0.918, blue: 0.996) // #DBEAFE tint
 
-    // Warm coral accent for secondary CTAs, highlights, and the Featured badge.
+    // Warm coral accent for secondary CTAs, highlights, and the Featured badge —
+    // a deliberate warm counterpoint to the cool blue brand.
     static let accent       = Color(red: 0.984, green: 0.443, blue: 0.522) // #FB7185 coral
     static let accentDark   = Color(red: 0.957, green: 0.247, blue: 0.369) // #F43F5E
 
@@ -18,25 +19,25 @@ enum Theme {
 
     // Semantic status colors.
     static let success      = Color(red: 0.063, green: 0.725, blue: 0.506) // #10B981 emerald
-    static let info         = Color(red: 0.231, green: 0.510, blue: 0.965) // #3B82F6 blue
+    static let info         = Color(red: 0.024, green: 0.643, blue: 0.808) // #06A4CE cyan
 
-    // Hero gradient: indigo → violet.
+    // Hero gradient: royal blue → sky blue.
     static let gradient = LinearGradient(
-        colors: [Color(red: 0.310, green: 0.275, blue: 0.898),  // #4F46E5
-                 Color(red: 0.486, green: 0.227, blue: 0.929)], // #7C3AED
+        colors: [Color(red: 0.145, green: 0.388, blue: 0.922),  // #2563EB
+                 Color(red: 0.055, green: 0.647, blue: 0.914)], // #0EA5E9
         startPoint: .topLeading, endPoint: .bottomTrailing
     )
 
-    static let cardShadow = Color(red: 0.06, green: 0.05, blue: 0.20).opacity(0.10)
+    static let cardShadow = Color(red: 0.04, green: 0.10, blue: 0.25).opacity(0.10)
 
     // Deterministic avatar color per business name — a modern set that
-    // harmonizes with the indigo/coral brand.
+    // harmonizes with the azure/coral brand.
     private static let avatarPalette: [Color] = [
-        Color(red: 0.310, green: 0.275, blue: 0.898), // indigo
+        Color(red: 0.145, green: 0.388, blue: 0.922), // royal blue #2563EB
         Color(red: 0.984, green: 0.443, blue: 0.522), // coral
         Color(red: 0.063, green: 0.725, blue: 0.506), // emerald
-        Color(red: 0.486, green: 0.227, blue: 0.929), // violet
-        Color(red: 0.231, green: 0.510, blue: 0.965), // blue
+        Color(red: 0.055, green: 0.647, blue: 0.914), // sky blue #0EA5E9
+        Color(red: 0.118, green: 0.251, blue: 0.686), // navy #1E40AF
         Color(red: 0.024, green: 0.616, blue: 0.639), // teal #06A9A3
     ]
 
