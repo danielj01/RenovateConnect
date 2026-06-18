@@ -20,9 +20,13 @@ final class APIService {
     static let shared = APIService()
 
     #if DEBUG
-    // Simulator: http://localhost:3000
-    // Physical device: use your Mac's local IP (must be on same WiFi)
-    private let base = URL(string: "http://10.0.0.152:3000")!
+    // Dev server on the Mac, addressed by its mDNS (.local) hostname instead of
+    // a hard-coded LAN IP. The hostname resolves to whatever IP the router
+    // currently assigns, so switching WiFi networks no longer breaks the app
+    // (the IP changes; the hostname doesn't). Both devices must be on the same
+    // network. Simulator can also use http://localhost:3000.
+    // To find this name on the Mac: `scutil --get LocalHostName` (+ ".local").
+    private let base = URL(string: "http://Daniels-MacBook-Air-204.local:3000")!
     #else
     // Production API (Render service from render.yaml). Point this at the
     // custom domain (e.g. https://api.renovateconnect.app) once DNS is set up.
