@@ -3,6 +3,7 @@ const db = require('../src/services/db');
 
 // Wipe all rows between tests so each suite starts clean. Order respects FKs.
 async function resetDb() {
+  await db.waitlistEntry.deleteMany();
   await db.report.deleteMany();
   await db.block.deleteMany();
   await db.dispute.deleteMany();

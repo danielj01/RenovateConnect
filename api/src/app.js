@@ -28,6 +28,7 @@ const projectRoutes = require('./routes/projects');
 const adminRoutes = require('./routes/admin');
 const internalRoutes = require('./routes/internal');
 const feedRoutes = require('./routes/feed');
+const waitlistRoutes = require('./routes/waitlist');
 const reportRoutes = require('./routes/reports');
 const blockRoutes = require('./routes/blocks');
 const verificationDocumentsRoutes = require('./routes/verificationDocuments');
@@ -93,6 +94,7 @@ app.use('/projects', projectRoutes);
 app.use('/admin', adminRoutes);
 app.use('/internal', internalRoutes);
 app.use('/feed', feedRoutes);
+app.use('/waitlist', waitlistRoutes);
 app.use('/reports', reportRoutes);
 app.use('/blocks', blockRoutes);
 

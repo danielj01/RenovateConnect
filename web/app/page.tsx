@@ -1,8 +1,7 @@
-import { appStoreUrl } from '@/lib/config';
-
 // Minimal landing for v1. The full AI-estimator front door (build A, Phase 2)
 // lands here later; for now this gives the domain a real home and a path to the
-// app while the SSR /b/:id profile pages do the heavy lifting for shared links.
+// estimator + waitlist while the SSR /b/:id profile pages do the heavy lifting
+// for shared links.
 export default function Home() {
   return (
     <main className="container">
@@ -16,7 +15,7 @@ export default function Home() {
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
         <a className="btn btn-primary" href="/estimate">Get an instant estimate</a>
-        <a className="btn btn-secondary" href={appStoreUrl}>Get the app</a>
+        <a className="btn btn-secondary" href="/waitlist">Join the waitlist</a>
       </div>
 
       <div className="card" style={{ marginTop: 40 }}>

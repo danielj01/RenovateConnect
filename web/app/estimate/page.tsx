@@ -1,9 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { appStoreUrl } from '@/lib/config';
 import { type EstimateResult } from '@/lib/estimate';
 import { EstimateBreakdown } from '@/components/EstimateBreakdown';
+import { WaitlistForm } from '@/components/WaitlistForm';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
@@ -127,48 +127,21 @@ export default function EstimatePage() {
 }
 
 function ResultView({ result, roomType, onReset }: { result: EstimateResult; roomType: string; onReset: () => void }) {
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-
-  // Save & get matched: persist the result, then route to /e/<code> — which
-  // opens the app (if installed) or shows the result + code to carry it in.
-  async function saveAndContinue() {
-    setSaving(true);
-    setSaveError(null);
-    try {
-      const res = await fetch(`${API_BASE}/estimations/share`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ result, roomType }),
-      });
-      if (!res.ok) throw new Error('save failed');
-      const { code } = await res.json();
-      window.location.href = `/e/${code}`;
-    } catch {
-      setSaving(false);
-      setSaveError('Couldn’t save right now — you can still get the app.');
-    }
-  }
-
   return (
     <main className="container">
       <EstimateBreakdown result={result} />
 
-      {/* Conversion gate — the whole point of the front door. */}
-      <section className="card" style={{ marginTop: 26, textAlign: 'center', background: 'var(--bg-soft)' }}>
-        <strong style={{ fontSize: 18 }}>Make it real</strong>
-        <p className="muted" style={{ marginTop: 6 }}>
-          Save this estimate and get matched with vetted local contractors — with payment protection and no spam.
-        </p>
-        <button className="btn btn-primary btn-block" style={{ marginTop: 8 }} onClick={saveAndContinue} disabled={saving}>
-          {saving ? 'Saving…' : 'Save & get matched in the app'}
-        </button>
-        {saveError ? (
-          <p style={{ color: '#b91c1c', marginTop: 10 }}>
-            {saveError} <a href={appStoreUrl}>Get the app</a>
-          </p>
-        ) : null}
-      </section>
+      {/* Pre-launch conversion gate — capture the email now, match them at
+          launch. Carries the room type as context so we know what they want. */}
+      <div style={{ marginTop: 26 }}>
+        <WaitlistForm
+          source="estimate"
+          context={roomType}
+          title="Want a real quote for this?"
+          subtitle="We’re launching soon with vetted local contractors, payment protection, and no spam. Leave your email and we’ll match you the moment we go live in your area."
+          cta="Match me at launch"
+        />
+      </div>
 
       <button onClick={onReset} className="btn btn-secondary btn-block" style={{ marginTop: 12 }}>
         Estimate another space

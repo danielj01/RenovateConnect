@@ -739,3 +739,30 @@ model Review {
   @@index([businessId])
   @@index([authorId])
 }
+
+// Pre-launch email capture. Homeowners (and contractors) who hit the web
+// estimator / waitlist page before the app is live leave an email so we can
+// build a launch list and notify them when we go live in their area. Email is
+// unique — re-joining is an idempotent upsert, never an error. No account, no
+// PII beyond the email + optional city/context they volunteer.
+enum WaitlistRole {
+  HOMEOWNER
+  CONTRACTOR
+}
+
+model WaitlistEntry {
+  id        String       @id @default(cuid())
+  email     String       @unique
+  role      WaitlistRole @default(HOMEOWNER)
+  city      String?
+  // Where the signup came from: "estimate", "waitlist_page", etc.
+  source    String?
+  // Optional volunteered context (e.g. the room type they estimated).
+  context   String?
+  // Set when we've sent them the launch announcement, so a future blast can
+  // skip already-notified entries.
+  notifiedAt DateTime?
+  createdAt DateTime     @default(now())
+
+  @@index([role, createdAt])
+}
