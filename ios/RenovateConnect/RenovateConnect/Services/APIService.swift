@@ -87,8 +87,19 @@ final class APIService {
         try await request("auth/login", method: "POST", body: ["email": email, "password": password])
     }
 
-    func register(email: String, password: String, name: String, role: UserRole) async throws -> AuthResponse {
-        try await request("auth/register", method: "POST", body: ["email": email, "password": password, "name": name, "role": role.rawValue])
+    func register(email: String, password: String, name: String, role: UserRole,
+                  acceptedTerms: Bool) async throws -> AuthResponse {
+        try await request("auth/register", method: "POST", body: [
+            "email": email, "password": password, "name": name, "role": role.rawValue,
+            // Clickwrap: the server requires this to be exactly true.
+            "acceptedTerms": acceptedTerms,
+        ])
+    }
+
+    /// Record (re-)acceptance of the current Terms of Service for the signed-in
+    /// user. Used to clear a re-acceptance prompt after the terms change.
+    func acceptTerms() async throws {
+        try await requestNoContent("auth/accept-terms", method: "POST")
     }
 
     func me() async throws -> User {

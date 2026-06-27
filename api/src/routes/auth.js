@@ -9,6 +9,7 @@ const db = require('../services/db');
 const googleAuth = require('../services/googleAuth');
 const { authMiddleware } = require('../middleware/auth');
 const { authLimiter } = require('../middleware/rateLimit');
+const { CURRENT_TERMS_VERSION } = require('../services/legal');
 const upload = require('../middleware/upload');
 const { uploadImage } = require('../services/storage');
 
@@ -37,6 +38,10 @@ const registerSchema = z.object({
   name: z.string().min(1).max(100),
   role: z.enum(['CLIENT', 'BUSINESS']),
   phone: z.string().max(30).optional(),
+  // Clickwrap: registration requires affirmative agreement to the Terms (and
+  // Privacy Policy). Must be exactly `true`, so a client that omits it or sends
+  // false is rejected — there is no silent default-accept.
+  acceptedTerms: z.literal(true),
 }).strict();
 
 const loginSchema = z.object({
@@ -68,8 +73,19 @@ function unguessablePasswordHash() {
 async function socialSignIn(res, { email, name }) {
   let user = await db.user.findUnique({ where: { email } });
   if (!user) {
+    // Creating an account via Apple/Google is itself the act of agreement — the
+    // sign-in screen presents the Terms + Privacy links beside the buttons — so
+    // we record acceptance of the current terms on first sign-in, the same way
+    // /register does.
     user = await db.user.create({
-      data: { email, passwordHash: await unguessablePasswordHash(), name, role: 'CLIENT' },
+      data: {
+        email,
+        passwordHash: await unguessablePasswordHash(),
+        name,
+        role: 'CLIENT',
+        termsAcceptedAt: new Date(),
+        termsVersion: CURRENT_TERMS_VERSION,
+      },
     });
   }
   res.json({ token: signToken(user), user: { id: user.id, email: user.email, name: user.name, role: user.role } });
@@ -80,7 +96,16 @@ router.post('/register', authLimiter, async (req, res, next) => {
     const data = registerSchema.parse(req.body);
     const passwordHash = await bcrypt.hash(data.password, 12);
     const user = await db.user.create({
-      data: { email: data.email, passwordHash, name: data.name, role: data.role, phone: data.phone },
+      data: {
+        email: data.email,
+        passwordHash,
+        name: data.name,
+        role: data.role,
+        phone: data.phone,
+        // Record the clickwrap acceptance (timestamp + the version agreed to).
+        termsAcceptedAt: new Date(),
+        termsVersion: CURRENT_TERMS_VERSION,
+      },
     });
     res.status(201).json({ token: signToken(user), user: { id: user.id, email: user.email, name: user.name, role: user.role } });
   } catch (err) {
@@ -182,8 +207,29 @@ router.get('/me', authMiddleware, async (req, res, next) => {
       where: { id: req.user.id },
       include: { business: true },
     });
-    if (user) delete user.passwordHash;
+    if (user) {
+      delete user.passwordHash;
+      // Surface the current terms version + whether this user needs to (re-)accept
+      // so the app can gate behind a re-acceptance prompt after a terms update.
+      user.currentTermsVersion = CURRENT_TERMS_VERSION;
+      user.needsTermsAcceptance = user.termsVersion !== CURRENT_TERMS_VERSION;
+    }
     res.json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Record (re-)acceptance of the current Terms of Service. Used when a signed-in
+// user is re-prompted after the terms change, keeping an unbroken, timestamped
+// chain of assent to the version in force.
+router.post('/accept-terms', authMiddleware, async (req, res, next) => {
+  try {
+    const user = await db.user.update({
+      where: { id: req.user.id },
+      data: { termsAcceptedAt: new Date(), termsVersion: CURRENT_TERMS_VERSION },
+    });
+    res.json({ termsVersion: user.termsVersion, termsAcceptedAt: user.termsAcceptedAt });
   } catch (err) {
     next(err);
   }

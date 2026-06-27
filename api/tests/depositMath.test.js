@@ -5,7 +5,13 @@ const { depositCentsFor, commissionCentsFor } = require('../src/services/stripe'
 describe('deposit + commission math (unit)', () => {
   const ENV = process.env;
   beforeEach(() => {
-    process.env = { ...ENV, DEPOSIT_PERCENT: '10', DEPOSIT_MIN_CENTS: '5000', COMMISSION_BPS: '800' };
+    process.env = {
+      ...ENV,
+      DEPOSIT_PERCENT: '10',
+      DEPOSIT_MIN_CENTS: '5000',
+      DEPOSIT_MAX_CENTS: '100000', // $1,000 — the home-improvement down-payment cap
+      COMMISSION_BPS: '800',
+    };
   });
   afterEach(() => { process.env = ENV; });
 
@@ -33,8 +39,27 @@ describe('deposit + commission math (unit)', () => {
 
     test('respects a custom DEPOSIT_PERCENT', () => {
       process.env.DEPOSIT_PERCENT = '20';
-      // midpoint $5000, 20% = $1000 = 100000 cents
+      // midpoint $5000, 20% = $1000 = 100000 cents (== the cap; not exceeded)
       expect(depositCentsFor(4000, 6000)).toBe(100000);
+    });
+
+    test('caps the deposit at $1,000 on large jobs (home-improvement down-payment limit)', () => {
+      // midpoint $300,000, 10% = $30,000 — capped to $1,000 (100000 cents)
+      expect(depositCentsFor(250000, 350000)).toBe(100000);
+      // midpoint $100,000, 10% = $10,000 — also capped to $1,000
+      expect(depositCentsFor(100000, 100000)).toBe(100000);
+    });
+
+    test('the cap binds even when DEPOSIT_PERCENT is raised', () => {
+      process.env.DEPOSIT_PERCENT = '50';
+      // midpoint $5,000, 50% = $2,500 — still capped to $1,000
+      expect(depositCentsFor(4000, 6000)).toBe(100000);
+    });
+
+    test('a configurable cap is honored', () => {
+      process.env.DEPOSIT_MAX_CENTS = '50000'; // $500 cap
+      // midpoint $20,000, 10% = $2,000 — capped to $500
+      expect(depositCentsFor(15000, 25000)).toBe(50000);
     });
   });
 

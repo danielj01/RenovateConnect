@@ -5,17 +5,30 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 // In-app deposit economics (Option A).
 //   DEPOSIT_PERCENT   — the deposit is this % of the quote midpoint…
 //   DEPOSIT_MIN_CENTS — …but never below this floor (so tiny jobs still clear fees)
+//   DEPOSIT_MAX_CENTS — …and never above this cap. Defaults to $1,000.
 //   COMMISSION_BPS    — the platform's cut, in basis points (800 = 8%)
+//
+// The $1,000 cap is a hard legal guardrail, not a business preference.
+// California's Contractors State License Law (Bus. & Prof. Code § 7159.5) caps
+// the down payment on a home-improvement contract at the LESSER of $1,000 or
+// 10% of the contract price (excluding finance charges). Because our deposit is
+// already 10% of the midpoint, capping the absolute amount at $1,000 keeps the
+// in-app deposit within "lesser of $1,000 or 10%" on every job size. Several
+// other states have similar caps; $1,000 is at or below the common floor.
+// If you launch outside CA-style rules, this can be raised via env — but do not
+// raise it without confirming the down-payment limits in your launch states.
 const DEPOSIT_PERCENT = () => parseInt(process.env.DEPOSIT_PERCENT || '10', 10);
 const DEPOSIT_MIN_CENTS = () => parseInt(process.env.DEPOSIT_MIN_CENTS || '5000', 10);
+const DEPOSIT_MAX_CENTS = () => parseInt(process.env.DEPOSIT_MAX_CENTS || '100000', 10);
 const COMMISSION_BPS = () => parseInt(process.env.COMMISSION_BPS || '800', 10);
 
 // The deposit the contractor receives, derived from the accepted quote's
-// midpoint (dollars in → cents out), floored at DEPOSIT_MIN_CENTS.
+// midpoint (dollars in → cents out), floored at DEPOSIT_MIN_CENTS and capped at
+// DEPOSIT_MAX_CENTS (see the home-improvement down-payment note above).
 function depositCentsFor(quoteLow, quoteHigh) {
   const midDollars = ((quoteLow || 0) + (quoteHigh || 0)) / 2;
   const pctCents = Math.round(midDollars * 100 * (DEPOSIT_PERCENT() / 100));
-  return Math.max(DEPOSIT_MIN_CENTS(), pctCents);
+  return Math.min(DEPOSIT_MAX_CENTS(), Math.max(DEPOSIT_MIN_CENTS(), pctCents));
 }
 
 // The platform commission for a given deposit. Charged as a fee on top, so this

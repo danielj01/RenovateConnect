@@ -66,6 +66,9 @@ struct LoginView: View {
     @State private var password     = ""
     @State private var showRegister = false
 
+    private static let termsURL = URL(string: "https://renovateconnect.app/terms")!
+    private static let privacyURL = URL(string: "https://renovateconnect.app/privacy")!
+
     var body: some View {
         GeometryReader { geo in
             ScrollView(showsIndicators: false) {
@@ -226,6 +229,21 @@ struct LoginView: View {
                 + Text("Create one").foregroundStyle(Theme.primary).bold()
             }
             .font(.subheadline)
+            .padding(.top, 2)
+
+            // Legal disclosure for the social sign-in paths (Apple/Google):
+            // creating an account that way records acceptance of these terms.
+            VStack(spacing: 2) {
+                Text("By continuing, you agree to our")
+                HStack(spacing: 4) {
+                    Link("Terms of Service", destination: Self.termsURL)
+                    Text("and")
+                    Link("Privacy Policy", destination: Self.privacyURL)
+                }
+            }
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
             .padding(.top, 2)
         }
         .padding(24)

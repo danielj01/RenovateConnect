@@ -52,12 +52,14 @@ final class AuthStore: ObservableObject {
         }
     }
 
-    func register(email: String, password: String, name: String, role: UserRole) async {
+    func register(email: String, password: String, name: String, role: UserRole, acceptedTerms: Bool) async {
         isLoading = true
         error = nil
         defer { isLoading = false }
         do {
-            let resp = try await APIService.shared.register(email: email, password: password, name: name, role: role)
+            let resp = try await APIService.shared.register(
+                email: email, password: password, name: name, role: role, acceptedTerms: acceptedTerms
+            )
             AuthToken.set(resp.token)
             await loadMe()
             landOnFirstTab()

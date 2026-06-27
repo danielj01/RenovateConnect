@@ -152,6 +152,14 @@ model User {
   // saved that business. Advanced when the homeowner views the digest.
   favoritesDigestSeenAt DateTime?
 
+  // Clickwrap record of Terms of Service acceptance — proof of affirmative
+  // assent, which is what makes the arbitration / class-action-waiver terms
+  // enforceable. `termsVersion` is the version string the user agreed to
+  // (matches CURRENT_TERMS_VERSION in services/legal.js and the date on the
+  // web Terms page); when it lags the current version the app re-prompts.
+  termsAcceptedAt DateTime?
+  termsVersion    String?
+
   business     Business?
   sentMessages     Message[]   @relation("SentMessages")
   conversations    Conversation[] @relation("ClientConversations")

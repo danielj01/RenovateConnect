@@ -19,6 +19,7 @@ struct BusinessDetailView: View {
     @State private var respondingTo: Review?
     @State private var verifying = false
     @State private var showReportSheet = false
+    @State private var showVerifiedInfo = false
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var favorites: FavoritesStore
 
@@ -121,6 +122,9 @@ struct BusinessDetailView: View {
             if let biz = business {
                 ReportSheet(targetType: .business, targetId: biz.id)
             }
+        }
+        .sheet(isPresented: $showVerifiedInfo) {
+            VerifiedInfoSheet().presentationDetents([.medium, .large])
         }
         .task { await load() }
     }
@@ -245,18 +249,34 @@ struct BusinessDetailView: View {
                             .foregroundStyle(VerifiedBadge.trust)
 
                         if biz.isVerified {
-                            HStack(spacing: 10) {
-                                Image(systemName: "checkmark.seal.fill")
-                                    .foregroundStyle(VerifiedBadge.trust)
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("Verified by RenovateConnect")
-                                        .font(.subheadline.weight(.semibold))
-                                    if let checked = biz.verifiedAt?.verifiedDateText {
-                                        Text("Checked \(checked)")
-                                            .font(.caption).foregroundStyle(.secondary)
+                            Button {
+                                showVerifiedInfo = true
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: "checkmark.seal.fill")
+                                        .foregroundStyle(VerifiedBadge.trust)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        HStack(spacing: 5) {
+                                            Text("Verified by RenovateConnect")
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundStyle(.primary)
+                                            Image(systemName: "info.circle")
+                                                .font(.caption2)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        if let checked = biz.verifiedAt?.verifiedDateText {
+                                            Text("Checked \(checked) · What this means")
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        } else {
+                                            Text("What this means")
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
                                     }
+                                    Spacer()
                                 }
                             }
+                            .buttonStyle(.plain)
+                            .accessibilityHint("Learn what the Verified badge means")
                         }
 
                         if let license = biz.licenseNumber, !license.isEmpty {
@@ -846,6 +866,76 @@ struct ContactBusinessSheet: View {
             sent = true
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - "What Verified means" disclosure
+//
+// Explains the limits of the Verified badge so it is not read as a guarantee of
+// quality or current licensing. Mirrors Section 5 of the Terms of Service and
+// keeps the in-app representation aligned with what the Terms disclaim.
+struct VerifiedInfoSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.title)
+                            .foregroundStyle(VerifiedBadge.trust)
+                        Text("What “Verified” means")
+                            .font(.title2.bold())
+                    }
+
+                    Text("The Verified badge reflects a limited, point-in-time review of information a contractor submitted — which may include identity and a license or insurance document — at the time we reviewed it.")
+                        .font(.subheadline)
+
+                    row(icon: "clock.arrow.circlepath",
+                        title: "It is a snapshot, not a guarantee",
+                        body: "A license or policy can lapse after we check it. We do not continuously monitor a contractor’s status.")
+                    row(icon: "checklist",
+                        title: "It is not an endorsement",
+                        body: "Verification is not a rating of skill, reliability, or fit for your project, and is not a recommendation to hire.")
+                    row(icon: "magnifyingglass",
+                        title: "Please verify independently",
+                        body: "Before you hire or pay, confirm the contractor’s license and insurance directly with your state licensing board, and get a written contract.")
+
+                    Text("See our Terms of Service and Privacy Policy for full details.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 14) {
+                        Link("Terms of Service",
+                             destination: URL(string: "https://renovateconnect.app/terms")!)
+                        Link("Privacy Policy",
+                             destination: URL(string: "https://renovateconnect.app/privacy")!)
+                    }
+                    .font(.caption)
+                }
+                .padding(20)
+            }
+            .navigationTitle("Verified")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func row(icon: String, title: String, body: String) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundStyle(Theme.primary)
+                .frame(width: 26)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.weight(.semibold))
+                Text(body).font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 }

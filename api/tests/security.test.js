@@ -12,6 +12,7 @@ const valid = {
   password: 'sup3rsecret!',
   name: 'Sec Tester',
   role: 'CLIENT',
+  acceptedTerms: true,
 };
 
 describe('input validation hardening', () => {
