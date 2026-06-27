@@ -89,11 +89,17 @@ final class APIService {
 
     func register(email: String, password: String, name: String, role: UserRole,
                   acceptedTerms: Bool) async throws -> AuthResponse {
-        try await request("auth/register", method: "POST", body: [
-            "email": email, "password": password, "name": name, "role": role.rawValue,
+        struct Body: Encodable {
+            let email: String
+            let password: String
+            let name: String
+            let role: String
             // Clickwrap: the server requires this to be exactly true.
-            "acceptedTerms": acceptedTerms,
-        ])
+            let acceptedTerms: Bool
+        }
+        return try await request("auth/register", method: "POST",
+                                 body: Body(email: email, password: password, name: name,
+                                            role: role.rawValue, acceptedTerms: acceptedTerms))
     }
 
     /// Record (re-)acceptance of the current Terms of Service for the signed-in
