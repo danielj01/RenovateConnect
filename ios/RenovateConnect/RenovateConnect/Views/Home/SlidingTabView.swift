@@ -78,9 +78,17 @@ struct RCTabBar: View {
         .padding(.top, 8)
         .padding(.bottom, 2)
         .frame(maxWidth: .infinity)
+        // Frosted-glass background like the native iOS tab bar — the system
+        // `.bar` material (a translucent blur) instead of an opaque fill, with
+        // a hairline separator on top. Extends into the home-indicator area.
         .background {
-            Color(.systemBackground)
-                .overlay(alignment: .top) { Divider() }
+            Rectangle()
+                .fill(.bar)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(Color(.separator).opacity(0.5))
+                        .frame(height: 0.5)
+                }
                 .ignoresSafeArea(edges: .bottom)
         }
         // Keep the bar pinned to the bottom even when a keyboard is up, rather
