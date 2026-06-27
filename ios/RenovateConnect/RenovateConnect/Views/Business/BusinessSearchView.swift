@@ -6,6 +6,7 @@ struct BusinessSearchView: View {
     @StateObject private var location = LocationManager()
     @State private var query = ""
     @State private var selectedSpecialty: String? = nil
+    @State private var selectedCostTier: CostTier? = nil
     @State private var businesses: [Business] = []
     @State private var sponsored: [Business] = []
     @State private var isLoading = false
@@ -22,7 +23,7 @@ struct BusinessSearchView: View {
     private enum SaveState { case idle, saving, saved }
 
     private var isClient: Bool { auth.currentUser?.role == .client }
-    private var hasActiveFilter: Bool { selectedSpecialty != nil || !query.isEmpty }
+    private var hasActiveFilter: Bool { selectedSpecialty != nil || selectedCostTier != nil || !query.isEmpty }
 
     private let specialties: [(String, String)] = [
         ("Kitchen", "fork.knife"), ("Bathroom", "shower"),
@@ -84,6 +85,8 @@ struct BusinessSearchView: View {
                         }
                         .padding(.horizontal, 16).padding(.vertical, 14)
                     }
+
+                    priceFilterRow
 
                     // Save the current filters so new matching contractors trigger an alert.
                     if isClient && hasActiveFilter {
@@ -159,6 +162,38 @@ struct BusinessSearchView: View {
                 Text("Turn on location for RenovateConnect in Settings to sort contractors by distance.")
             }
         }
+    }
+
+    // MARK: - Price filter
+    //
+    // A compact "$ / $$ / $$$" row letting the homeowner narrow by price level.
+    // Tapping the active chip clears it. Re-searches on change.
+    private var priceFilterRow: some View {
+        HStack(spacing: 8) {
+            Text("Price").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
+            ForEach(CostTier.allCases) { tier in
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedCostTier = selectedCostTier == tier ? nil : tier
+                        businesses = []
+                        sponsored = []
+                    }
+                    Task { await search() }
+                } label: {
+                    Text(tier.dollars)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(minWidth: 34)
+                        .padding(.vertical, 7)
+                        .background(selectedCostTier == tier ? Theme.primary : Color(.systemGray6))
+                        .foregroundStyle(selectedCostTier == tier ? .white : Color(.label))
+                        .clipShape(Capsule())
+                        .animation(.easeInOut(duration: 0.18), value: selectedCostTier)
+                }
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
     }
 
     // MARK: - Results content
@@ -325,7 +360,8 @@ struct BusinessSearchView: View {
                 specialty: selectedSpecialty,
                 q: query.isEmpty ? nil : query,
                 lat: coord?.latitude,
-                lng: coord?.longitude
+                lng: coord?.longitude,
+                costTier: selectedCostTier
             )
             // Cross-fade the new list in. Without this the array swap is
             // instant — perceived as a jump on iOS 17/18.
@@ -520,6 +556,9 @@ struct BusinessListCard: View {
                                 Text("·").foregroundStyle(.secondary).font(.caption)
                                 Text("\(business.yearsInBusiness) yrs")
                                     .font(.caption).foregroundStyle(.secondary)
+                            }
+                            if let tier = business.costTier {
+                                CostTierBadge(tier: tier)
                             }
                         }
                     }

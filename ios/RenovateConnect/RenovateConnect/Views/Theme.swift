@@ -164,6 +164,37 @@ struct VerifiedBadge: View {
     }
 }
 
+/// Price-level chip — "$ / $$ / $$$" with the active level emphasized so the
+/// homeowner can read budget vs. high-end at a glance. The inactive dollar
+/// signs are dimmed (like a rating that's partly filled).
+struct CostTierBadge: View {
+    let tier: CostTier
+    var showLabel: Bool = false
+
+    private var activeCount: Int {
+        switch tier { case .low: return 1; case .medium: return 2; case .high: return 3 }
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            HStack(spacing: 0) {
+                ForEach(0..<3) { i in
+                    Text("$")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(i < activeCount ? Theme.success : Color(.tertiaryLabel))
+                }
+            }
+            if showLabel {
+                Text(tier.label).font(.caption2.weight(.medium)).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .background(Theme.success.opacity(0.10))
+        .clipShape(Capsule())
+        .accessibilityLabel("Price level: \(tier.label)")
+    }
+}
+
 struct SpecialtyTag: View {
     let text: String
 

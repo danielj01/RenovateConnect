@@ -171,12 +171,14 @@ final class APIService {
 
     // Businesses
     func searchBusinesses(specialty: String? = nil, city: String? = nil, q: String? = nil, page: Int = 1,
-                          lat: Double? = nil, lng: Double? = nil, radiusMiles: Double? = nil) async throws -> BusinessSearchResponse {
+                          lat: Double? = nil, lng: Double? = nil, radiusMiles: Double? = nil,
+                          costTier: CostTier? = nil) async throws -> BusinessSearchResponse {
         var comps = URLComponents(url: base.appendingPathComponent("businesses"), resolvingAgainstBaseURL: false)!
         var items: [URLQueryItem] = [.init(name: "page", value: "\(page)")]
         if let specialty { items.append(.init(name: "specialty", value: specialty)) }
         if let city { items.append(.init(name: "city", value: city)) }
         if let q { items.append(.init(name: "q", value: q)) }
+        if let costTier { items.append(.init(name: "costTier", value: costTier.rawValue)) }
         // "Near me": viewer coordinates make the API rank by distance.
         if let lat, let lng {
             items.append(.init(name: "lat", value: "\(lat)"))

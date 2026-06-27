@@ -96,6 +96,8 @@ router.post('/portfolio/:projectId/approve', async (req, res, next) => {
   try {
     const result = await decide(db.portfolioProject)('APPROVED', req.params.projectId);
     if (!result) return res.status(404).json({ error: 'Not found' });
+    // Approving a project with a cost range can change the business's tier.
+    await recomputeBusinessCostTier(result.updated.businessId);
     res.json(result.updated);
   } catch (err) {
     next(err);
@@ -107,6 +109,8 @@ router.post('/portfolio/:projectId/reject', async (req, res, next) => {
     const { reason } = decisionSchema.parse(req.body || {});
     const result = await decide(db.portfolioProject)('REJECTED', req.params.projectId, reason);
     if (!result) return res.status(404).json({ error: 'Not found' });
+    // Rejecting a previously-approved project can drop it out of the tier calc.
+    await recomputeBusinessCostTier(result.updated.businessId);
     res.json(result.updated);
   } catch (err) {
     next(err);
@@ -122,6 +126,7 @@ router.post('/portfolio/:projectId/reject', async (req, res, next) => {
 const projectsModule = require('./projects');
 const { createMilestoneRefund } = require('../services/stripe');
 const { recomputeBusinessVerified } = require('../services/verification');
+const { recomputeBusinessCostTier } = require('../services/costTier');
 
 // ─── VERIFICATION DOCUMENTS ───────────────────────────────────────────────────
 //

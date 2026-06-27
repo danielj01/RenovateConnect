@@ -204,6 +204,16 @@ enum ReportStatus {
   DISMISSED
 }
 
+// Price level derived from a contractor's typical project cost (the midpoint of
+// their approved portfolio projects' cost ranges). Surfaced to homeowners as
+// $ / $$ / $$$ so they can tell budget vs. high-end contractors at a glance.
+// Null when the contractor has no portfolio projects with a cost range yet.
+enum CostTier {
+  LOW
+  MEDIUM
+  HIGH
+}
+
 model Report {
   id           String           @id @default(cuid())
   reporterId   String?
@@ -288,6 +298,17 @@ model Business {
   // Dynamic badge surfaces "Verified · checked {verifiedAt}".
   verified        Boolean   @default(false)
   verifiedAt      DateTime?
+
+  // Price level, derived from the contractor's approved portfolio project cost
+  // ranges (see services/costTier.js). Recomputed whenever a portfolio project
+  // is added/edited/removed or its approval status changes. `typicalCostLow/High`
+  // are the average posted range (shown as "typically $X–$Y"); `costSamples`
+  // is how many projects fed the calc (a confidence hint). Null tier = not
+  // enough data yet.
+  costTier        CostTier?
+  typicalCostLow  Int?
+  typicalCostHigh Int?
+  costSamples     Int       @default(0)
 
   // Admin approval. New self-service profiles start PENDING and are hidden
   // from public search until an admin approves. Existing rows are backfilled

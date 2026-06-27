@@ -46,6 +46,32 @@ enum ApprovalStatus: String, Codable {
     }
 }
 
+/// Contractor price level, derived server-side from portfolio project costs.
+enum CostTier: String, Codable, CaseIterable, Identifiable {
+    case low = "LOW"
+    case medium = "MEDIUM"
+    case high = "HIGH"
+
+    var id: String { rawValue }
+
+    /// Scannable "$ / $$ / $$$" mark.
+    var dollars: String {
+        switch self {
+        case .low: return "$"
+        case .medium: return "$$"
+        case .high: return "$$$"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .low: return "Budget-friendly"
+        case .medium: return "Mid-range"
+        case .high: return "High-end"
+        }
+    }
+}
+
 struct Business: Codable, Identifiable {
     let id: String
     let companyName: String
@@ -91,7 +117,23 @@ struct Business: Codable, Identifiable {
     // Set on businesses returned in the search "sponsored" array (Pro placement).
     var sponsored: Bool?
 
+    // Price level, derived server-side from the contractor's portfolio project
+    // cost ranges. Nil until they have enough cost data.
+    var costTier: CostTier?
+    var typicalCostLow: Int?
+    var typicalCostHigh: Int?
+    var costSamples: Int?
+
     var isVerified: Bool { verified ?? false }
+
+    /// "$$ · typically $20k–$45k" — the typical range as a short label.
+    var typicalCostText: String? {
+        guard let lo = typicalCostLow, let hi = typicalCostHigh else { return nil }
+        func short(_ n: Int) -> String {
+            n >= 1000 ? "$\(Int((Double(n) / 1000).rounded()))k" : "$\(n)"
+        }
+        return "\(short(lo))–\(short(hi))"
+    }
 
     /// Short distance label for cards, e.g. "0.8 mi" / "12 mi" / "Nearby".
     var distanceText: String? {

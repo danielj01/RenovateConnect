@@ -4,6 +4,7 @@ const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { uploadImage } = require('../services/storage');
+const { recomputeBusinessCostTier } = require('../services/costTier');
 
 // Public shareable URL for a business profile. Contractors share this (link +
 // QR) on their site/Instagram/cards to send customers straight to their profile;
@@ -45,7 +46,7 @@ function milesBetween(lat1, lng1, lat2, lng2) {
 // Public: search businesses
 router.get('/', async (req, res, next) => {
   try {
-    const { specialty, city, state, q, page = '1', limit = '20', lat, lng, radiusMiles } = req.query;
+    const { specialty, city, state, q, costTier, page = '1', limit = '20', lat, lng, radiusMiles } = req.query;
     const pageNum = parseInt(page);
     const take = parseInt(limit);
     const skip = (pageNum - 1) * take;
@@ -57,6 +58,9 @@ router.get('/', async (req, res, next) => {
     if (state) where.state = state.toUpperCase();
     if (specialty) where.specialties = { has: specialty };
     if (q) where.companyName = { contains: q, mode: 'insensitive' };
+    // Price-level filter ($ / $$ / $$$). Ignores unknown values rather than
+    // erroring, so a bad query param just returns the unfiltered list.
+    if (['LOW', 'MEDIUM', 'HIGH'].includes(costTier)) where.costTier = costTier;
 
     const include = {
       reviews: { take: 3, orderBy: { createdAt: 'desc' } },
@@ -464,6 +468,9 @@ router.post('/:id/portfolio', authMiddleware, requireRole('BUSINESS', 'ADMIN'), 
     if (!business) return;
     const data = portfolioSchema.parse(req.body);
     const project = await db.portfolioProject.create({ data: { ...data, businessId: business.id } });
+    // New projects start PENDING, so the tier (approved-only) usually won't
+    // change yet — but recompute so an admin-seeded/approved create is reflected.
+    await recomputeBusinessCostTier(business.id);
     res.status(201).json(project);
   } catch (err) {
     next(err);
@@ -479,6 +486,8 @@ router.put('/:id/portfolio/:projectId', authMiddleware, requireRole('BUSINESS', 
     if (!existing || existing.businessId !== business.id) return res.status(404).json({ error: 'Not found' });
     const data = portfolioSchema.partial().parse(req.body);
     const project = await db.portfolioProject.update({ where: { id: req.params.projectId }, data });
+    // costMin/costMax may have changed — refresh the tier.
+    await recomputeBusinessCostTier(business.id);
     res.json(project);
   } catch (err) {
     next(err);
@@ -493,6 +502,7 @@ router.delete('/:id/portfolio/:projectId', authMiddleware, requireRole('BUSINESS
     const existing = await db.portfolioProject.findUnique({ where: { id: req.params.projectId } });
     if (!existing || existing.businessId !== business.id) return res.status(404).json({ error: 'Not found' });
     await db.portfolioProject.delete({ where: { id: req.params.projectId } });
+    await recomputeBusinessCostTier(business.id);
     res.json({ ok: true });
   } catch (err) {
     next(err);

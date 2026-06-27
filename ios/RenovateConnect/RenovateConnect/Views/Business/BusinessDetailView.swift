@@ -206,6 +206,11 @@ struct BusinessDetailView: View {
                 .padding(16)
             }
 
+            // Pricing — derived from this contractor's past project costs.
+            if let tier = biz.costTier {
+                pricingCard(biz, tier: tier)
+            }
+
             // Trust & credentials — shown when verified, licensed, or able to
             // accept secured in-app payments.
             if biz.isVerified || (biz.licenseNumber?.isEmpty == false) || (biz.payoutsEnabled == true) {
@@ -314,6 +319,38 @@ struct BusinessDetailView: View {
         .padding(.horizontal, 16)
         .padding(.top, 20)
         .background(Color(.systemBackground))
+    }
+
+    // MARK: - Pricing
+
+    @ViewBuilder
+    private func pricingCard(_ biz: Business, tier: CostTier) -> some View {
+        RCCard {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Label("Pricing", systemImage: "tag.fill")
+                        .font(.headline)
+                        .foregroundStyle(Theme.primary)
+                    Spacer()
+                    CostTierBadge(tier: tier, showLabel: true)
+                }
+                if let range = biz.typicalCostText {
+                    Text("Past projects typically run \(range).")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Text(pricingFootnote(biz))
+                    .font(.caption2).foregroundStyle(.tertiary)
+            }
+            .padding(16)
+        }
+    }
+
+    private func pricingFootnote(_ biz: Business) -> String {
+        let n = biz.costSamples ?? 0
+        let base = "Based on this contractor’s posted project costs"
+        if n == 1 { return base + " (1 project). A guide, not a quote." }
+        if n > 1 { return base + " (\(n) projects). A guide, not a quote." }
+        return base + ". A guide, not a quote."
     }
 
     // MARK: - Admin verification
