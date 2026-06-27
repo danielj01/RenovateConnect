@@ -12,17 +12,8 @@ struct InspirationView: View {
     @State private var loadingMore = false
     @State private var error: String?
     @State private var category: String?
-    // Drives the directional slide when switching categories (later = forward).
-    @State private var slideForward = true
 
     private let categories = ["Kitchen", "Bathroom", "Bedroom", "Living room", "Whole home", "Exterior"]
-
-    /// Position in the chip order (All = 0, then the categories) so we can tell
-    /// which way to slide.
-    private func categoryIndex(_ value: String?) -> Int {
-        guard let value else { return 0 }
-        return (categories.firstIndex(of: value) ?? -1) + 1
-    }
 
     // Simple two-column waterfall: alternate items by index. Good enough without
     // knowing image dimensions up front; heights vary naturally with each photo.
@@ -60,8 +51,11 @@ struct InspirationView: View {
                         column(cols.right)
                     }
                     .padding(.horizontal, 10)
-                    // Directional horizontal slide on category swap.
-                    .transition(.directionalSlide(forward: slideForward))
+                    // Fade-out-then-in on category swap (see Theme.contentSwap).
+                    // Plain .opacity cross-faded both columns simultaneously
+                    // and the previous category's photos visibly bled through
+                    // the new ones at the same grid positions.
+                    .transition(.contentSwap)
                     // Re-establish identity per category so the ScrollView
                     // doesn't try to diff a totally different list against the
                     // old one — that diff is what produces the visible jump.
@@ -96,8 +90,7 @@ struct InspirationView: View {
             // items snap to new ones — the ProgressView covers the gap until
             // the new page lands. Wrapped in withAnimation so the cross-fade
             // transition on the items HStack picks it up.
-            slideForward = categoryIndex(value) > categoryIndex(category)
-            withAnimation(.easeInOut(duration: 0.25)) {
+            withAnimation(.easeInOut(duration: 0.18)) {
                 category = value
                 items = []
             }

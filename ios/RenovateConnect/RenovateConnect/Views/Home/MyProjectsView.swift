@@ -15,8 +15,6 @@ struct MyProjectsView: View {
     @EnvironmentObject private var router: TabRouter
     @Environment(\.dismiss) private var dismiss
     @State private var segment: Segment = .saved
-    // Drives the directional slide when switching segments.
-    @State private var slideForward = false
     @State private var estimations: [Estimation] = []
     @State private var loadingEstimates = true
     @State private var projects: [ProjectSummary] = []
@@ -30,19 +28,13 @@ struct MyProjectsView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            // Set the slide direction from old → new BEFORE the body re-renders
-            // with the new segment, so the transition picks the right edge.
-            .onChange(of: segment) { old, new in
-                let order = Segment.allCases
-                let oldIdx = order.firstIndex(of: old) ?? 0
-                let newIdx = order.firstIndex(of: new) ?? 0
-                slideForward = newIdx > oldIdx
-            }
 
             ScrollView {
                 // Group + .id(segment) makes each segment its own identity tree
-                // so SwiftUI doesn't diff different lists against each other; the
-                // directional slide gives the swap a left/right motion.
+                // so SwiftUI doesn't try to diff different lists against each
+                // other; the .transition + .animation(value:) gives the swap a
+                // cross-fade instead of an instant pop. iOS 17/18 stopped
+                // implicitly easing this kind of conditional rebuild.
                 Group {
                     switch segment {
                     case .projects: projectsSection
@@ -50,10 +42,10 @@ struct MyProjectsView: View {
                     case .estimates: estimatesSection
                     }
                 }
-                .transition(.directionalSlide(forward: slideForward))
+                .transition(.contentSwap)
                 .id(segment)
             }
-            .animation(.easeInOut(duration: 0.25), value: segment)
+            .animation(.easeInOut(duration: 0.2), value: segment)
         }
         .background(Color(.systemBackground))
         .navigationTitle("My Projects")

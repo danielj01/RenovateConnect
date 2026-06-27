@@ -123,62 +123,78 @@ struct MainTabView: View {
     }
 
     // Homeowners: discover contractors, estimate, chat, message.
-    @ViewBuilder
     private var clientTabs: some View {
-        SlidingTabView(selection: $router.selection, tabs: [
-            RCTabItem(tag: 0, title: "Explore", icon: "safari.fill"),
-            RCTabItem(tag: 1, title: "Estimate", icon: "camera.viewfinder"),
-            RCTabItem(tag: 2, title: "Inspiration", icon: "photo.on.rectangle.angled"),
-            RCTabItem(tag: 3, title: "Messages", icon: "message.fill", badge: inbox.unreadCount),
-            RCTabItem(tag: 4, title: "Profile", icon: "person.crop.circle.fill"),
-        ]) { tab in
-            switch tab.tag {
-            case 0: BusinessSearchView()
-            case 1: EstimationView()
+        TabView(selection: $router.selection) {
+            BusinessSearchView()
+                .tabItem { Label("Explore", systemImage: "safari.fill") }
+                .tag(0)
+
+            EstimationView()
+                .tabItem { Label("Estimate", systemImage: "camera.viewfinder") }
+                .tag(1)
+
             // Inspiration replaces the AI Chat tab; AI chat now opens from Explore.
-            case 2: InspirationView()
-            case 3: ConversationsView()
-            default: ProfileView()
-            }
+            InspirationView()
+                .tabItem { Label("Inspiration", systemImage: "photo.on.rectangle.angled") }
+                .tag(2)
+
+            ConversationsView()
+                .tabItem { Label("Messages", systemImage: "message.fill") }
+                .badge(inbox.unreadCount)
+                .tag(3)
+
+            ProfileView()
+                .tabItem { Label("Profile", systemImage: "person.crop.circle.fill") }
+                .tag(4)
         }
     }
 
     // Platform admins: approval queue + browse search to spot-check listings.
     // Admins also see the search side so they can preview listings as users.
-    @ViewBuilder
     private var adminTabs: some View {
-        SlidingTabView(selection: $router.selection, tabs: [
-            RCTabItem(tag: 0, title: "Approvals", icon: "checkmark.shield.fill"),
-            RCTabItem(tag: 1, title: "Explore", icon: "safari.fill"),
-            RCTabItem(tag: 2, title: "Messages", icon: "message.fill", badge: inbox.unreadCount),
-            RCTabItem(tag: 3, title: "Profile", icon: "person.crop.circle.fill"),
-        ]) { tab in
-            switch tab.tag {
-            case 0: AdminView()
-            case 1: BusinessSearchView()
-            case 2: ConversationsView()
-            default: ProfileView()
-            }
+        TabView(selection: $router.selection) {
+            AdminView()
+                .tabItem { Label("Approvals", systemImage: "checkmark.shield.fill") }
+                .tag(0)
+
+            BusinessSearchView()
+                .tabItem { Label("Explore", systemImage: "safari.fill") }
+                .tag(1)
+
+            ConversationsView()
+                .tabItem { Label("Messages", systemImage: "message.fill") }
+                .badge(inbox.unreadCount)
+                .tag(2)
+
+            ProfileView()
+                .tabItem { Label("Profile", systemImage: "person.crop.circle.fill") }
+                .tag(3)
         }
     }
 
     // Contractors: run their business — dashboard, leads, portfolio, messages.
-    @ViewBuilder
     private var businessTabs: some View {
-        SlidingTabView(selection: $router.selection, tabs: [
-            RCTabItem(tag: 0, title: "Dashboard", icon: "chart.bar.fill"),
-            RCTabItem(tag: 1, title: "Leads", icon: "person.2.fill"),
-            RCTabItem(tag: 2, title: "Portfolio", icon: "photo.stack.fill"),
-            RCTabItem(tag: 3, title: "Messages", icon: "message.fill", badge: inbox.unreadCount),
-            RCTabItem(tag: 4, title: "Profile", icon: "person.crop.circle.fill"),
-        ]) { tab in
-            switch tab.tag {
-            case 0: DashboardView()
-            case 1: LeadsView()
-            case 2: PortfolioManagerView()
-            case 3: ConversationsView()
-            default: ProfileView()
-            }
+        TabView(selection: $router.selection) {
+            DashboardView()
+                .tabItem { Label("Dashboard", systemImage: "chart.bar.fill") }
+                .tag(0)
+
+            LeadsView()
+                .tabItem { Label("Leads", systemImage: "person.2.fill") }
+                .tag(1)
+
+            PortfolioManagerView()
+                .tabItem { Label("Portfolio", systemImage: "photo.stack.fill") }
+                .tag(2)
+
+            ConversationsView()
+                .tabItem { Label("Messages", systemImage: "message.fill") }
+                .badge(inbox.unreadCount)
+                .tag(3)
+
+            ProfileView()
+                .tabItem { Label("Profile", systemImage: "person.crop.circle.fill") }
+                .tag(4)
         }
     }
 }
