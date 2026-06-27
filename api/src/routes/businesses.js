@@ -4,7 +4,7 @@ const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { uploadImage } = require('../services/storage');
-const { recomputeBusinessCostTier } = require('../services/costTier');
+const { recomputeBusinessCostTier, tierForQuery } = require('../services/costTier');
 
 // Public shareable URL for a business profile. Contractors share this (link +
 // QR) on their site/Instagram/cards to send customers straight to their profile;
@@ -57,10 +57,20 @@ router.get('/', async (req, res, next) => {
     if (city) where.city = { contains: city, mode: 'insensitive' };
     if (state) where.state = state.toUpperCase();
     if (specialty) where.specialties = { has: specialty };
-    if (q) where.companyName = { contains: q, mode: 'insensitive' };
-    // Price-level filter ($ / $$ / $$$). Ignores unknown values rather than
-    // erroring, so a bad query param just returns the unfiltered list.
+
+    // A search-bar query that is itself a price keyword ("high"/"medium"/"low",
+    // "$$$", "budget", "premium", …) is treated as a cost-tier filter rather
+    // than a company-name match — this is how homeowners narrow by price level
+    // (there's no separate price control in the app). Any other text is a normal
+    // name search.
+    const queryTier = tierForQuery(q);
+    if (q && !queryTier) where.companyName = { contains: q, mode: 'insensitive' };
+
+    // Price-level filter ($ / $$ / $$$). An explicit ?costTier wins; otherwise a
+    // price keyword typed into the search bar applies. Unknown values are
+    // ignored rather than erroring, so a bad param just returns the list.
     if (['LOW', 'MEDIUM', 'HIGH'].includes(costTier)) where.costTier = costTier;
+    else if (queryTier) where.costTier = queryTier;
 
     const include = {
       reviews: { take: 3, orderBy: { createdAt: 'desc' } },

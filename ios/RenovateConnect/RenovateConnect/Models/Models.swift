@@ -70,6 +70,28 @@ enum CostTier: String, Codable, CaseIterable, Identifiable {
         case .high: return "High-end"
         }
     }
+
+    /// Recognize a price keyword typed into the search bar ("high"/"medium"/
+    /// "low", "$$$", "budget", "premium", …) and map it to a tier. Mirrors the
+    /// server's `tierForQuery` (api/src/services/costTier.js) so the UI can
+    /// confirm the price level the homeowner is filtering by. Nil for ordinary
+    /// name searches.
+    static func fromSearchQuery(_ query: String) -> CostTier? {
+        let norm = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !norm.isEmpty else { return nil }
+        let keywords: [CostTier: [String]] = [
+            .low: ["low", "low cost", "low-cost", "$", "budget", "budget-friendly",
+                   "cheap", "affordable", "inexpensive", "economy"],
+            .medium: ["medium", "med", "mid", "mid range", "mid-range", "midrange",
+                      "moderate", "average", "$$"],
+            .high: ["high", "high cost", "high-cost", "high end", "high-end", "highend",
+                    "$$$", "premium", "luxury", "luxe", "expensive", "upscale"],
+        ]
+        for (tier, words) in keywords where words.contains(norm) {
+            return tier
+        }
+        return nil
+    }
 }
 
 struct Business: Codable, Identifiable {

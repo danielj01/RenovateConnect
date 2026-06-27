@@ -6,7 +6,6 @@ struct BusinessSearchView: View {
     @StateObject private var location = LocationManager()
     @State private var query = ""
     @State private var selectedSpecialty: String? = nil
-    @State private var selectedCostTier: CostTier? = nil
     @State private var businesses: [Business] = []
     @State private var sponsored: [Business] = []
     @State private var isLoading = false
@@ -23,7 +22,13 @@ struct BusinessSearchView: View {
     private enum SaveState { case idle, saving, saved }
 
     private var isClient: Bool { auth.currentUser?.role == .client }
-    private var hasActiveFilter: Bool { selectedSpecialty != nil || selectedCostTier != nil || !query.isEmpty }
+    private var hasActiveFilter: Bool { selectedSpecialty != nil || !query.isEmpty }
+
+    /// The cost tier a homeowner is asking for by typing a price keyword
+    /// ("high"/"medium"/"low", "$$$", "budget", "premium", …) into the search
+    /// bar. Mirrors the server-side `tierForQuery` so the UI can confirm the
+    /// recognized price level. Nil for ordinary name searches.
+    private var queryCostTier: CostTier? { CostTier.fromSearchQuery(query) }
 
     private let specialties: [(String, String)] = [
         ("Kitchen", "fork.knife"), ("Bathroom", "shower"),
@@ -86,7 +91,12 @@ struct BusinessSearchView: View {
                         .padding(.horizontal, 16).padding(.vertical, 14)
                     }
 
-                    priceFilterRow
+                    // When the typed query is a price keyword, confirm the
+                    // recognized level so the homeowner knows we filtered by
+                    // price (e.g. "high" → "$$$ High-end") rather than by name.
+                    if let tier = queryCostTier {
+                        priceMatchBanner(tier)
+                    }
 
                     // Save the current filters so new matching contractors trigger an alert.
                     if isClient && hasActiveFilter {
@@ -164,32 +174,20 @@ struct BusinessSearchView: View {
         }
     }
 
-    // MARK: - Price filter
+    // MARK: - Price keyword confirmation
     //
-    // A compact "$ / $$ / $$$" row letting the homeowner narrow by price level.
-    // Tapping the active chip clears it. Re-searches on change.
-    private var priceFilterRow: some View {
+    // Homeowners filter by price by typing "high"/"medium"/"low" (or "$$$",
+    // "budget", "premium", …) into the search bar — the server maps the keyword
+    // to a cost tier. This banner echoes the recognized level so the price
+    // filtering is visible and understood.
+    @ViewBuilder
+    private func priceMatchBanner(_ tier: CostTier) -> some View {
         HStack(spacing: 8) {
-            Text("Price").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
-            ForEach(CostTier.allCases) { tier in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        selectedCostTier = selectedCostTier == tier ? nil : tier
-                        businesses = []
-                        sponsored = []
-                    }
-                    Task { await search() }
-                } label: {
-                    Text(tier.dollars)
-                        .font(.subheadline.weight(.semibold))
-                        .frame(minWidth: 34)
-                        .padding(.vertical, 7)
-                        .background(selectedCostTier == tier ? Theme.primary : Color(.systemGray6))
-                        .foregroundStyle(selectedCostTier == tier ? .white : Color(.label))
-                        .clipShape(Capsule())
-                        .animation(.easeInOut(duration: 0.18), value: selectedCostTier)
-                }
-            }
+            Image(systemName: "tag.fill").font(.caption).foregroundStyle(Theme.primary)
+            Text("Showing **\(tier.label)** contractors")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            CostTierBadge(tier: tier)
             Spacer()
         }
         .padding(.horizontal, 16)
@@ -356,12 +354,14 @@ struct BusinessSearchView: View {
         defer { isLoading = false }
         let coord = nearMe ? location.coordinate : nil
         do {
+            // A price keyword in `query` (e.g. "high") is sent verbatim as `q`;
+            // the server recognizes it and filters by cost tier. No separate
+            // price control is sent.
             let resp = try await APIService.shared.searchBusinesses(
                 specialty: selectedSpecialty,
                 q: query.isEmpty ? nil : query,
                 lat: coord?.latitude,
-                lng: coord?.longitude,
-                costTier: selectedCostTier
+                lng: coord?.longitude
             )
             // Cross-fade the new list in. Without this the array swap is
             // instant — perceived as a jump on iOS 17/18.

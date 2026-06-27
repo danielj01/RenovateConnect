@@ -1,7 +1,7 @@
 const request = require('supertest');
 const app = require('../src/app');
 const { db, resetDb, createBusiness, createAdmin } = require('./helpers');
-const { recomputeBusinessCostTier, tierForMidpoint } = require('../src/services/costTier');
+const { recomputeBusinessCostTier, tierForMidpoint, tierForQuery } = require('../src/services/costTier');
 
 beforeEach(async () => {
   await resetDb();
@@ -146,5 +146,71 @@ describe('Search surfaces + filters by cost tier', () => {
     const names = filtered.body.businesses.map((b) => b.companyName);
     expect(names).toContain('Luxe Renovations');
     expect(names).not.toContain('Budget Builders');
+  });
+});
+
+describe('tierForQuery', () => {
+  test('maps price keywords (case/whitespace-insensitive) to a tier', () => {
+    expect(tierForQuery('low')).toBe('LOW');
+    expect(tierForQuery('  High  ')).toBe('HIGH');
+    expect(tierForQuery('MEDIUM')).toBe('MEDIUM');
+    expect(tierForQuery('$$$')).toBe('HIGH');
+    expect(tierForQuery('budget')).toBe('LOW');
+    expect(tierForQuery('premium')).toBe('HIGH');
+    expect(tierForQuery('mid-range')).toBe('MEDIUM');
+  });
+
+  test('returns null for non-keyword queries and empty input', () => {
+    expect(tierForQuery('highland kitchens')).toBeNull(); // not an exact keyword
+    expect(tierForQuery('Acme')).toBeNull();
+    expect(tierForQuery('')).toBeNull();
+    expect(tierForQuery(null)).toBeNull();
+    expect(tierForQuery(undefined)).toBeNull();
+  });
+});
+
+describe('Search bar price keywords filter by tier', () => {
+  test('typing "high"/"low" in the search bar (q=) filters by cost tier', async () => {
+    const low = await createBusiness({ email: 'low@t.com', companyName: 'Budget Builders' });
+    await addProject(low.business.id, 8000, 12000);
+    await recomputeBusinessCostTier(low.business.id);
+
+    const high = await createBusiness({ email: 'high@t.com', companyName: 'Luxe Renovations' });
+    await addProject(high.business.id, 90000, 130000);
+    await recomputeBusinessCostTier(high.business.id);
+
+    const highResp = await request(app).get('/businesses?q=high');
+    expect(highResp.status).toBe(200);
+    const highNames = highResp.body.businesses.map((b) => b.companyName);
+    expect(highNames).toContain('Luxe Renovations');
+    expect(highNames).not.toContain('Budget Builders');
+
+    const lowResp = await request(app).get('/businesses?q=Budget'); // keyword, not name
+    const lowNames = lowResp.body.businesses.map((b) => b.companyName);
+    expect(lowNames).toContain('Budget Builders');
+    expect(lowNames).not.toContain('Luxe Renovations');
+  });
+
+  test('a non-keyword query still does a normal company-name search', async () => {
+    const a = await createBusiness({ email: 'a@t.com', companyName: 'Luxe Renovations' });
+    await addProject(a.business.id, 90000, 130000);
+    await recomputeBusinessCostTier(a.business.id);
+    await createBusiness({ email: 'b@t.com', companyName: 'Budget Builders' });
+
+    const resp = await request(app).get('/businesses?q=Luxe');
+    const names = resp.body.businesses.map((b) => b.companyName);
+    expect(names).toContain('Luxe Renovations');
+    expect(names).not.toContain('Budget Builders');
+  });
+
+  test('explicit ?costTier wins over a price keyword in q', async () => {
+    const low = await createBusiness({ email: 'low@t.com', companyName: 'Budget Builders' });
+    await addProject(low.business.id, 8000, 12000);
+    await recomputeBusinessCostTier(low.business.id);
+
+    // q says HIGH but the explicit param says LOW — the explicit param decides.
+    const resp = await request(app).get('/businesses?q=high&costTier=LOW');
+    const names = resp.body.businesses.map((b) => b.companyName);
+    expect(names).toContain('Budget Builders');
   });
 });

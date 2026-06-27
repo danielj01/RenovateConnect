@@ -20,6 +20,31 @@ function tierForMidpoint(avgMidpoint) {
   return 'MEDIUM';
 }
 
+// Map a free-text search query to a cost tier so a homeowner can type
+// "high" / "medium" / "low" (or "$$$", "budget", "premium", …) into the search
+// bar instead of using a separate filter control. Returns LOW / MEDIUM / HIGH,
+// or null when the query isn't a recognized price keyword (so it falls back to
+// a normal company-name search). Matches the whole trimmed query only, to avoid
+// hijacking legitimate name searches that merely contain one of these words.
+const TIER_KEYWORDS = {
+  LOW: ['low', 'low cost', 'low-cost', '$', 'budget', 'budget-friendly', 'cheap',
+    'affordable', 'inexpensive', 'economy'],
+  MEDIUM: ['medium', 'med', 'mid', 'mid range', 'mid-range', 'midrange', 'moderate',
+    'average', '$$'],
+  HIGH: ['high', 'high cost', 'high-cost', 'high end', 'high-end', 'highend', '$$$',
+    'premium', 'luxury', 'luxe', 'expensive', 'upscale'],
+};
+
+function tierForQuery(q) {
+  if (!q || typeof q !== 'string') return null;
+  const norm = q.trim().toLowerCase();
+  if (!norm) return null;
+  for (const [tier, keywords] of Object.entries(TIER_KEYWORDS)) {
+    if (keywords.includes(norm)) return tier;
+  }
+  return null;
+}
+
 // Recompute and persist the tier for one business. Only approved portfolio
 // projects that have BOTH costMin and costMax set count. Returns the new tier
 // (or null when there isn't enough data).
@@ -60,4 +85,4 @@ async function recomputeBusinessCostTier(businessId) {
   return tier;
 }
 
-module.exports = { recomputeBusinessCostTier, tierForMidpoint };
+module.exports = { recomputeBusinessCostTier, tierForMidpoint, tierForQuery };

@@ -149,9 +149,17 @@ struct BusinessDetailView: View {
                             .foregroundStyle(.white)
                         if biz.isVerified { VerifiedBadge() }
                     }
-                    HStack(spacing: 4) {
-                        Image(systemName: "mappin.circle.fill").font(.caption)
-                        Text("\(biz.city), \(biz.state)").font(.subheadline)
+                    HStack(spacing: 10) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "mappin.circle.fill").font(.caption)
+                            Text("\(biz.city), \(biz.state)").font(.subheadline)
+                        }
+                        // Price level, derived from this contractor's past
+                        // project costs. Styled for the gradient header (the
+                        // light-background CostTierBadge is used on white cards).
+                        if let tier = biz.costTier {
+                            headerCostBadge(tier)
+                        }
                     }
                     .foregroundStyle(.white.opacity(0.85))
                 }
@@ -159,6 +167,27 @@ struct BusinessDetailView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
         }
+    }
+
+    /// Price-level badge sized for the white-on-gradient hero: filled "$" marks
+    /// up to the tier, dimmed beyond, plus the short label.
+    @ViewBuilder
+    private func headerCostBadge(_ tier: CostTier) -> some View {
+        let active: Int = { switch tier { case .low: return 1; case .medium: return 2; case .high: return 3 } }()
+        HStack(spacing: 5) {
+            HStack(spacing: 0) {
+                ForEach(0..<3) { i in
+                    Text("$")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(i < active ? Color.white : Color.white.opacity(0.4))
+                }
+            }
+            Text(tier.label).font(.caption2.weight(.semibold)).foregroundStyle(.white)
+        }
+        .padding(.horizontal, 8).padding(.vertical, 4)
+        .background(Color.white.opacity(0.18), in: Capsule())
+        .overlay(Capsule().stroke(Color.white.opacity(0.30), lineWidth: 0.5))
+        .accessibilityLabel("Price level: \(tier.label)")
     }
 
     // MARK: - Stats row
