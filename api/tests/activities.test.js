@@ -171,6 +171,7 @@ describe('Activity feed', () => {
       .send({
         companyName: 'Bright Kitchens', description: 'We remodel kitchens.',
         city: 'Austin', state: 'TX', zipCode: '78701', specialties: ['Kitchen'],
+        licenseNumber: '1234567',
       });
     expect(created.status).toBe(201);
 

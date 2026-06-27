@@ -23,7 +23,12 @@ const profileSchema = z.object({
   zipCode: z.string().min(3).max(12),
   specialties: z.array(z.string().min(1).max(40)).min(1).max(20),
   yearsInBusiness: z.number().int().min(0).max(200).optional(),
-  licenseNumber: z.string().max(60).optional(),
+  // Required to list as a contractor. Listings are "advertising" under CA law,
+  // which requires the contractor's license number to appear in all advertising
+  // (Bus. & Prof. Code § 7030.5) and bars advertising construction without a
+  // license. We collect it at signup and display it on the public profile.
+  // (Kept as a free-form string so non-CA license formats are accepted.)
+  licenseNumber: z.string().min(1).max(60),
   website: z.string().url().max(2000).optional(),
   address: z.string().max(200).optional(),
   // Geocoded on the client (contractor's device) from their address so the API

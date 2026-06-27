@@ -48,7 +48,8 @@ struct EditBusinessProfileView: View {
         !city.trimmed.isEmpty &&
         state.trimmed.count == 2 &&
         !zipCode.trimmed.isEmpty &&
-        !selectedSpecialties.isEmpty
+        !selectedSpecialties.isEmpty &&
+        !licenseNumber.trimmed.isEmpty
     }
 
     var body: some View {
@@ -143,7 +144,7 @@ struct EditBusinessProfileView: View {
                 zipCode: zipCode.trimmed,
                 specialties: Array(selectedSpecialties),
                 yearsInBusiness: Int(yearsInBusiness.trimmed),
-                licenseNumber: licenseNumber.trimmed.isEmpty ? nil : licenseNumber.trimmed,
+                licenseNumber: licenseNumber.trimmed,
                 website: trimmedWebsite.isEmpty ? nil : trimmedWebsite,
                 address: address.trimmed.isEmpty ? nil : address.trimmed,
                 lat: coord?.latitude,

@@ -17,6 +17,7 @@ function profileBody(overrides = {}) {
     state: 'TX',
     zipCode: '78701',
     specialties: ['Kitchen'],
+    licenseNumber: '1234567',
     ...overrides,
   };
 }

@@ -32,7 +32,8 @@ struct BusinessProfileSetupView: View {
         !city.trimmed.isEmpty &&
         state.trimmed.count == 2 &&
         !zipCode.trimmed.isEmpty &&
-        !selectedSpecialties.isEmpty
+        !selectedSpecialties.isEmpty &&
+        !licenseNumber.trimmed.isEmpty
     }
 
     var body: some View {
@@ -84,10 +85,19 @@ struct BusinessProfileSetupView: View {
                     TextField("Street address (optional)", text: $address)
                 }
 
+                Section {
+                    TextField("Contractor license number", text: $licenseNumber)
+                        .textInputAutocapitalization(.characters)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("License")
+                } footer: {
+                    Text("Required. Your license number is shown on your public profile — the law requires it to appear on contractor listings.")
+                }
+
                 Section("Details (optional)") {
                     TextField("Years in business", text: $yearsInBusiness)
                         .keyboardType(.numberPad)
-                    TextField("License number", text: $licenseNumber)
                     TextField("Website (https://…)", text: $website)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
@@ -149,7 +159,7 @@ struct BusinessProfileSetupView: View {
                 zipCode: zipCode.trimmed,
                 specialties: Array(selectedSpecialties),
                 yearsInBusiness: Int(yearsInBusiness.trimmed),
-                licenseNumber: licenseNumber.trimmed.isEmpty ? nil : licenseNumber.trimmed,
+                licenseNumber: licenseNumber.trimmed,
                 website: trimmedWebsite.isEmpty ? nil : trimmedWebsite,
                 address: address.trimmed.isEmpty ? nil : address.trimmed,
                 lat: coord?.latitude,

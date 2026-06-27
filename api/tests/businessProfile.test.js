@@ -27,6 +27,7 @@ const validProfile = {
   state: 'TX',
   zipCode: '78701',
   specialties: ['Kitchen', 'Bathroom'],
+  licenseNumber: '1234567',
 };
 
 describe('POST /businesses', () => {
@@ -37,6 +38,16 @@ describe('POST /businesses', () => {
       .send(validProfile);
     expect(res.status).toBe(201);
     expect(res.body.companyName).toBe('Acme Renovations');
+    expect(res.body.licenseNumber).toBe('1234567');
+  });
+
+  test('rejects a profile with no license number (CA advertising rule)', async () => {
+    const { token } = await ownerWithoutProfile();
+    const { licenseNumber, ...noLicense } = validProfile;
+    const res = await request(app).post('/businesses')
+      .set('Authorization', `Bearer ${token}`)
+      .send(noLicense);
+    expect(res.status).toBe(400);
   });
 
   test('rejects a second profile with 409 instead of 500', async () => {
