@@ -228,7 +228,7 @@ struct BusinessSearchView: View {
                 .transition(.opacity)
         } else {
             resultsPopulated
-                .transition(Theme.directionalSlide(forward: slideForward))
+                .transition(.directionalSlide(forward: slideForward))
                 .id(selectedSpecialty ?? "all")
         }
     }

@@ -62,7 +62,7 @@ struct LeadsView: View {
                             .font(.callout).foregroundStyle(.secondary).padding(.top, 40)
                     }
                 }
-                .transition(Theme.directionalSlide(forward: slideForward))
+                .transition(.directionalSlide(forward: slideForward))
                 .id(filter?.rawValue ?? "all")
             }
             .padding(.horizontal, 20)

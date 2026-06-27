@@ -61,7 +61,7 @@ struct InspirationView: View {
                     }
                     .padding(.horizontal, 10)
                     // Directional horizontal slide on category swap.
-                    .transition(Theme.directionalSlide(forward: slideForward))
+                    .transition(.directionalSlide(forward: slideForward))
                     // Re-establish identity per category so the ScrollView
                     // doesn't try to diff a totally different list against the
                     // old one — that diff is what produces the visible jump.

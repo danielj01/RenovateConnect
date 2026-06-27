@@ -50,7 +50,7 @@ struct MyProjectsView: View {
                     case .estimates: estimatesSection
                     }
                 }
-                .transition(Theme.directionalSlide(forward: slideForward))
+                .transition(.directionalSlide(forward: slideForward))
                 .id(segment)
             }
             .animation(.easeInOut(duration: 0.25), value: segment)
