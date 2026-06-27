@@ -6,10 +6,18 @@ struct LeadsView: View {
     @State private var loadError: String?
     @State private var filter: LeadStatus?
     @State private var selected: Lead?
+    // Drives the directional slide when switching the status filter.
+    @State private var slideForward = true
 
     private var filtered: [Lead] {
         guard let filter else { return leads }
         return leads.filter { $0.status == filter }
+    }
+
+    /// Position in the chip order (All = 0, then the statuses) for slide direction.
+    private func filterIndex(_ value: LeadStatus?) -> Int {
+        guard let value else { return 0 }
+        return (LeadStatus.allCases.firstIndex(of: value) ?? -1) + 1
     }
 
     var body: some View {
@@ -54,7 +62,7 @@ struct LeadsView: View {
                             .font(.callout).foregroundStyle(.secondary).padding(.top, 40)
                     }
                 }
-                .transition(.contentSwap)
+                .transition(Theme.directionalSlide(forward: slideForward))
                 .id(filter?.rawValue ?? "all")
             }
             .padding(.horizontal, 20)
@@ -67,14 +75,15 @@ struct LeadsView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 FilterChip(title: "All", count: leads.count, isOn: filter == nil) {
-                    withAnimation(.easeInOut(duration: 0.18)) { filter = nil }
+                    slideForward = filterIndex(nil) > filterIndex(filter)
+                    withAnimation(.easeInOut(duration: 0.22)) { filter = nil }
                 }
                 ForEach(LeadStatus.allCases) { status in
                     let c = leads.filter { $0.status == status }.count
                     FilterChip(title: status.label, count: c, isOn: filter == status) {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            filter = (filter == status) ? nil : status
-                        }
+                        let newValue: LeadStatus? = (filter == status) ? nil : status
+                        slideForward = filterIndex(newValue) > filterIndex(filter)
+                        withAnimation(.easeInOut(duration: 0.22)) { filter = newValue }
                     }
                 }
             }

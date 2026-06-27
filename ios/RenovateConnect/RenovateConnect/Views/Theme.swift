@@ -232,4 +232,15 @@ extension AnyTransition {
         insertion: .opacity.animation(.easeIn(duration: 0.18).delay(0.18)),
         removal:   .opacity.animation(.easeOut(duration: 0.18))
     )
+
+    /// Directional horizontal slide for in-page filter/segment swaps. `forward`
+    /// (moving to a later filter) slides the new content in from the trailing
+    /// edge and the old out to the leading edge; backward reverses it. Paired
+    /// with a fade so there's no hard clip at the edges.
+    static func directionalSlide(forward: Bool) -> AnyTransition {
+        .asymmetric(
+            insertion: .move(edge: forward ? .trailing : .leading).combined(with: .opacity),
+            removal:   .move(edge: forward ? .leading : .trailing).combined(with: .opacity)
+        )
+    }
 }

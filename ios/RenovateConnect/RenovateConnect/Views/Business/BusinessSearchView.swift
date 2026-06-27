@@ -7,6 +7,8 @@ struct BusinessSearchView: View {
     @State private var query = ""
     @State private var selectedSpecialty: String? = nil
     @State private var selectedCostTier: CostTier? = nil
+    // Drives the directional slide when switching the specialty filter.
+    @State private var slideForward = true
     @State private var businesses: [Business] = []
     @State private var sponsored: [Business] = []
     @State private var isLoading = false
@@ -36,6 +38,13 @@ struct BusinessSearchView: View {
     // replacing the old paid-promotion carousel.
     private var featured: [Business] { businesses.filter { $0.isVerified } }
     private var all: [Business] { businesses }
+
+    /// Position in the chip order (All = 0, then the specialties) for slide
+    /// direction.
+    private func specialtyIndex(_ value: String?) -> Int {
+        guard let value else { return 0 }
+        return (specialties.firstIndex { $0.0 == value } ?? -1) + 1
+    }
 
     var body: some View {
         NavigationStack {
@@ -67,8 +76,10 @@ struct BusinessSearchView: View {
                                     // the network round-trip lands. The
                                     // withAnimation drives the cross-fade
                                     // transition on the content sections.
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        selectedSpecialty = selectedSpecialty == name ? nil : name
+                                    let newValue = selectedSpecialty == name ? nil : name
+                                    slideForward = specialtyIndex(newValue) > specialtyIndex(selectedSpecialty)
+                                    withAnimation(.easeInOut(duration: 0.25)) {
+                                        selectedSpecialty = newValue
                                         businesses = []
                                         sponsored = []
                                     }
@@ -217,7 +228,7 @@ struct BusinessSearchView: View {
                 .transition(.opacity)
         } else {
             resultsPopulated
-                .transition(.contentSwap)
+                .transition(Theme.directionalSlide(forward: slideForward))
                 .id(selectedSpecialty ?? "all")
         }
     }
