@@ -169,19 +169,14 @@ struct BusinessDetailView: View {
         }
     }
 
-    /// Price-level badge sized for the white-on-gradient hero: filled "$" marks
-    /// up to the tier, dimmed beyond, plus the short label.
+    /// Price-level badge sized for the white-on-gradient hero: one "$" per
+    /// level ($ / $$ / $$$) plus the short label.
     @ViewBuilder
     private func headerCostBadge(_ tier: CostTier) -> some View {
-        let active: Int = { switch tier { case .low: return 1; case .medium: return 2; case .high: return 3 } }()
         HStack(spacing: 5) {
-            HStack(spacing: 0) {
-                ForEach(0..<3) { i in
-                    Text("$")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(i < active ? Color.white : Color.white.opacity(0.4))
-                }
-            }
+            Text(tier.dollars)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(.white)
             Text(tier.label).font(.caption2.weight(.semibold)).foregroundStyle(.white)
         }
         .padding(.horizontal, 8).padding(.vertical, 4)

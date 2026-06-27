@@ -171,19 +171,11 @@ struct CostTierBadge: View {
     let tier: CostTier
     var showLabel: Bool = false
 
-    private var activeCount: Int {
-        switch tier { case .low: return 1; case .medium: return 2; case .high: return 3 }
-    }
-
     var body: some View {
         HStack(spacing: 4) {
-            HStack(spacing: 0) {
-                ForEach(0..<3) { i in
-                    Text("$")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(i < activeCount ? Theme.success : Color(.tertiaryLabel))
-                }
-            }
+            Text(tier.dollars)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Theme.success)
             if showLabel {
                 Text(tier.label).font(.caption2.weight(.medium)).foregroundStyle(.secondary)
             }
