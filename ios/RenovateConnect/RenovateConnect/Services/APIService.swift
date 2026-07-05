@@ -741,88 +741,6 @@ final class APIService {
                                             quoteHigh: quoteHigh, responseNote: responseNote))
     }
 
-    // MARK: - Project hub (derived: everything tied to one contractor)
-
-    /// Active projects for the signed-in user, grouped by contractor, newest
-    /// activity first. Read-only aggregation over quotes/appointments/payments/
-    /// messages — there's no Project table behind this.
-    func myProjects() async throws -> [ProjectSummary] {
-        try await request("projects")
-    }
-
-    /// The full aggregated timeline for one engagement (the homeowner's project
-    /// with a given contractor).
-    func project(businessId: String) async throws -> ProjectDetail {
-        try await request("projects/\(businessId)")
-    }
-
-    /// Save the homeowner's project notes (free-form scratchpad). Pass an
-    /// empty string to clear. Returns the persisted value.
-    func updateProjectNotes(projectId: String, notes: String) async throws -> String? {
-        struct Body: Encodable { let notes: String }
-        struct Resp: Decodable { let clientNotes: String? }
-        let resp: Resp = try await request("projects/\(projectId)/notes",
-                                           method: "PATCH",
-                                           body: Body(notes: notes))
-        return resp.clientNotes
-    }
-
-    // MARK: - Milestone escrow
-
-    /// Create (or fetch) the persistent Project for an accepted quote, so staged
-    /// milestone payments can hang off it.
-    func createProject(quoteRequestId: String) async throws -> ProjectRecord {
-        try await request("projects", method: "POST", body: ["quoteRequestId": quoteRequestId])
-    }
-
-    /// Contractor: add a payment milestone to a project (amount in cents).
-    func addMilestone(projectId: String, title: String, amountCents: Int) async throws -> Milestone {
-        struct Body: Encodable { let title: String; let amountCents: Int }
-        return try await request("projects/\(projectId)/milestones", method: "POST",
-                                 body: Body(title: title, amountCents: amountCents))
-    }
-
-    /// Homeowner: fund a milestone. Returns a hosted Checkout URL to open in a
-    /// Safari view; funds are held in escrow until release.
-    func fundMilestone(projectId: String, milestoneId: String) async throws -> URL {
-        struct Resp: Decodable { let url: String }
-        let resp: Resp = try await request("projects/\(projectId)/milestones/\(milestoneId)/fund", method: "POST")
-        guard let url = URL(string: resp.url) else { throw APIError.invalidURL }
-        return url
-    }
-
-    /// Homeowner: release escrowed funds to the contractor.
-    func approveMilestone(projectId: String, milestoneId: String) async throws -> Milestone {
-        try await request("projects/\(projectId)/milestones/\(milestoneId)/approve", method: "POST")
-    }
-
-    /// Contractor: mark a funded milestone complete, attaching proof photos.
-    func submitMilestone(projectId: String, milestoneId: String, images: [Data]) async throws -> Milestone {
-        let url = base.appendingPathComponent("projects/\(projectId)/milestones/\(milestoneId)/submit")
-        var req = URLRequest(url: url)
-        req.httpMethod = "POST"
-        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-
-        let boundary = UUID().uuidString
-        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        var body = Data()
-        func append(_ s: String) { body.append(s.data(using: .utf8)!) }
-        for (i, img) in images.enumerated() {
-            append("--\(boundary)\r\nContent-Disposition: form-data; name=\"images\"; filename=\"proof\(i).jpg\"\r\nContent-Type: image/jpeg\r\n\r\n")
-            body.append(img)
-            append("\r\n")
-        }
-        append("--\(boundary)--\r\n")
-        req.httpBody = body
-
-        let (data, response) = try await URLSession.shared.data(for: req)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw APIError.requestFailed((response as? HTTPURLResponse)?.statusCode ?? 0, "Submit failed")
-        }
-        return try JSONDecoder().decode(Milestone.self, from: data)
-    }
-
     // Activity feed
     func myActivities() async throws -> [Activity] {
         try await request("activities")
@@ -886,40 +804,6 @@ final class APIService {
         try await request("reviews/\(id)/response", method: "DELETE")
     }
 
-    // MARK: - In-app deposits (Stripe Connect)
-
-    /// Business: start (or resume) Stripe Connect onboarding so the contractor
-    /// can receive in-app deposit payouts. Returns the hosted onboarding URL.
-    func connectOnboardURL() async throws -> URL {
-        struct Resp: Decodable { let url: String }
-        let resp: Resp = try await request("payments/connect/onboard", method: "POST")
-        guard let url = URL(string: resp.url) else { throw APIError.invalidURL }
-        return url
-    }
-
-    /// Business: current payout readiness (syncs the flags from Stripe).
-    func connectStatus() async throws -> ConnectStatus {
-        try await request("payments/connect/status")
-    }
-
-    /// Homeowner: start a hosted Checkout to pay the deposit on an accepted
-    /// quote. Returns the breakdown plus the URL to open in a Safari view.
-    func depositCheckout(quoteRequestId: String) async throws -> DepositCheckout {
-        struct Body: Encodable { let quoteRequestId: String }
-        return try await request("payments/deposit", method: "POST",
-                                 body: Body(quoteRequestId: quoteRequestId))
-    }
-
-    /// Role-scoped deposit history (homeowner's payments / business's receipts).
-    func payments() async throws -> [Payment] {
-        try await request("payments")
-    }
-
-    /// Contractor: aggregate earnings — released vs. in-escrow, plus fees/refunds.
-    func earnings() async throws -> Earnings {
-        try await request("payments/earnings")
-    }
-
     // MARK: - Pro subscription
 
     func proStatus() async throws -> ProStatus {
@@ -956,13 +840,6 @@ final class APIService {
         let s: Shared = try await request("estimations/shared/\(normalized)")
         return Estimation(id: s.code, imageUrls: [], roomType: s.roomType,
                           description: nil, result: s.result, createdAt: s.createdAt)
-    }
-
-    /// Contractor (or admin): fully refund a settled deposit. Reverses the
-    /// transfer and refunds the platform fee server-side; the row flips to
-    /// REFUNDED via webhook, so callers should re-fetch after this returns.
-    func refundPayment(id: String) async throws {
-        try await requestNoContent("payments/\(id)/refund", method: "POST")
     }
 
     // AI Chat
@@ -1002,25 +879,6 @@ final class APIService {
 
     func blockedUsers() async throws -> [BlockedUser] {
         try await request("blocks")
-    }
-
-    // MARK: - Milestone disputes
-
-    /// Open a dispute on a FUNDED or SUBMITTED milestone. Pauses the
-    /// auto-release until the homeowner withdraws or an admin resolves.
-    func disputeMilestone(projectId: String, milestoneId: String,
-                          reason: String, details: String) async throws {
-        struct Body: Encodable { let reason: String; let details: String }
-        try await requestNoContent("projects/\(projectId)/milestones/\(milestoneId)/dispute",
-                                   method: "POST",
-                                   body: Body(reason: reason, details: details))
-    }
-
-    /// Withdraw the homeowner's own open dispute; the milestone falls back to
-    /// its pre-dispute status (FUNDED or SUBMITTED).
-    func withdrawDispute(projectId: String, milestoneId: String) async throws {
-        try await requestNoContent("projects/\(projectId)/milestones/\(milestoneId)/dispute/withdraw",
-                                   method: "POST")
     }
 
     // MARK: - Verification documents

@@ -6,11 +6,7 @@ async function resetDb() {
   await db.waitlistEntry.deleteMany();
   await db.report.deleteMany();
   await db.block.deleteMany();
-  await db.dispute.deleteMany();
   await db.verificationDocument.deleteMany();
-  await db.payment.deleteMany();
-  await db.milestone.deleteMany();
-  await db.project.deleteMany();
   await db.portfolioProject.deleteMany();
   await db.quoteRequest.deleteMany();
   await db.activity.deleteMany();

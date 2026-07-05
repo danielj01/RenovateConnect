@@ -55,61 +55,12 @@ enum ApprovalStatus {
   REJECTED
 }
 
-// In-app deposit payments (Stripe Connect). A homeowner pays a deposit when they
-// accept a quote; the money is routed to the contractor's connected account and
-// the platform takes a commission as a fee on top. One Payment row per deposit
-// is our durable record — it both confirms the job happened and tracks the fee.
-enum PaymentStatus {
-  PENDING    // PaymentIntent created, not yet confirmed by the homeowner
-  SUCCEEDED  // funds captured + routed; commission collected
-  FAILED     // the charge failed (card declined, etc.)
-  REFUNDED   // the deposit was refunded (dispute/cancellation)
-}
-
-// A Project is the first-class version of the derived hub: one persistent
-// container per accepted job, holding the staged milestone payments. (The
-// read-only /projects aggregation still works for engagements without one.)
-enum ProjectStatus {
-  ACTIVE
-  COMPLETED
-  CANCELLED
-}
-
-// Milestone escrow lifecycle. Funds are held on the platform when the homeowner
-// funds a milestone, and only transferred to the contractor on release
-// (homeowner approval, or auto-release after the grace window once work is
-// submitted). A funded-but-unreleased milestone can be refunded in full.
-enum MilestoneStatus {
-  PENDING    // created by the contractor, not yet funded
-  FUNDED     // homeowner paid; funds held on the platform balance
-  SUBMITTED  // contractor marked the work done and attached proof
-  DISPUTED   // homeowner raised a dispute — auto-release is paused, admin reviews
-  APPROVED   // released — funds transferred to the contractor
-  REFUNDED   // funded then refunded back to the homeowner
-}
-
-// A homeowner-raised dispute on a milestone. While OPEN, the milestone sits in
-// DISPUTED status: the auto-release sweep skips it and neither side can manually
-// approve/refund without an admin. Resolution writes the chosen action and
-// flips the milestone (RELEASE → APPROVED + transfer; REFUND → REFUNDED via the
-// existing milestone refund path). WITHDRAWN restores the milestone's prior
-// status so normal flow resumes.
-enum DisputeStatus {
-  OPEN
-  RESOLVED_RELEASE
-  RESOLVED_REFUND
-  WITHDRAWN
-}
-
-enum DisputeReason {
-  WORK_NOT_DONE
-  WORK_INCOMPLETE
-  WORK_LOW_QUALITY
-  NOT_AS_AGREED
-  DAMAGE
-  WRONG_AMOUNT
-  OTHER
-}
+// NOTE: The in-app construction-payment stack (Payment / Project / Milestone /
+// Dispute models + their enums, and the Business Stripe Connect fields) was
+// removed for CSLB compliance — homeowners contract with and pay the licensed
+// contractor directly, off-platform. The full schema + logic is preserved at
+// git tag `pre-deposit-removal` / branch `deposit-feature-archive`. The Pro
+// subscription (Business.proStatus etc.) is unrelated and stays.
 
 // Contractor identity-verification documents (license, insurance, optional ID).
 // Each upload is reviewed by an admin. `Business.verified` is derived: a
@@ -171,8 +122,6 @@ model User {
   reviews          Review[]
   savedSearches    SavedSearch[]
   quoteRequests    QuoteRequest[] @relation("ClientQuoteRequests")
-  payments         Payment[]      @relation("ClientPayments")
-  projects         Project[]      @relation("ClientProjects")
   reportsFiled     Report[]       @relation("ReportsFiled")
   reportsResolved  Report[]       @relation("ReportsResolved")
   blocking         Block[]        @relation("Blocker")
@@ -337,18 +286,10 @@ model Business {
   sponsoredImpressions Int  @default(0)
   sponsoredClicks      Int  @default(0)
 
-  // Stripe Connect — the contractor's connected (Express) account, used to
-  // receive in-app deposit payouts. `chargesEnabled`/`payoutsEnabled` mirror the
-  // Stripe account capabilities (updated via the account.updated webhook); a
-  // business can only receive deposits once payouts are enabled.
-  stripeAccountId  String?
-  chargesEnabled   Boolean   @default(false)
-  payoutsEnabled   Boolean   @default(false)
-
   // "Pro" subscription ($5/mo, 90-day free trial) — the contractor pays the
-  // PLATFORM (a normal Stripe subscription, distinct from the Connect account
-  // above). While trialing/active they're eligible for the clearly-labeled
-  // "Sponsored" slot in search. Mirrored from Stripe via subscription webhooks.
+  // PLATFORM (a normal Stripe subscription). While trialing/active they're
+  // eligible for the clearly-labeled "Sponsored" slot in search. Mirrored from
+  // Stripe via subscription webhooks.
   stripeCustomerId    String?
   proSubscriptionId   String?
   proStatus           String?   // Stripe sub status: trialing | active | past_due | canceled | …
@@ -367,8 +308,6 @@ model Business {
   appointments    Appointment[]
   hours           BusinessHours[]
   quoteRequests   QuoteRequest[]
-  payments        Payment[]
-  projects        Project[]
   verificationDocuments VerificationDocument[]
 }
 
@@ -435,8 +374,6 @@ model QuoteRequest {
 
   client       User        @relation("ClientQuoteRequests", fields: [clientId], references: [id], onDelete: Cascade)
   business     Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  payment      Payment?
-  project      Project?
 
   @@index([clientId])
   @@index([businessId])
@@ -612,115 +549,6 @@ model PortfolioProject {
   business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 }
 
-// An in-app deposit a homeowner pays when accepting a quote. Created PENDING
-// when the PaymentIntent is generated and flipped to SUCCEEDED by the
-// payment_intent.succeeded webhook. Commission is charged as a fee on top:
-// `amountCents` is the total the homeowner is charged, `commissionCents` is the
-// platform's cut, and the contractor receives the difference (the deposit) in
-// their connected account.
-model Payment {
-  id                    String        @id @default(cuid())
-  quoteRequestId        String?       @unique
-  // When this payment funds a milestone (escrow) rather than a quote deposit.
-  milestoneId           String?       @unique
-  clientId              String
-  businessId            String
-
-  amountCents           Int           // total charged to the homeowner (deposit + commission)
-  commissionCents       Int           // platform fee (application_fee_amount)
-  currency              String        @default("usd")
-  status                PaymentStatus @default(PENDING)
-
-  stripePaymentIntentId String?       @unique
-  description           String?
-  paidAt                DateTime?
-  refundedAt            DateTime?
-
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-
-  quoteRequest QuoteRequest? @relation(fields: [quoteRequestId], references: [id], onDelete: SetNull)
-  milestone    Milestone?    @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
-  client       User          @relation("ClientPayments", fields: [clientId], references: [id], onDelete: Cascade)
-  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-
-  @@index([businessId])
-  @@index([clientId])
-}
-
-// One persistent job container per (homeowner, contractor) pair, optionally tied
-// to the accepted quote it came from. Holds the staged milestone payments.
-model Project {
-  id             String        @id @default(cuid())
-  clientId       String
-  businessId     String
-  quoteRequestId String?       @unique
-  title          String
-  status         ProjectStatus @default(ACTIVE)
-  // Homeowner-only scratchpad — measurements, paint colors, contractor notes,
-  // anything they want to remember between sessions. Not visible to the
-  // contractor. Kept inline on the project so the hub view is a single fetch.
-  clientNotes    String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-
-  client       User          @relation("ClientProjects", fields: [clientId], references: [id], onDelete: Cascade)
-  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  quoteRequest QuoteRequest? @relation(fields: [quoteRequestId], references: [id], onDelete: SetNull)
-  milestones   Milestone[]
-
-  @@unique([clientId, businessId])
-  @@index([clientId])
-  @@index([businessId])
-}
-
-// A staged escrow payment within a project. `amountCents` is the contractor's
-// portion for the stage; the platform commission is charged on top at funding.
-// Funds are held on the platform until release, then transferred to the
-// contractor's connected account (`stripeTransferId`).
-model Milestone {
-  id               String          @id @default(cuid())
-  projectId        String
-  title            String
-  amountCents      Int
-  status           MilestoneStatus @default(PENDING)
-  proofUrls        String[]
-  stripeTransferId String?
-  fundedAt         DateTime?
-  submittedAt      DateTime?
-  approvedAt       DateTime?
-  // The milestone's status right before a dispute was opened, so withdrawing
-  // a dispute can put the row back where it was (FUNDED or SUBMITTED).
-  preDisputeStatus MilestoneStatus?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-
-  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  payment   Payment?
-  disputes  Dispute[]
-
-  @@index([projectId])
-}
-
-model Dispute {
-  id            String        @id @default(cuid())
-  milestoneId   String
-  raisedById    String        // the homeowner who raised it
-  reason        DisputeReason
-  details       String
-  status        DisputeStatus @default(OPEN)
-  resolvedById  String?       // the admin who resolved it
-  resolvedAt    DateTime?
-  resolutionNote String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  milestone  Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
-
-  @@index([milestoneId])
-  @@index([status, createdAt])
-  @@index([raisedById])
-}
 
 model Estimation {
   id          String   @id @default(cuid())

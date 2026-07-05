@@ -1,6 +1,7 @@
 // Stripe SDK calls are mocked; we drive handleStripeEvent with synthetic events
 // and assert the resulting DB state. One route-level test covers signature
-// rejection.
+// rejection. Only the Pro subscription lifecycle is handled now — the in-app
+// construction-payment webhooks were removed with the payment stack.
 jest.mock('../src/services/stripe', () => ({
   constructWebhookEvent: jest.fn(),
 }));
@@ -9,7 +10,7 @@ const request = require('supertest');
 const app = require('../src/app');
 const stripe = require('../src/services/stripe');
 const { handleStripeEvent } = require('../src/routes/webhooks');
-const { db, resetDb, createBusiness, createClient } = require('./helpers');
+const { db, resetDb, createBusiness } = require('./helpers');
 
 beforeEach(async () => {
   await resetDb();
@@ -17,134 +18,65 @@ beforeEach(async () => {
 });
 afterAll(async () => { await db.$disconnect(); });
 
-describe('handleStripeEvent', () => {
+describe('handleStripeEvent — Pro subscription lifecycle', () => {
   test('an unhandled event type is ignored', async () => {
     await expect(handleStripeEvent({ type: 'payment_intent.created', data: { object: {} } }))
       .resolves.toBeUndefined();
   });
 
-  test('account.updated syncs Connect capability flags', async () => {
+  test('checkout.session.completed (subscription) links the customer + subscription to the business', async () => {
     const { business } = await createBusiness();
-    await db.business.update({ where: { id: business.id }, data: { stripeAccountId: 'acct_w' } });
-
     await handleStripeEvent({
-      type: 'account.updated',
-      data: { object: { id: 'acct_w', charges_enabled: true, payouts_enabled: true } },
-    });
-
-    const updated = await db.business.findUnique({ where: { id: business.id } });
-    expect(updated.chargesEnabled).toBe(true);
-    expect(updated.payoutsEnabled).toBe(true);
-  });
-
-  async function pendingPayment() {
-    const { user: client } = await createClient();
-    const { business } = await createBusiness();
-    return db.payment.create({
+      type: 'checkout.session.completed',
       data: {
-        clientId: client.id, businessId: business.id,
-        amountCents: 54000, commissionCents: 4000,
-        status: 'PENDING', stripePaymentIntentId: 'pi_w',
+        object: {
+          mode: 'subscription',
+          customer: 'cus_1',
+          subscription: 'sub_1',
+          metadata: { businessId: business.id, plan: 'sponsored' },
+        },
       },
     });
-  }
-
-  test('checkout.session.completed (payment) settles the deposit via metadata', async () => {
-    const payment = await pendingPayment();
-    await handleStripeEvent({
-      type: 'checkout.session.completed',
-      data: { object: { mode: 'payment', payment_intent: 'pi_chk', metadata: { paymentId: payment.id } } },
-    });
-    const updated = await db.payment.findUnique({ where: { id: payment.id } });
-    expect(updated.status).toBe('SUCCEEDED');
-    expect(updated.paidAt).not.toBeNull();
-    expect(updated.stripePaymentIntentId).toBe('pi_chk');
+    const updated = await db.business.findUnique({ where: { id: business.id } });
+    expect(updated.stripeCustomerId).toBe('cus_1');
+    expect(updated.proSubscriptionId).toBe('sub_1');
+    expect(updated.proStatus).toBe('trialing');
+    expect(updated.proPlan).toBe('sponsored');
   });
 
-  test('payment_intent.succeeded marks the deposit SUCCEEDED + paid', async () => {
-    const payment = await pendingPayment();
+  test('customer.subscription.updated mirrors status + period onto the business', async () => {
+    const { business } = await createBusiness();
     await handleStripeEvent({
-      type: 'payment_intent.succeeded',
-      data: { object: { id: 'pi_w' } },
+      type: 'customer.subscription.updated',
+      data: {
+        object: {
+          id: 'sub_2',
+          customer: 'cus_2',
+          status: 'active',
+          trial_end: null,
+          current_period_end: 1893456000,
+          metadata: { businessId: business.id, plan: 'insights' },
+        },
+      },
     });
-    const updated = await db.payment.findUnique({ where: { id: payment.id } });
-    expect(updated.status).toBe('SUCCEEDED');
-    expect(updated.paidAt).not.toBeNull();
+    const updated = await db.business.findUnique({ where: { id: business.id } });
+    expect(updated.proStatus).toBe('active');
+    expect(updated.proPlan).toBe('insights');
+    expect(updated.proSubscriptionId).toBe('sub_2');
   });
 
-  test('payment_intent.payment_failed marks the deposit FAILED', async () => {
-    const payment = await pendingPayment();
-    await handleStripeEvent({
-      type: 'payment_intent.payment_failed',
-      data: { object: { id: 'pi_w' } },
-    });
-    const updated = await db.payment.findUnique({ where: { id: payment.id } });
-    expect(updated.status).toBe('FAILED');
-  });
-
-  test('charge.refunded marks the deposit REFUNDED via the intent id', async () => {
-    const payment = await pendingPayment();
-    await handleStripeEvent({
-      type: 'charge.refunded',
-      data: { object: { payment_intent: 'pi_w' } },
-    });
-    const updated = await db.payment.findUnique({ where: { id: payment.id } });
-    expect(updated.status).toBe('REFUNDED');
-    expect(updated.refundedAt).not.toBeNull();
-  });
-
-  test('a replayed checkout.session.completed cannot resurrect a REFUNDED deposit', async () => {
-    const payment = await pendingPayment();
-    await db.payment.update({
-      where: { id: payment.id },
-      data: { status: 'REFUNDED', refundedAt: new Date() },
+  test('customer.subscription.deleted flips the business to canceled', async () => {
+    const { business } = await createBusiness();
+    await db.business.update({
+      where: { id: business.id },
+      data: { proSubscriptionId: 'sub_3', proStatus: 'active' },
     });
     await handleStripeEvent({
-      type: 'checkout.session.completed',
-      data: { object: { mode: 'payment', payment_intent: 'pi_chk', metadata: { paymentId: payment.id } } },
+      type: 'customer.subscription.deleted',
+      data: { object: { id: 'sub_3' } },
     });
-    const updated = await db.payment.findUnique({ where: { id: payment.id } });
-    expect(updated.status).toBe('REFUNDED');
-  });
-
-  test('a late payment_intent.succeeded cannot resurrect a REFUNDED deposit', async () => {
-    const payment = await pendingPayment();
-    await db.payment.update({
-      where: { id: payment.id },
-      data: { status: 'REFUNDED', refundedAt: new Date() },
-    });
-    await handleStripeEvent({
-      type: 'payment_intent.succeeded',
-      data: { object: { id: 'pi_w' } },
-    });
-    const updated = await db.payment.findUnique({ where: { id: payment.id } });
-    expect(updated.status).toBe('REFUNDED');
-  });
-
-  test('an out-of-order payment_failed cannot clobber a SUCCEEDED or REFUNDED deposit', async () => {
-    const succeeded = await pendingPayment();
-    await db.payment.update({ where: { id: succeeded.id }, data: { status: 'SUCCEEDED', paidAt: new Date() } });
-    await handleStripeEvent({
-      type: 'payment_intent.payment_failed',
-      data: { object: { id: 'pi_w' } },
-    });
-    const after = await db.payment.findUnique({ where: { id: succeeded.id } });
-    expect(after.status).toBe('SUCCEEDED');
-  });
-
-  test('charge.refunded posts a PAYMENT activity entry for the homeowner', async () => {
-    const payment = await pendingPayment();
-    await handleStripeEvent({
-      type: 'charge.refunded',
-      data: { object: { payment_intent: 'pi_w' } },
-    });
-    const activity = await db.activity.findFirst({
-      where: { userId: payment.clientId, type: 'PAYMENT' },
-    });
-    expect(activity).not.toBeNull();
-    expect(activity.title).toBe('Deposit refunded');
-    expect(activity.body).toContain('$540.00');
-    expect(activity.data).toMatchObject({ paymentId: payment.id });
+    const updated = await db.business.findUnique({ where: { id: business.id } });
+    expect(updated.proStatus).toBe('canceled');
   });
 });
 

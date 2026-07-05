@@ -5,13 +5,10 @@ const { authMiddleware, requireRole } = require('../middleware/auth');
 const { sendPush } = require('../services/push');
 const { recordActivity } = require('../services/activity');
 
-// Shared include so both sides see who/what the quote concerns. `payoutsEnabled`
-// lets the homeowner's UI know whether a deposit can be paid, and `payment`
-// surfaces a deposit's status so the card can flip to "Deposit paid".
+// Shared include so both sides see who/what the quote concerns.
 const quoteInclude = {
-  business: { select: { id: true, companyName: true, logoUrl: true, city: true, payoutsEnabled: true } },
+  business: { select: { id: true, companyName: true, logoUrl: true, city: true } },
   client: { select: { id: true, name: true, avatarUrl: true } },
-  payment: { select: { status: true } },
 };
 
 // Notify a recipient about a quote-request event. Quote requests are sales
@@ -97,7 +94,7 @@ router.get('/', authMiddleware, async (req, res, next) => {
 async function loadOwnedQuote(req, res) {
   const quote = await db.quoteRequest.findUnique({
     where: { id: req.params.id },
-    include: { business: { select: { userId: true, companyName: true, payoutsEnabled: true } } },
+    include: { business: { select: { userId: true, companyName: true } } },
   });
   if (!quote) { res.status(404).json({ error: 'Not found' }); return null; }
   const isClient = quote.clientId === req.user.id;
@@ -200,17 +197,6 @@ router.patch('/:id', authMiddleware, async (req, res, next) => {
     });
 
     await notify(recipientId, { title, body: messageBody, quoteId: updated.id });
-
-    // When a homeowner accepts and the contractor can take in-app payments,
-    // nudge the homeowner to pay the deposit — this is the path that keeps the
-    // transaction (and our commission) on-platform.
-    if (body.status === 'ACCEPTED' && quote.business.payoutsEnabled) {
-      await notify(quote.clientId, {
-        title: 'Lock it in — pay your deposit 🔒',
-        body: `Pay your deposit to ${quote.business.companyName} to confirm the job.`,
-        quoteId: updated.id,
-      });
-    }
 
     res.json(updated);
   } catch (err) {

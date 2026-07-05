@@ -24,9 +24,7 @@ const reviewRoutes = require('./routes/reviews');
 const savedSearchRoutes = require('./routes/savedSearches');
 const quoteRoutes = require('./routes/quotes');
 const paymentRoutes = require('./routes/payments');
-const projectRoutes = require('./routes/projects');
 const adminRoutes = require('./routes/admin');
-const internalRoutes = require('./routes/internal');
 const feedRoutes = require('./routes/feed');
 const waitlistRoutes = require('./routes/waitlist');
 const reportRoutes = require('./routes/reports');
@@ -90,9 +88,7 @@ app.use('/reviews', reviewRoutes);
 app.use('/saved-searches', savedSearchRoutes);
 app.use('/quotes', quoteRoutes);
 app.use('/payments', paymentRoutes);
-app.use('/projects', projectRoutes);
 app.use('/admin', adminRoutes);
-app.use('/internal', internalRoutes);
 app.use('/feed', feedRoutes);
 app.use('/waitlist', waitlistRoutes);
 app.use('/reports', reportRoutes);
@@ -145,18 +141,6 @@ if (process.env.NODE_ENV !== 'test' && require.main === module) {
   assertStorageConfigured();
 
   app.listen(PORT, () => console.log(`API running on :${PORT}`));
-
-  // Periodically release milestone funds the homeowner left un-actioned past the
-  // grace window (protects contractors from being ghosted after submitting work).
-  // Lightweight in-process timer — fine for a single API instance. When scaling
-  // to multiple instances, disable this and drive POST /internal/sweep from an
-  // external cron instead (see routes/internal.js) so it runs exactly once.
-  const { autoReleaseStaleMilestones } = projectRoutes;
-  const runAutoRelease = () => autoReleaseStaleMilestones()
-    .then((n) => { if (n) console.log(`Auto-released ${n} milestone(s)`); })
-    .catch((err) => console.error('Auto-release sweep failed', err));
-  setInterval(runAutoRelease, 6 * 60 * 60 * 1000).unref(); // every 6h
-  runAutoRelease();
 }
 
 module.exports = app;

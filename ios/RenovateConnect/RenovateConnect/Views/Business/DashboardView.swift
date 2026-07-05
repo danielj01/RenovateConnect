@@ -5,9 +5,6 @@ struct DashboardView: View {
     @State private var stats: DashboardStats?
     @State private var isLoading = true
     @State private var error: String?
-    @State private var payouts: ConnectStatus?
-    @State private var onboardURL: URL?
-    @State private var onboardLoading = false
     @State private var showShare = false
     @State private var pro: ProStatus?
     @State private var proCheckoutURL: URL?
@@ -32,22 +29,12 @@ struct DashboardView: View {
                         )
                     }
 
-                    // Payouts gate all in-app deposits. Nudge the contractor to
-                    // finish Stripe Connect setup until it's enabled.
-                    if let payouts, !payouts.payoutsEnabled {
-                        PayoutSetupBanner(
-                            onboarded: payouts.onboarded,
-                            isLoading: onboardLoading
-                        ) { await startOnboarding() }
-                    }
-
                     // Celebrate the verified badge — the contractor gets the
                     // "Verified Pros" featured spot and higher search placement.
                     if auth.currentUser?.business?.isVerified == true {
                         VerifiedStatusCard()
                     }
 
-                    earningsLink
                     verificationLink
                     shareProfileCard
                     proCard
@@ -84,9 +71,6 @@ struct DashboardView: View {
             }
             .task { await load() }
             .refreshable { await load() }
-            .sheet(item: $onboardURL, onDismiss: { Task { await loadPayouts() } }) { url in
-                SafariView(url: url).ignoresSafeArea()
-            }
             .sheet(isPresented: $showShare) {
                 if let business = auth.currentUser?.business {
                     ShareProfileView(business: business)
@@ -160,32 +144,6 @@ struct DashboardView: View {
             }
             .buttonStyle(.plain)
         }
-    }
-
-    // Entry point to the full earnings breakdown (released vs. in escrow).
-    private var earningsLink: some View {
-        NavigationLink {
-            EarningsView()
-        } label: {
-            RCCard {
-                HStack(spacing: 14) {
-                    Image(systemName: "dollarsign.circle.fill")
-                        .font(.title2).foregroundStyle(.green)
-                        .frame(width: 40, height: 40)
-                        .background(Color.green.opacity(0.15)).clipShape(Circle())
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Earnings").font(.subheadline.weight(.semibold))
-                        Text("See what you've been paid and what's held in escrow.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                }
-                .padding(16)
-            }
-        }
-        .buttonStyle(.plain)
     }
 
     // Growth loop: every contractor who shares becomes a demand channel.
@@ -402,12 +360,7 @@ struct DashboardView: View {
         } catch {
             self.error = error.localizedDescription
         }
-        await loadPayouts()
         await loadPro()
-    }
-
-    private func loadPayouts() async {
-        payouts = try? await APIService.shared.connectStatus()
     }
 
     private func loadPro() async {
@@ -423,12 +376,6 @@ struct DashboardView: View {
     private func cancelPro() async {
         try? await APIService.shared.cancelPro()
         await loadPro()
-    }
-
-    private func startOnboarding() async {
-        onboardLoading = true
-        defer { onboardLoading = false }
-        onboardURL = try? await APIService.shared.connectOnboardURL()
     }
 }
 
@@ -512,57 +459,6 @@ struct ApprovalStatusBanner: View {
                 Text(body1).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-        }
-        .padding(14)
-        .background(tint.opacity(0.08))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
-        .overlay(
-            RoundedRectangle(cornerRadius: 14).stroke(tint.opacity(0.25), lineWidth: 1)
-        )
-    }
-}
-
-// MARK: - Payout setup banner
-
-/// Dashboard nudge shown until the contractor finishes Stripe Connect payout
-/// setup. Without it homeowners can't pay deposits, so it's the gate on all
-/// in-app revenue. Tapping it opens hosted onboarding directly.
-struct PayoutSetupBanner: View {
-    let onboarded: Bool
-    let isLoading: Bool
-    let action: () async -> Void
-
-    private let tint = Theme.primary
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: "building.columns.fill")
-                    .font(.title3).foregroundStyle(tint)
-                    .frame(width: 36, height: 36)
-                    .background(tint.opacity(0.15)).clipShape(Circle())
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(onboarded ? "Finish payout setup" : "Set up payouts to get paid")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Homeowners can't pay deposits until you connect a payout account. Powered by Stripe.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Spacer()
-            }
-            Button {
-                Task { await action() }
-            } label: {
-                HStack(spacing: 8) {
-                    if isLoading { ProgressView().tint(.white) }
-                    Text(onboarded ? "Finish setup" : "Set up payouts")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 38)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(tint)
-            .disabled(isLoading)
         }
         .padding(14)
         .background(tint.opacity(0.08))

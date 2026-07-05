@@ -119,8 +119,6 @@ struct Business: Codable, Identifiable {
     var verified: Bool?
     var verifiedAt: String?
     var licenseNumber: String?
-    // Whether the contractor can accept in-app deposits (Stripe Connect payouts).
-    var payoutsEnabled: Bool?
 
     // Admin approval — optional because the backend only includes these for
     // owners/admins and on dashboard payloads.
@@ -259,9 +257,6 @@ struct BusinessSummary: Codable {
     let companyName: String
     let logoUrl: String?
     let city: String
-    // Present on quote payloads: whether the contractor can accept in-app
-    // deposits. Optional because other endpoints don't select it.
-    let payoutsEnabled: Bool?
     // Owner user id — present on conversation payloads so the homeowner can
     // block the contractor's owner from the thread view. Optional elsewhere.
     var userId: String?
@@ -740,11 +735,6 @@ struct QuoteRequest: Codable, Identifiable {
     let createdAt: String
     let business: BusinessSummary?
     let client: AppointmentClient?
-    /// The deposit tied to this quote, if one has been started/paid.
-    let payment: QuotePayment?
-
-    /// Whether a deposit has already been paid for this quote.
-    var depositPaid: Bool { payment?.status == .succeeded }
 
     /// "$20,000 – $35,000", "From $20,000", "Up to $35,000", or nil.
     var budgetText: String? { Self.rangeText(budgetMin, budgetMax) }
@@ -760,12 +750,6 @@ struct QuoteRequest: Codable, Identifiable {
         default: return nil
         }
     }
-}
-
-/// The deposit attached to a quote (status only), used to flip the quote card
-/// to a "Deposit paid" state. Mirrors the `payment` include on a quote.
-struct QuotePayment: Codable {
-    let status: PaymentStatus
 }
 
 // MARK: - Activity feed
@@ -970,77 +954,6 @@ struct DashboardStats: Codable {
     let conversionRate: Int
     let pipelineValue: Int
     let wonValue: Int
-}
-
-// MARK: - In-app deposits (Stripe Connect)
-
-/// A contractor's payout readiness. Mirrors GET /payments/connect/status.
-/// `payoutsEnabled` gates whether homeowners can pay deposits to this business.
-struct ConnectStatus: Codable {
-    let onboarded: Bool
-    let chargesEnabled: Bool
-    let payoutsEnabled: Bool
-}
-
-/// The response to GET /payments/earnings — the contractor's money at a glance.
-/// `releasedCents` is what's settled to them (deposit nets + approved
-/// milestones); `inEscrowCents` is milestone funds held until release.
-struct Earnings: Codable {
-    let releasedCents: Int
-    let inEscrowCents: Int
-    let lifetimeFeesCents: Int
-    let refundedCents: Int
-    let releasedCount: Int
-    let inEscrowCount: Int
-}
-
-/// The response to POST /payments/deposit — a hosted Checkout URL plus the
-/// amount breakdown so the UI can confirm the figures before opening the page.
-struct DepositCheckout: Codable {
-    let paymentId: String
-    let url: String
-    let amountCents: Int
-    let depositCents: Int
-    let commissionCents: Int
-}
-
-enum PaymentStatus: String, Codable {
-    case pending = "PENDING"
-    case succeeded = "SUCCEEDED"
-    case failed = "FAILED"
-    case refunded = "REFUNDED"
-
-    var label: String {
-        switch self {
-        case .pending:   return "Pending"
-        case .succeeded: return "Paid"
-        case .failed:    return "Failed"
-        case .refunded:  return "Refunded"
-        }
-    }
-}
-
-/// A deposit payment row, as returned by GET /payments (role-scoped history).
-struct Payment: Codable, Identifiable {
-    let id: String
-    let amountCents: Int
-    let commissionCents: Int
-    let status: PaymentStatus
-    let description: String?
-    let paidAt: String?
-    let createdAt: String?
-    let business: PaymentBusiness?
-    let client: PaymentClient?
-
-    struct PaymentBusiness: Codable {
-        let id: String
-        let companyName: String
-        let logoUrl: String?
-    }
-    struct PaymentClient: Codable {
-        let id: String
-        let name: String
-    }
 }
 
 // MARK: - Admin approval queue
