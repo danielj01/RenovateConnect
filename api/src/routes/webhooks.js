@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const db = require('../services/db');
-const { constructWebhookEvent } = require('../services/stripe');
+const { constructWebhookEvent, BOOST_PRICE_CENTS, BOOST_DURATION_DAYS } = require('../services/stripe');
 
 // Apply a verified Stripe event to our DB. Pulled out of the route so it can be
 // unit-tested directly with the Stripe service mocked. Only the Pro subscription
@@ -20,7 +20,6 @@ async function applyProSubscription(database, sub) {
     proStatus: sub.status,
     proTrialEndsAt: toDate(sub.trial_end),
     proCurrentPeriodEnd: toDate(sub.current_period_end),
-    ...(sub.metadata && sub.metadata.plan ? { proPlan: sub.metadata.plan } : {}),
   };
   if (businessId) {
     await database.business.updateMany({ where: { id: businessId }, data });
@@ -46,10 +45,11 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
     return;
   }
 
-  // Pro subscription checkout completed: link the customer + subscription to
-  // the business immediately (status is finalized by the subscription.* events).
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object;
+
+    // Listing-subscription checkout completed: link the customer + subscription
+    // to the business immediately (status is finalized by subscription.* events).
     if (session.mode === 'subscription' && session.metadata && session.metadata.businessId) {
       await database.business.updateMany({
         where: { id: session.metadata.businessId },
@@ -57,11 +57,54 @@ async function handleStripeEvent(event, { db: database = db } = {}) {
           stripeCustomerId: typeof session.customer === 'string' ? session.customer : session.customer?.id,
           proSubscriptionId: typeof session.subscription === 'string' ? session.subscription : session.subscription?.id,
           proStatus: 'trialing',
-          ...(session.metadata.plan ? { proPlan: session.metadata.plan } : {}),
         },
       });
     }
+
+    // Boost payment completed: record the boost week and extend the business's
+    // denormalized boostedUntil. Buying while already boosted extends the run.
+    if (session.mode === 'payment' && session.metadata && session.metadata.kind === 'boost'
+        && session.metadata.businessId) {
+      await activateBoost(database, session);
+    }
   }
+}
+
+// Idempotent boost activation — the unique stripeSessionId means a replayed
+// webhook can't double-extend.
+async function activateBoost(database, session) {
+  const businessId = session.metadata.businessId;
+  const business = await database.business.findUnique({ where: { id: businessId } });
+  if (!business) return;
+
+  const now = new Date();
+  const base = business.boostedUntil && business.boostedUntil > now ? business.boostedUntil : now;
+  const endsAt = new Date(base.getTime() + BOOST_DURATION_DAYS() * 24 * 60 * 60 * 1000);
+
+  try {
+    await database.boost.create({
+      data: {
+        businessId,
+        startsAt: now,
+        endsAt,
+        amountCents: session.amount_total ?? BOOST_PRICE_CENTS(),
+        stripeSessionId: session.id,
+      },
+    });
+  } catch (err) {
+    if (err.code === 'P2002') return; // replayed event — boost already applied
+    throw err;
+  }
+
+  await database.business.update({
+    where: { id: businessId },
+    data: {
+      boostedUntil: endsAt,
+      ...(session.customer
+        ? { stripeCustomerId: typeof session.customer === 'string' ? session.customer : session.customer?.id }
+        : {}),
+    },
+  });
 }
 
 // Raw body needed for Stripe signature verification.

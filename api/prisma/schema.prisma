@@ -286,16 +286,26 @@ model Business {
   sponsoredImpressions Int  @default(0)
   sponsoredClicks      Int  @default(0)
 
-  // "Pro" subscription ($5/mo, 90-day free trial) — the contractor pays the
-  // PLATFORM (a normal Stripe subscription). While trialing/active they're
-  // eligible for the clearly-labeled "Sponsored" slot in search. Mirrored from
-  // Stripe via subscription webhooks.
+  // Listing subscription ($10/mo, includes the Insights dashboard) — the
+  // contractor pays the PLATFORM (a normal Stripe subscription) to BE LISTED.
+  // Every business gets one free month of listing, stamped at first admin
+  // approval (freeListingEndsAt); after that only trialing/active subscribers
+  // stay publicly visible (search, feed, profiles, AI-chat recommendations).
+  // services/listing.js is the single source of eligibility truth. Mirrored
+  // from Stripe via subscription webhooks.
   stripeCustomerId    String?
   proSubscriptionId   String?
   proStatus           String?   // Stripe sub status: trialing | active | past_due | canceled | …
-  proPlan             String?   // which tier: "sponsored" ($5) | "insights" ($10)
   proTrialEndsAt      DateTime?
   proCurrentPeriodEnd DateTime?
+  freeListingEndsAt   DateTime? // end of the free first month; stamped at first approval
+
+  // Boost ($5 one-time, 7 days): the clearly-labeled slot above organic search
+  // (wire/metric name "sponsored" kept for client compat). Concurrent boosts
+  // are capped per city at purchase time. Denormalized here so search filters
+  // cheaply; purchase history lives in Boost rows.
+  boostedUntil        DateTime?
+  boosts              Boost[]
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -309,6 +319,23 @@ model Business {
   hours           BusinessHours[]
   quoteRequests   QuoteRequest[]
   verificationDocuments VerificationDocument[]
+}
+
+// One purchased Boost week ($5 one-time Stripe payment, activated by the
+// checkout.session.completed webhook). Buying while already boosted extends
+// the run — Business.boostedUntil always mirrors the furthest endsAt.
+// stripeSessionId is unique so a replayed webhook can't double-apply.
+model Boost {
+  id              String   @id @default(cuid())
+  businessId      String
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  startsAt        DateTime @default(now())
+  endsAt          DateTime
+  amountCents     Int
+  stripeSessionId String   @unique
+  createdAt       DateTime @default(now())
+
+  @@index([businessId])
 }
 
 // One uploaded document a contractor submits to prove their identity, license,

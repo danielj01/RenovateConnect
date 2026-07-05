@@ -5,6 +5,7 @@ const { authMiddleware, requireRole } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { uploadImage } = require('../services/storage');
 const { recomputeBusinessCostTier, tierForQuery } = require('../services/costTier');
+const { isListed, listedWhere } = require('../services/listing');
 
 // Public shareable URL for a business profile. Contractors share this (link +
 // QR) on their site/Instagram/cards to send customers straight to their profile;
@@ -56,9 +57,10 @@ router.get('/', async (req, res, next) => {
     const take = parseInt(limit);
     const skip = (pageNum - 1) * take;
 
-    // Public search shows only admin-approved listings. Pending/rejected
-    // businesses are visible only to their owner (via /dashboard) and admins.
-    const where = { approvalStatus: 'APPROVED' };
+    // Public search shows only admin-approved listings whose listing is active
+    // (free first month still running, or a live $10/mo subscription). Pending/
+    // rejected/lapsed businesses are visible only to their owner and admins.
+    const where = { approvalStatus: 'APPROVED', ...listedWhere() };
     if (city) where.city = { contains: city, mode: 'insensitive' };
     if (state) where.state = state.toUpperCase();
     if (specialty) where.specialties = { has: specialty };
@@ -88,15 +90,16 @@ router.get('/', async (req, res, next) => {
       },
     };
 
-    // Sponsored slot (Pro subscribers): a small, clearly-labeled set surfaced
-    // ABOVE organic results — it never reorders the organic list, so the
-    // verification/rating ranking (and its trust signal) stays intact. Shown on
-    // the first page only; rotated for fairness among eligible Pro businesses.
+    // Boosted slot ($5/week Boost purchases; wire name "sponsored" kept for
+    // client compat): a small, clearly-labeled set surfaced ABOVE organic
+    // results — it never reorders the organic list, so the verification/rating
+    // ranking (and its trust signal) stays intact. Shown on the first page
+    // only; rotated for fairness among currently-boosted businesses.
     const SPONSORED_CAP = 3;
     let sponsored = [];
     if (pageNum === 1) {
       const pool = await db.business.findMany({
-        where: { ...where, proStatus: { in: ['trialing', 'active'] } },
+        where: { ...where, boostedUntil: { gt: new Date() } },
         include,
         take: 12,
         orderBy: { averageRating: 'desc' },
@@ -108,9 +111,9 @@ router.get('/', async (req, res, next) => {
       }
       sponsored = pool.slice(0, SPONSORED_CAP).map((b) => ({ ...b, sponsored: true }));
 
-      // Count a sponsored impression for each Pro listing actually shown in
-      // the slot (fire-and-forget, same pattern as organic impressions). This
-      // powers the Pro dashboard's performance card.
+      // Count an impression for each boosted listing actually shown in the
+      // slot (fire-and-forget, same pattern as organic impressions). This
+      // powers the dashboard's boost-performance card.
       if (sponsored.length > 0) {
         db.business.updateMany({
           where: { id: { in: sponsored.map((b) => b.id) } },
@@ -265,7 +268,9 @@ router.get('/:id', async (req, res, next) => {
 
     const isOwner = viewerId === business.userId;
     const isAdmin = viewerRole === 'ADMIN';
-    if (business.approvalStatus !== 'APPROVED' && !isOwner && !isAdmin) {
+    // Unapproved OR delisted (free month over, no subscription) profiles are
+    // public-404 — only the owner (to preview / see status) and admins see them.
+    if (!isListed(business) && !isOwner && !isAdmin) {
       return res.status(404).json({ error: 'Not found' });
     }
     if (!isOwner && !isAdmin) {

@@ -1,10 +1,12 @@
 // Stripe SDK calls are mocked; we drive handleStripeEvent with synthetic events
 // and assert the resulting DB state. One route-level test covers signature
-// rejection. Only the Pro subscription lifecycle is handled now — the in-app
-// construction-payment webhooks were removed with the payment stack.
-jest.mock('../src/services/stripe', () => ({
-  constructWebhookEvent: jest.fn(),
-}));
+// rejection. The listing-subscription lifecycle + boost activation are handled
+// now — the in-app construction-payment webhooks were removed with the payment
+// stack. requireActual keeps the price/duration constants the handler reads.
+jest.mock('../src/services/stripe', () => {
+  const actual = jest.requireActual('../src/services/stripe');
+  return { ...actual, constructWebhookEvent: jest.fn() };
+});
 
 const request = require('supertest');
 const app = require('../src/app');
@@ -33,7 +35,7 @@ describe('handleStripeEvent — Pro subscription lifecycle', () => {
           mode: 'subscription',
           customer: 'cus_1',
           subscription: 'sub_1',
-          metadata: { businessId: business.id, plan: 'sponsored' },
+          metadata: { businessId: business.id },
         },
       },
     });
@@ -41,7 +43,6 @@ describe('handleStripeEvent — Pro subscription lifecycle', () => {
     expect(updated.stripeCustomerId).toBe('cus_1');
     expect(updated.proSubscriptionId).toBe('sub_1');
     expect(updated.proStatus).toBe('trialing');
-    expect(updated.proPlan).toBe('sponsored');
   });
 
   test('customer.subscription.updated mirrors status + period onto the business', async () => {
@@ -55,13 +56,12 @@ describe('handleStripeEvent — Pro subscription lifecycle', () => {
           status: 'active',
           trial_end: null,
           current_period_end: 1893456000,
-          metadata: { businessId: business.id, plan: 'insights' },
+          metadata: { businessId: business.id },
         },
       },
     });
     const updated = await db.business.findUnique({ where: { id: business.id } });
     expect(updated.proStatus).toBe('active');
-    expect(updated.proPlan).toBe('insights');
     expect(updated.proSubscriptionId).toBe('sub_2');
   });
 
@@ -77,6 +77,58 @@ describe('handleStripeEvent — Pro subscription lifecycle', () => {
     });
     const updated = await db.business.findUnique({ where: { id: business.id } });
     expect(updated.proStatus).toBe('canceled');
+  });
+});
+
+describe('handleStripeEvent — boost activation', () => {
+  const boostSession = (business, id = 'cs_boost_1') => ({
+    type: 'checkout.session.completed',
+    data: {
+      object: {
+        id,
+        mode: 'payment',
+        customer: 'cus_b1',
+        amount_total: 500,
+        metadata: { businessId: business.id, kind: 'boost' },
+      },
+    },
+  });
+
+  test('a completed boost payment records the boost and sets boostedUntil ~7 days out', async () => {
+    const { business } = await createBusiness();
+    await handleStripeEvent(boostSession(business));
+
+    const updated = await db.business.findUnique({ where: { id: business.id } });
+    const days = (updated.boostedUntil - Date.now()) / 86400000;
+    expect(days).toBeGreaterThan(6.9);
+    expect(days).toBeLessThan(7.1);
+
+    const boosts = await db.boost.findMany({ where: { businessId: business.id } });
+    expect(boosts).toHaveLength(1);
+    expect(boosts[0].amountCents).toBe(500);
+    expect(boosts[0].stripeSessionId).toBe('cs_boost_1');
+  });
+
+  test('a replayed boost event is idempotent (no double extension)', async () => {
+    const { business } = await createBusiness();
+    await handleStripeEvent(boostSession(business));
+    const first = (await db.business.findUnique({ where: { id: business.id } })).boostedUntil;
+
+    await handleStripeEvent(boostSession(business)); // same session id replayed
+    const second = (await db.business.findUnique({ where: { id: business.id } })).boostedUntil;
+    expect(second.getTime()).toBe(first.getTime());
+    expect(await db.boost.count({ where: { businessId: business.id } })).toBe(1);
+  });
+
+  test('buying while already boosted extends the current run', async () => {
+    const { business } = await createBusiness();
+    await handleStripeEvent(boostSession(business, 'cs_boost_a'));
+    await handleStripeEvent(boostSession(business, 'cs_boost_b'));
+
+    const updated = await db.business.findUnique({ where: { id: business.id } });
+    const days = (updated.boostedUntil - Date.now()) / 86400000;
+    expect(days).toBeGreaterThan(13.9);
+    expect(await db.boost.count({ where: { businessId: business.id } })).toBe(2);
   });
 });
 

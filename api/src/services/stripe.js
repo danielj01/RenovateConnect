@@ -21,29 +21,26 @@ function constructWebhookEvent(rawBody, signature) {
   return stripe.webhooks.constructEvent(rawBody, signature, process.env.STRIPE_WEBHOOK_SECRET);
 }
 
-// --- "Pro" subscription (contractor pays the platform) ------------------------
+// --- Listing subscription (contractor pays the platform to be listed) --------
 //
 // A normal recurring subscription billed TO the contractor BY the platform —
-// NOT a Connect charge. $5/mo with a 90-day free trial. `payment_method_collection:
-// 'if_required'` lets the trial start with no card, so signup is frictionless;
-// Stripe collects a card before the trial ends. The subscription's businessId
-// metadata lets the webhook map status changes back to the right business.
+// NOT a Connect charge. One plan: $10/mo, includes the Insights dashboard.
+// The free first month is NOT a Stripe trial — it's freeListingEndsAt on the
+// business (stamped at admin approval). When a contractor subscribes while
+// their free month is still running, we pass its end as the Stripe trial_end
+// so they're never billed for time they already had free. Checkout requires
+// trial_end >= 48h out; anything closer just bills immediately.
+// `payment_method_collection: 'if_required'` lets a trial-carrying checkout
+// complete without a card; Stripe collects one before the trial ends.
 
-const PRO_PRICE_CENTS = () => parseInt(process.env.PRO_PRICE_CENTS || '500', 10);
-const INSIGHTS_PRICE_CENTS = () => parseInt(process.env.INSIGHTS_PRICE_CENTS || '1000', 10);
-const PRO_TRIAL_DAYS = () => parseInt(process.env.PRO_TRIAL_DAYS || '90', 10);
+const PRO_PRICE_CENTS = () => parseInt(process.env.PRO_PRICE_CENTS || '1000', 10);
+const BOOST_PRICE_CENTS = () => parseInt(process.env.BOOST_PRICE_CENTS || '500', 10);
+const BOOST_DURATION_DAYS = () => parseInt(process.env.BOOST_DURATION_DAYS || '7', 10);
 
-// Two tiers: "sponsored" ($5 — the labeled Sponsored slot) and "insights" ($10 —
-// Sponsored slot + aggregated market insights). Insights is a strict superset.
-function proPlanConfig(plan) {
-  if (plan === 'insights') {
-    return { plan: 'insights', name: 'RenovateConnect Pro — Insights', unitAmount: INSIGHTS_PRICE_CENTS() };
-  }
-  return { plan: 'sponsored', name: 'RenovateConnect Pro', unitAmount: PRO_PRICE_CENTS() };
-}
-
-async function createProCheckoutSession({ businessId, customerId, customerEmail, plan }) {
-  const cfg = proPlanConfig(plan);
+async function createProCheckoutSession({ businessId, customerId, customerEmail, trialEndsAt }) {
+  const trialEnd = trialEndsAt && trialEndsAt.getTime() > Date.now() + 48 * 60 * 60 * 1000
+    ? Math.floor(trialEndsAt.getTime() / 1000)
+    : undefined;
   return stripe.checkout.sessions.create({
     mode: 'subscription',
     ...(customerId ? { customer: customerId } : { customer_email: customerEmail || undefined }),
@@ -52,18 +49,41 @@ async function createProCheckoutSession({ businessId, customerId, customerEmail,
       quantity: 1,
       price_data: {
         currency: 'usd',
-        product_data: { name: cfg.name },
-        unit_amount: cfg.unitAmount,
+        product_data: { name: 'RenovateConnect listing subscription' },
+        unit_amount: PRO_PRICE_CENTS(),
         recurring: { interval: 'month' },
       },
     }],
     subscription_data: {
-      trial_period_days: PRO_TRIAL_DAYS(),
-      metadata: { businessId, plan: cfg.plan },
+      ...(trialEnd ? { trial_end: trialEnd } : {}),
+      metadata: { businessId },
     },
     client_reference_id: businessId,
-    metadata: { businessId, plan: cfg.plan, kind: 'pro_subscription' },
+    metadata: { businessId, kind: 'pro_subscription' },
     success_url: `${APP_BASE_URL()}/billing/return?status=success&pro=1`,
+    cancel_url: `${APP_BASE_URL()}/billing/return?status=cancel`,
+  });
+}
+
+// --- Boost (one-time $5 payment for a week in the labeled top slot) ----------
+//
+// mode: 'payment' — a single charge, no subscription. The webhook activates
+// the boost when checkout.session.completed arrives with kind: 'boost'.
+async function createBoostCheckoutSession({ businessId, customerId, customerEmail }) {
+  return stripe.checkout.sessions.create({
+    mode: 'payment',
+    ...(customerId ? { customer: customerId } : { customer_email: customerEmail || undefined }),
+    line_items: [{
+      quantity: 1,
+      price_data: {
+        currency: 'usd',
+        product_data: { name: `RenovateConnect Boost — top of search for ${BOOST_DURATION_DAYS()} days` },
+        unit_amount: BOOST_PRICE_CENTS(),
+      },
+    }],
+    client_reference_id: businessId,
+    metadata: { businessId, kind: 'boost' },
+    success_url: `${APP_BASE_URL()}/billing/return?status=success&boost=1`,
     cancel_url: `${APP_BASE_URL()}/billing/return?status=cancel`,
   });
 }
@@ -75,7 +95,11 @@ async function cancelProSubscription(subscriptionId) {
 
 module.exports = {
   constructWebhookEvent,
-  // Pro subscription
+  // Listing subscription
   createProCheckoutSession,
   cancelProSubscription,
+  // Boost
+  createBoostCheckoutSession,
+  BOOST_PRICE_CENTS,
+  BOOST_DURATION_DAYS,
 };

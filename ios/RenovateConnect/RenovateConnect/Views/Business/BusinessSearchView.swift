@@ -257,7 +257,7 @@ struct BusinessSearchView: View {
         if !sponsored.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 6) {
-                    sectionHeader(icon: "megaphone.fill", title: "Sponsored")
+                    sectionHeader(icon: "bolt.fill", title: "Boosted")
                     Button { showSponsoredDisclosure = true } label: {
                         Image(systemName: "info.circle")
                             .font(.footnote)
@@ -518,7 +518,7 @@ struct BusinessListCard: View {
                                     .accessibilityLabel("Verified")
                             }
                             if business.sponsored == true {
-                                Text("Sponsored")
+                                Text("Boosted")
                                     .font(.caption2.weight(.semibold))
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 6).padding(.vertical, 2)

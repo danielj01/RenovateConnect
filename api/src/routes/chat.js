@@ -4,6 +4,7 @@ const { authMiddleware } = require('../middleware/auth');
 const { chatWithAssistant } = require('../services/ai');
 const { extractMentions } = require('../utils/mentions');
 const db = require('../services/db');
+const { listedWhere } = require('../services/listing');
 
 // Cap message + history (length and turn count) — this is free text fed into
 // the AI model, so bound cost/abuse.
@@ -21,11 +22,11 @@ router.post('/', authMiddleware, async (req, res, next) => {
   try {
     const { message, history } = chatSchema.parse(req.body);
 
-    // Load all approved businesses so the AI can recommend specific ones.
-    // Pending/rejected listings are excluded — they 404 for clients, so a
-    // recommendation pointing at one would dead-end the conversation.
+    // Load all currently-listed businesses so the AI can recommend specific
+    // ones. Pending/rejected/delisted listings are excluded — they 404 for
+    // clients, so a recommendation pointing at one would dead-end the chat.
     const businesses = await db.business.findMany({
-      where: { approvalStatus: 'APPROVED' },
+      where: { approvalStatus: 'APPROVED', ...listedWhere() },
       select: { id: true, companyName: true, city: true, state: true, specialties: true, averageRating: true },
     });
 

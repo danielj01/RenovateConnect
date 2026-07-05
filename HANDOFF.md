@@ -1,11 +1,66 @@
 # RenovateConnect — Session Handoff
 
-_Last updated: 2026-06-26 · HEAD `4dd32c0` on `main` · API suite: 361 tests passing · CI green (API/Web/Docker/iOS)_
+_Last updated: 2026-07-04 · `main` · API suite: 377 tests passing_
 
 iOS + web marketplace connecting homeowners with renovation contractors.
 Monorepo at `~/renovate-connect`: `api/` (Node/Express/Prisma/Postgres),
 `ios/` (SwiftUI), `web/` (Next.js). See `CLAUDE.md` for the source-of-truth
 architecture notes.
+
+---
+
+## ⚠️ 2026-07-04 session: revenue model pivot + security audit
+
+### Revenue model changed (again)
+
+**One $10/mo listing subscription (includes Insights) is now required to be
+publicly listed.** Every business gets **one free month**, stamped at first
+admin approval (`Business.freeListingEndsAt`, backfilled +30d for existing
+approved rows by migration `20260704010000`). Lapsed businesses vanish from
+search / feed / public profiles / AI-chat until they subscribe (owner + admin
+still see them; iOS Dashboard shows a "listing hidden" banner). Subscribing
+during the free month sets Stripe `trial_end` to the month's end. The old
+$5 Sponsored / $10 Insights tiers are gone (`proPlan` dropped).
+
+**Boost:** $5 one-time for 7 days in the labeled **"Boosted"** slot above
+organic search (the old Sponsored slot, relabeled — wire name `sponsored`
+kept). Capped at `BOOST_CITY_CAP` (3) concurrent boosts per city, first-come;
+extending your own boost is always allowed. `POST /payments/boost` → Stripe
+Checkout (mode: payment) → idempotent webhook activation (`Boost` table +
+`Business.boostedUntil`).
+
+Key files: `api/src/services/listing.js` (NEW — eligibility source of truth),
+`services/stripe.js`, `routes/{payments,webhooks,businesses,admin,chat,feed}.js`,
+`prisma/migrations/20260704010000_listing_subscription_boosts/`, iOS
+`Models.swift` / `APIService.swift` / `DashboardView.swift` (ARL disclosure now
+adjacent to the Subscribe button) / `BusinessSearchView.swift` /
+`SponsoredDisclosureSheet.swift`. New tests: `tests/listingGate.test.js`.
+
+### Fixed this session
+
+- **Local login 500** — the dev DB was missing the 6/26 migrations; applied.
+  (`danjeznach@gmail.com` dev password was reset in the local DB only.)
+
+### Security audit findings (full report in the 2026-07-04 session transcript)
+
+Launch blockers, in priority order — none fixed yet unless noted:
+1. **Anthropic API account out of credits** — all AI estimation/chat is down.
+2. **Error handler leaks upstream 4xx messages** (e.g. the Anthropic billing
+   error) to clients — sanitize non-local errors (`app.js` error middleware).
+3. **No forgot/change-password flow and no email infra at all** — locked-out
+   users are unrecoverable; also blocks email verification.
+4. **Account pre-hijack**: no email verification + social sign-in merges by
+   email into any existing password account (`socialSignIn` in `routes/auth.js`).
+5. **Verification documents (incl. government IDs) on public S3 URLs** —
+   should be a private bucket + presigned GETs.
+6. **Web estimator media-type bug** — `services/ai.js` hardcodes
+   `image/jpeg`; web uploads of PNG (screenshots) fail at the Claude API and
+   HEIC (iPhone camera) is unsupported — sniff magic bytes + convert/reject.
+7. **`GET /businesses` query params unvalidated** — `?page=abc` → 500,
+   `?limit=999999` unbounded; same class: array-valued params (`?state=a&b`).
+8. Minor: search metrics (impressions/clicks) are forgeable by anonymous
+   requests; `/estimations/share` accepts up to 10MB JSON unauthenticated
+   (cap size + TTL); 30-day JWTs have no revocation.
 
 ---
 
@@ -23,10 +78,9 @@ milestone-escrow + disputes + Stripe Connect + earnings stack — API models,
 routes, services, webhooks, migration, tests; and the iOS views, models, and
 API-client methods.
 
-**Revenue model now:** **Pro subscription is the SOLE revenue stream** —
-`$5/mo Sponsored` (labeled Sponsored search slot above organic) + `$10/mo
-Insights` (aggregated/de-identified market demand). Stripe is used **only** for
-this subscription now.
+**Revenue model then:** `$5/mo Sponsored` + `$10/mo Insights` tiers —
+**superseded 2026-07-04** by the $10/mo listing subscription + $5 Boost (see
+the section above).
 
 **♻️ How to restore the payment stack** (if the business/legal picture changes):
 everything is preserved at:

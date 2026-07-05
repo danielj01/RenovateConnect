@@ -6,6 +6,7 @@ const { sendPush } = require('../services/push');
 const { recordActivity } = require('../services/activity');
 const { areBlocked } = require('../services/moderation');
 const { estimateRenovationCost } = require('../services/ai');
+const { isListed, listedWhere } = require('../services/listing');
 
 // GET /feed — the public "Inspiration" feed: a flattened stream of approved
 // portfolio photos (each image is its own item), paired with its "before" photo
@@ -20,7 +21,12 @@ router.get('/', async (req, res, next) => {
     const take = Math.min(60, Math.max(1, parseInt(limit, 10) || 30));
     const skip = (pageNum - 1) * take;
 
-    const where = { approvalStatus: 'APPROVED' };
+    // Both the project AND its business must be publicly visible — a delisted
+    // contractor's photos leave the feed with them.
+    const where = {
+      approvalStatus: 'APPROVED',
+      business: { approvalStatus: 'APPROVED', ...listedWhere() },
+    };
     if (category) where.category = category;
 
     const projects = await db.portfolioProject.findMany({
@@ -96,9 +102,17 @@ router.post('/quote-this-look', authMiddleware, requireRole('CLIENT'), async (re
 
     const portfolio = await db.portfolioProject.findUnique({
       where: { id: portfolioProjectId },
-      include: { business: { select: { id: true, userId: true, companyName: true } } },
+      include: {
+        business: {
+          select: {
+            id: true, userId: true, companyName: true,
+            approvalStatus: true, proStatus: true, freeListingEndsAt: true,
+          },
+        },
+      },
     });
-    if (!portfolio || portfolio.approvalStatus !== 'APPROVED' || !portfolio.business) {
+    if (!portfolio || portfolio.approvalStatus !== 'APPROVED' || !portfolio.business
+        || !isListed(portfolio.business)) {
       return res.status(404).json({ error: 'Not found' });
     }
     // The image must come from this portfolio's own gallery (after or before).

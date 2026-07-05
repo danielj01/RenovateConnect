@@ -65,17 +65,27 @@ function decide(target) {
 }
 
 const { notifyMatchingSearches } = require('../services/savedSearch');
+const { freeListingEnd } = require('../services/listing');
 
 router.post('/businesses/:id/approve', async (req, res, next) => {
   try {
     const result = await decide(db.business)('APPROVED', req.params.id);
     if (!result) return res.status(404).json({ error: 'Not found' });
+    // First approval starts the free listing month. Stamped once — a
+    // re-approval (e.g. after a reject/fix cycle) never restarts the clock.
+    let approved = result.updated;
+    if (!approved.freeListingEndsAt) {
+      approved = await db.business.update({
+        where: { id: approved.id },
+        data: { freeListingEndsAt: freeListingEnd() },
+      });
+    }
     // Saved-search alerts fire only on the transition INTO 'APPROVED'. A
     // re-approval of an already-approved business does not re-spam.
     if (result.existing.approvalStatus !== 'APPROVED') {
-      await notifyMatchingSearches(result.updated);
+      await notifyMatchingSearches(approved);
     }
-    res.json(result.updated);
+    res.json(approved);
   } catch (err) {
     next(err);
   }

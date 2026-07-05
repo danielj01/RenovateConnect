@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Plain-language explanation of the Sponsored slot, opened from the ⓘ next
-/// to the "Sponsored" header in search. This is our ad-disclosure surface:
+/// Plain-language explanation of the Boosted slot, opened from the ⓘ next
+/// to the "Boosted" header in search. This is our ad-disclosure surface:
 /// it states what's paid, what isn't, and what paid placement can never buy.
 /// Keep the promises here in sync with the search implementation — they're
 /// the public version of the monetization guardrails in CLAUDE.md.
@@ -12,17 +12,17 @@ struct SponsoredDisclosureSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    Label("About Sponsored results", systemImage: "megaphone.fill")
+                    Label("About Boosted results", systemImage: "bolt.fill")
                         .font(.title3.weight(.semibold))
                         .foregroundStyle(Theme.primary)
 
                     point(icon: "dollarsign.circle",
-                          title: "What \"Sponsored\" means",
-                          body: "Contractors with a Pro subscription can appear in this clearly-labeled spot at the top of search. That's the only thing the subscription changes about search.")
+                          title: "What \"Boosted\" means",
+                          body: "Contractors can pay for a one-week Boost to appear in this clearly-labeled spot at the top of search. That's the only thing a Boost changes about search.")
 
                     point(icon: "list.number",
                           title: "Regular results are never for sale",
-                          body: "The list below the Sponsored section is ranked only by verification and customer rating. Paying never moves a contractor up in the regular results — and not paying never moves one down.")
+                          body: "The list below the Boosted section is ranked only by verification and customer rating. Paying never moves a contractor up in the regular results — and not paying never moves one down.")
 
                     point(icon: "checkmark.seal",
                           title: "Verification can't be bought",
@@ -30,12 +30,12 @@ struct SponsoredDisclosureSheet: View {
 
                     point(icon: "shuffle",
                           title: "The spot rotates",
-                          body: "Eligible contractors rotate through the Sponsored spots so the same few don't always lead. Sponsored contractors still have to meet the same listing standards as everyone else.")
+                          body: "Boost slots are limited per area and boosted contractors rotate through them so the same few don't always lead. Boosted contractors still have to meet the same listing standards as everyone else.")
                 }
                 .padding(20)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .navigationTitle("Sponsored")
+            .navigationTitle("Boosted")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {

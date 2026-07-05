@@ -21,6 +21,7 @@ async function resetDb() {
   await db.favorite.deleteMany();
   await db.savedSearch.deleteMany();
   await db.businessHours.deleteMany();
+  await db.boost.deleteMany();
   await db.business.deleteMany();
   await db.user.deleteMany();
 }
@@ -72,10 +73,15 @@ async function createBusiness(overrides = {}) {
       state: 'TX',
       zipCode: '78701',
       specialties: overrides.specialties || ['Kitchen'],
-      // Most suites assume a public, browsable business; default to APPROVED.
-      // Pass approvalStatus: 'PENDING' (or 'REJECTED') to exercise the queue.
+      // Most suites assume a public, browsable business; default to APPROVED
+      // with a running free listing month. Pass approvalStatus: 'PENDING' (or
+      // 'REJECTED') to exercise the queue, or freeListingEndsAt: <past date>
+      // (with no proStatus) to exercise delisting.
       approvalStatus: overrides.approvalStatus || 'APPROVED',
       reviewedAt: new Date(),
+      freeListingEndsAt: 'freeListingEndsAt' in overrides
+        ? overrides.freeListingEndsAt
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     },
   });
   return { user, business, token: tokenFor(user) };

@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Pro Insights ($10 tier): aggregated, de-identified market demand + the
-/// contractor's own performance. Every figure is a group of at least
-/// `minBucket`; nothing here identifies an individual homeowner.
+/// Market Insights (included with the listing subscription): aggregated,
+/// de-identified market demand + the contractor's own performance. Every
+/// figure is a group of at least `minBucket`; nothing here identifies an
+/// individual homeowner.
 struct InsightsView: View {
     @State private var insights: ProInsights?
     @State private var isLoading = true

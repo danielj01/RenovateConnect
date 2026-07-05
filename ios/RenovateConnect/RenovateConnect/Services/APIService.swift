@@ -804,16 +804,18 @@ final class APIService {
         try await request("reviews/\(id)/response", method: "DELETE")
     }
 
-    // MARK: - Pro subscription
+    // MARK: - Listing subscription + Boost
 
     func proStatus() async throws -> ProStatus {
         try await request("payments/pro/status")
     }
 
-    /// Start the Pro Checkout for the chosen tier and return the hosted URL.
-    func proSubscribeURL(plan: String) async throws -> URL {
+    /// Start the hosted Checkout for the $10/mo listing subscription and
+    /// return its URL. If the free first month is still running, the server
+    /// makes its end the Stripe trial end so billing never overlaps it.
+    func proSubscribeURL() async throws -> URL {
         struct Resp: Decodable { let url: String }
-        let resp: Resp = try await request("payments/pro/subscribe", method: "POST", body: ["plan": plan])
+        let resp: Resp = try await request("payments/pro/subscribe", method: "POST")
         guard let url = URL(string: resp.url) else { throw APIError.invalidURL }
         return url
     }
@@ -822,7 +824,16 @@ final class APIService {
         try await requestNoContent("payments/pro/cancel", method: "POST")
     }
 
-    /// Aggregated market insights (Insights tier only).
+    /// Start the hosted Checkout for a one-time 7-day Boost ($5). Throws a
+    /// 409 APIError with a friendly message when the area's slots are full.
+    func boostURL() async throws -> URL {
+        struct Resp: Decodable { let url: String }
+        let resp: Resp = try await request("payments/boost", method: "POST")
+        guard let url = URL(string: resp.url) else { throw APIError.invalidURL }
+        return url
+    }
+
+    /// Aggregated market insights (included with the listing subscription).
     func proInsights() async throws -> ProInsights {
         try await request("payments/pro/insights")
     }

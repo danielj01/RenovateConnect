@@ -134,7 +134,8 @@ struct Business: Codable, Identifiable {
     var lng: Double?
     var distanceMiles: Double?
 
-    // Set on businesses returned in the search "sponsored" array (Pro placement).
+    // Set on businesses returned in the search's boosted slot (wire name
+    // "sponsored" for compat; the UI labels it "Boosted").
     var sponsored: Bool?
 
     // Price level, derived server-side from the contractor's portfolio project
@@ -482,25 +483,31 @@ struct BusinessSearchResponse: Codable {
     let total: Int
     let page: Int
     let limit: Int
-    // Clearly-labeled Pro placements shown above organic results (page 1).
+    // Clearly-labeled Boosted placements shown above organic results (page 1).
+    // Wire name "sponsored" is kept for compatibility; the UI says "Boosted".
     var sponsored: [Business]?
 }
 
-/// Contractor "Pro" subscription state (GET /payments/pro/status).
+/// Contractor listing-subscription + boost state (GET /payments/pro/status).
+/// `listed` is the bottom line: is this profile publicly visible right now
+/// (free first month still running, or subscription trialing/active)?
 struct ProStatus: Codable {
     let isPro: Bool
-    var plan: String?
-    var hasInsights: Bool?
     let status: String?
     let trialEndsAt: String?
     let currentPeriodEnd: String?
+    var listed: Bool?
+    var freeListingEndsAt: String?
+    var boostedUntil: String?
+    var boostActive: Bool?
 
     var isTrialing: Bool { status == "trialing" }
-    var insights: Bool { hasInsights ?? false }
+    var isListed: Bool { listed ?? false }
+    var isBoosted: Bool { boostActive ?? false }
 }
 
-/// Aggregated, de-identified market demand for the Pro Insights tier
-/// (GET /payments/pro/insights). Never contains homeowner PII.
+/// Aggregated, de-identified market demand, included with the listing
+/// subscription (GET /payments/pro/insights). Never contains homeowner PII.
 struct ProInsights: Codable {
     let demandByCategory: [DemandBucket]
     let demandByProjectType: [DemandBucket]

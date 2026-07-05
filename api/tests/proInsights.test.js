@@ -5,11 +5,13 @@ const { db, resetDb, createBusiness, createClient } = require('./helpers');
 beforeEach(async () => { await resetDb(); });
 afterAll(async () => { await db.$disconnect(); });
 
+// Insights is included with the (single) listing subscription — any
+// trialing/active subscriber can read it.
 async function insightsBusiness() {
   const { business, token } = await createBusiness();
   await db.business.update({
     where: { id: business.id },
-    data: { proStatus: 'active', proPlan: 'insights' },
+    data: { proStatus: 'active' },
   });
   return { business, token };
 }
@@ -49,24 +51,25 @@ describe('Pro Insights tier', () => {
     expect(res.body.performance).toBeDefined();
   });
 
-  test('sponsored ($5) plan cannot access insights (403)', async () => {
-    const { business, token } = await createBusiness();
-    await db.business.update({ where: { id: business.id }, data: { proStatus: 'active', proPlan: 'sponsored' } });
-    const res = await request(app).get('/payments/pro/insights').set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(403);
-  });
-
   test('non-subscriber cannot access insights (403)', async () => {
     const { token } = await createBusiness();
     const res = await request(app).get('/payments/pro/insights').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(403);
   });
 
-  test('status reports the plan and hasInsights flag', async () => {
+  test('a canceled subscription cannot access insights (403)', async () => {
+    const { business, token } = await createBusiness();
+    await db.business.update({ where: { id: business.id }, data: { proStatus: 'canceled' } });
+    const res = await request(app).get('/payments/pro/insights').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  test('status reports subscription + listing state', async () => {
     const { token } = await insightsBusiness();
     const res = await request(app).get('/payments/pro/status').set('Authorization', `Bearer ${token}`);
-    expect(res.body.plan).toBe('insights');
-    expect(res.body.hasInsights).toBe(true);
     expect(res.body.isPro).toBe(true);
+    expect(res.body.listed).toBe(true);
+    expect(res.body.boostActive).toBe(false);
+    expect(res.body.freeListingEndsAt).toBeTruthy();
   });
 });

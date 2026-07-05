@@ -2,16 +2,30 @@
 
 ## What this project is
 
-iOS marketplace for homeowners to find renovation contractors. Revenue model:
-- **Pro subscription** (the sole revenue stream) — contractors can pay the
-  platform **$5/mo (90-day free trial)** via a Stripe **subscription**. While
-  trialing/active they appear in a clearly-labeled, capped **"Sponsored"** slot
-  shown ABOVE organic search results. Routes: `/payments/pro/*`; status mirrored
-  from Stripe subscription webhooks onto `Business.proStatus`. A saved card on
-  file is expected here (it's a normal subscription).
+iOS marketplace for homeowners to find renovation contractors. Revenue model
+(changed 2026-07-04):
+- **Listing subscription** — contractors pay the platform **$10/mo** (Stripe
+  subscription) to **be publicly listed at all**. Every business gets **one
+  free month**, stamped at first admin approval (`Business.freeListingEndsAt`);
+  after that, non-subscribers are hidden from search, the Inspiration feed,
+  public profiles, and AI-chat recommendations until they pay (data intact,
+  reactivates instantly). Includes the **Market Insights** dashboard (the old
+  separate $5/$10 Sponsored/Insights tiers are gone — `proPlan` was dropped).
+  Routes: `/payments/pro/*`; status mirrored from Stripe subscription webhooks
+  onto `Business.proStatus`. If a contractor subscribes during their free
+  month, its end becomes the Stripe `trial_end` (no double-charging).
+  **`services/listing.js` is the single source of eligibility truth** —
+  `isListed()` / `listedWhere()`; every public surface must filter through it.
+- **Boost** — **$5 one-time for 7 days** in the clearly-labeled **"Boosted"**
+  slot ABOVE organic search (wire/DB name `sponsored` kept for compat; UI says
+  "Boosted"). Concurrent boosts capped per city (`BOOST_CITY_CAP`, default 3,
+  first-come; extending your own boost is always allowed). `POST
+  /payments/boost` → Stripe Checkout (mode: payment) → activated idempotently
+  by the `checkout.session.completed` webhook (`Boost` rows +
+  `Business.boostedUntil`).
 - **Admin verification** — trust signal. Organic search placement is earned by
   verification + rating and is **not for sale**; paid visibility exists ONLY via
-  the disclosed Sponsored slot, which never reorders the organic list.
+  the disclosed Boosted slot, which never reorders the organic list.
 
 > **In-app construction payments were REMOVED (2026-06-26) for CSLB compliance.**
 > The deposit-commission + Stripe Connect + milestone-escrow + disputes stack is
@@ -20,12 +34,14 @@ iOS marketplace for homeowners to find renovation contractors. Revenue model:
 > CSLB online-marketplace bulletin). Do NOT reintroduce platform-collected
 > construction payments without a CA construction-law attorney's sign-off. The
 > full implementation is preserved at git tag `pre-deposit-removal` / branch
-> `deposit-feature-archive`. Stripe is now used ONLY for the Pro subscription.
+> `deposit-feature-archive`. Stripe is now used ONLY for the listing
+> subscription and Boost payments (platform advertising fees, not construction
+> payments).
 
 > Monetization guardrails: **per-lead fees stay retired** (don't reintroduce
 > lead-fee billing). The OLD silent **`isPromoted`** boolean that reordered
 > organic results also stays retired — paid placement must remain a *separate,
-> clearly-labeled* Sponsored slot, never a secret bump in organic ranking.
+> clearly-labeled* Boosted slot, never a secret bump in organic ranking.
 
 ## Architecture
 
@@ -42,7 +58,9 @@ iOS marketplace for homeowners to find renovation contractors. Revenue model:
 
 **Contractor license:** `Business.licenseNumber` is **required** at profile creation and shown on the public profile — contractor listings are "advertising" under CA Bus. & Prof. Code § 7030.5, which requires the license number to appear. Enforced in the `profileSchema` (`routes/businesses.js`) and the iOS setup/edit forms.
 
-**In-app payments:** REMOVED (see the revenue-model note above). There is no deposit, escrow, Stripe Connect, dispute, or earnings flow anymore. Stripe (`services/stripe.js`, `routes/webhooks.js`) handles only the Pro subscription lifecycle. Preserved at tag `pre-deposit-removal`.
+**In-app payments:** REMOVED (see the revenue-model note above). There is no deposit, escrow, Stripe Connect, dispute, or earnings flow anymore. Stripe (`services/stripe.js`, `routes/webhooks.js`) handles only the listing-subscription lifecycle and one-time Boost payments. Preserved at tag `pre-deposit-removal`.
+
+**Listing eligibility:** `services/listing.js` (`isListed`, `listedWhere`, `freeListingEnd`). Applied in `routes/businesses.js` (search + public profile), `routes/feed.js` (feed + quote-this-look), and `routes/chat.js`. `routes/admin.js` stamps `freeListingEndsAt` on first approval. Owner and admins always see a hidden profile; the iOS Dashboard shows a "Your listing is hidden" banner (`ProStatus.listed`).
 
 **AI estimation:** `POST /estimations` accepts multipart images, passes them to Claude (vision), and returns a structured cost breakdown. Model: `claude-opus-4-7`.
 

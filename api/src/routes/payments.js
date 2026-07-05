@@ -1,22 +1,17 @@
 const router = require('express').Router();
-const { z } = require('zod');
 const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const {
   createProCheckoutSession,
   cancelProSubscription,
+  createBoostCheckoutSession,
 } = require('../services/stripe');
+const { isProActive, isListed } = require('../services/listing');
 
-// A business counts as "Pro" (eligible for the Sponsored slot) while trialing or
-// actively paying.
-const PRO_ACTIVE_STATUSES = ['trialing', 'active'];
-function isProActive(business) {
-  return PRO_ACTIVE_STATUSES.includes(business?.proStatus);
-}
-// Insights ($10) is the higher tier; it includes the Sponsored slot.
-function hasInsights(business) {
-  return isProActive(business) && business?.proPlan === 'insights';
-}
+// How many businesses in one city can hold an active boost at the same time —
+// first-come, first-served scarcity is what makes the boost worth $5. A
+// business extending its own running boost never counts against the cap.
+const BOOST_CITY_CAP = () => parseInt(process.env.BOOST_CITY_CAP || '3', 10);
 
 // Aggregated demand is only shared in buckets of at least this many — small
 // buckets are suppressed so nothing can be tied back to an individual/small
@@ -29,36 +24,35 @@ function suppressed(rows, labelKey) {
     .sort((a, b) => b.count - a.count);
 }
 
-// --- Pro subscription (contractor pays the platform) -------------------------
+// --- Listing subscription (contractor pays the platform to be listed) --------
 //
 // NOTE: The in-app construction-payment stack (homeowner deposits, milestone
 // escrow, disputes, Stripe Connect payouts, refunds, earnings) was removed for
 // CSLB compliance — a referral platform should not collect or hold payment for
 // construction work (homeowners contract and pay the licensed contractor
 // directly). The full implementation is preserved at git tag
-// `pre-deposit-removal` / branch `deposit-feature-archive`. Pro subscription
-// below is a platform subscription (Stripe Billing), not a construction
-// payment, so it stays.
+// `pre-deposit-removal` / branch `deposit-feature-archive`. The subscription
+// and boost below are platform advertising fees (Stripe Billing / a one-time
+// charge), not construction payments, so they stay.
 
-// POST /payments/pro/subscribe — start a hosted Checkout for the $5/mo Pro plan
-// (90-day free trial). Returns a URL the app opens in a web auth session.
+// POST /payments/pro/subscribe — start a hosted Checkout for the $10/mo listing
+// subscription (includes Insights). If the business's free first month is still
+// running, its end becomes the Stripe trial_end so they aren't billed early.
+// Returns a URL the app opens in a web auth session.
 router.post('/pro/subscribe', authMiddleware, requireRole('BUSINESS'), async (req, res, next) => {
   try {
-    const { plan } = z.object({
-      plan: z.enum(['sponsored', 'insights']).optional(),
-    }).strict().parse(req.body || {});
     const user = await db.user.findUnique({ where: { id: req.user.id } });
     const business = await db.business.findUnique({ where: { userId: req.user.id } });
     if (!business) return res.status(404).json({ error: 'No business profile found' });
     if (isProActive(business)) {
-      return res.status(409).json({ error: 'You already have an active Pro subscription' });
+      return res.status(409).json({ error: 'You already have an active subscription' });
     }
 
     const session = await createProCheckoutSession({
       businessId: business.id,
       customerId: business.stripeCustomerId || undefined,
       customerEmail: user.email,
-      plan: plan || 'sponsored',
+      trialEndsAt: business.freeListingEndsAt,
     });
     res.json({ url: session.url });
   } catch (err) {
@@ -66,33 +60,77 @@ router.post('/pro/subscribe', authMiddleware, requireRole('BUSINESS'), async (re
   }
 });
 
-// GET /payments/pro/status — the contractor's Pro state for the upsell/manage UI.
+// GET /payments/pro/status — the contractor's listing/subscription/boost state
+// for the manage UI. `listed` is the bottom line: is this profile publicly
+// visible right now?
 router.get('/pro/status', authMiddleware, requireRole('BUSINESS'), async (req, res, next) => {
   try {
     const business = await db.business.findUnique({ where: { userId: req.user.id } });
     if (!business) return res.status(404).json({ error: 'No business profile found' });
+    const now = new Date();
     res.json({
       isPro: isProActive(business),
-      plan: business.proPlan || null,
-      hasInsights: hasInsights(business),
       status: business.proStatus || null,
       trialEndsAt: business.proTrialEndsAt,
       currentPeriodEnd: business.proCurrentPeriodEnd,
+      listed: isListed(business, now),
+      freeListingEndsAt: business.freeListingEndsAt,
+      boostedUntil: business.boostedUntil,
+      boostActive: Boolean(business.boostedUntil && business.boostedUntil > now),
     });
   } catch (err) {
     next(err);
   }
 });
 
-// GET /payments/pro/insights — aggregated, de-identified market demand for the
-// Insights tier. Every figure is a bucket of >= MIN_BUCKET; smaller buckets are
-// suppressed so nothing maps to an individual. No homeowner PII is ever returned.
+// POST /payments/boost — buy a 7-day Boost ($5 one-time). Limited slots per
+// city, first-come: if the cap is full, 409 until someone's boost lapses.
+router.post('/boost', authMiddleware, requireRole('BUSINESS'), async (req, res, next) => {
+  try {
+    const user = await db.user.findUnique({ where: { id: req.user.id } });
+    const business = await db.business.findUnique({ where: { userId: req.user.id } });
+    if (!business) return res.status(404).json({ error: 'No business profile found' });
+
+    // A hidden listing can't be boosted — the slot links to the public profile.
+    if (!isListed(business)) {
+      return res.status(409).json({ error: 'Your listing must be active to buy a Boost. Subscribe to get listed first.' });
+    }
+
+    // First-come slot cap per city. The business's own running boost doesn't
+    // count against it (buying again just extends their week).
+    const activeInCity = await db.business.count({
+      where: {
+        city: business.city,
+        state: business.state,
+        boostedUntil: { gt: new Date() },
+        id: { not: business.id },
+      },
+    });
+    if (activeInCity >= BOOST_CITY_CAP()) {
+      return res.status(409).json({ error: 'All Boost slots in your area are taken right now. Try again when one opens up.' });
+    }
+
+    const session = await createBoostCheckoutSession({
+      businessId: business.id,
+      customerId: business.stripeCustomerId || undefined,
+      customerEmail: user.email,
+    });
+    res.json({ url: session.url });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /payments/pro/insights — aggregated, de-identified market demand,
+// included with the listing subscription. Every figure is a bucket of
+// >= MIN_BUCKET; smaller buckets are suppressed so nothing maps to an
+// individual. No homeowner PII is ever returned.
 router.get('/pro/insights', authMiddleware, requireRole('BUSINESS'), async (req, res, next) => {
   try {
     const business = await db.business.findUnique({ where: { userId: req.user.id } });
     if (!business) return res.status(404).json({ error: 'No business profile found' });
-    if (!hasInsights(business)) {
-      return res.status(403).json({ error: 'Insights requires the Pro Insights plan' });
+    if (!isProActive(business)) {
+      return res.status(403).json({ error: 'Insights is included with the listing subscription' });
     }
 
     const [bySpecialty, byArea, estByType, sharedByType, leads] = await Promise.all([

@@ -10,7 +10,9 @@ struct DashboardView: View {
     @State private var proCheckoutURL: URL?
     @State private var proLoading = false
     @State private var showCancelPro = false
-    @State private var showPlanDialog = false
+    @State private var showSubscribeConfirm = false
+    @State private var showBoostConfirm = false
+    @State private var boostError: String?
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
@@ -35,10 +37,12 @@ struct DashboardView: View {
                         VerifiedStatusCard()
                     }
 
+                    delistedBanner
                     verificationLink
                     shareProfileCard
                     proCard
-                    if let stats { sponsoredPerformanceCard(stats) }
+                    boostCard
+                    if let stats { boostPerformanceCard(stats) }
                     insightsLink
 
                     if isLoading {
@@ -79,18 +83,34 @@ struct DashboardView: View {
             .sheet(item: $proCheckoutURL, onDismiss: { Task { await loadPro() } }) { url in
                 SafariView(url: url).ignoresSafeArea()
             }
-            .alert("Manage Pro", isPresented: $showCancelPro) {
+            .alert("Manage subscription", isPresented: $showCancelPro) {
                 Button("Cancel subscription", role: .destructive) { Task { await cancelPro() } }
-                Button("Keep Pro", role: .cancel) {}
+                Button("Keep subscription", role: .cancel) {}
             } message: {
-                Text("You'll keep Pro until the end of your current period, then stop being featured.")
+                Text("You'll stay listed until the end of your paid period, then your profile is hidden from homeowners until you re-subscribe.")
             }
-            .confirmationDialog("Choose your plan", isPresented: $showPlanDialog, titleVisibility: .visible) {
-                Button("Sponsored — $5/mo") { Task { await startPro(plan: "sponsored") } }
-                Button("Insights — $10/mo") { Task { await startPro(plan: "insights") } }
-                Button("Cancel", role: .cancel) {}
+            // CA Automatic-Renewal Law: the auto-renewal terms (price, interval,
+            // how to cancel) must sit adjacent to the action that starts the
+            // subscription — that's this confirmation, not a buried settings page.
+            .confirmationDialog("RenovateConnect listing", isPresented: $showSubscribeConfirm, titleVisibility: .visible) {
+                Button("Subscribe — $10/month") { Task { await startPro() } }
+                Button("Not now", role: .cancel) {}
             } message: {
-                Text("Both include the Sponsored search slot and a 3-month free trial. Insights adds aggregated market demand data.")
+                Text(subscribeDisclosure)
+            }
+            .confirmationDialog("Boost your profile", isPresented: $showBoostConfirm, titleVisibility: .visible) {
+                Button("Boost — $5 for 7 days") { Task { await startBoost() } }
+                Button("Not now", role: .cancel) {}
+            } message: {
+                Text("A one-time $5 payment — no renewal. Your profile appears in the labeled “Boosted” row above search results for 7 days. Slots are limited per area, first come first served.")
+            }
+            .alert("Boost unavailable", isPresented: .init(
+                get: { boostError != nil },
+                set: { if !$0 { boostError = nil } }
+            )) {
+                Button("OK", role: .cancel) { boostError = nil }
+            } message: {
+                Text(boostError ?? "")
             }
         }
     }
@@ -173,14 +193,41 @@ struct DashboardView: View {
         }
     }
 
-    // Pro upsell / status. Subscribers appear in the clearly-labeled "Sponsored"
-    // slot in search. $5/mo with a 90-day free trial.
+    // Urgent state: approved but the free month is over and there's no live
+    // subscription — the profile is invisible to homeowners until they pay.
+    @ViewBuilder
+    private var delistedBanner: some View {
+        if auth.currentUser?.business?.approvalStatus == .approved,
+           let pro, !pro.isListed {
+            RCCard {
+                HStack(spacing: 14) {
+                    Image(systemName: "eye.slash.fill")
+                        .font(.title2).foregroundStyle(.white)
+                        .frame(width: 40, height: 40)
+                        .background(Color.red.opacity(0.85)).clipShape(Circle())
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Your listing is hidden").font(.subheadline.weight(.semibold))
+                        Text("Your free month has ended. Subscribe for $10/mo to get back in front of homeowners.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Button("Subscribe") { showSubscribeConfirm = true }
+                        .font(.caption.weight(.semibold))
+                        .buttonStyle(.borderedProminent)
+                }
+                .padding(16)
+            }
+        }
+    }
+
+    // Listing subscription status / upsell. One plan: $10/mo to be listed,
+    // Market Insights included. The first month (from admin approval) is free.
     @ViewBuilder
     private var proCard: some View {
         if auth.currentUser?.business != nil {
             let isPro = pro?.isPro == true
             Button {
-                if isPro { showCancelPro = true } else { showPlanDialog = true }
+                if isPro { showCancelPro = true } else { showSubscribeConfirm = true }
             } label: {
                 RCCard {
                     HStack(spacing: 14) {
@@ -189,7 +236,7 @@ struct DashboardView: View {
                             .frame(width: 40, height: 40)
                             .background(Theme.gold.opacity(0.15)).clipShape(Circle())
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(isPro ? "RenovateConnect Pro" : "Get featured in search")
+                            Text(isPro ? "Listing subscription" : "Keep your listing live")
                                 .font(.subheadline.weight(.semibold))
                             Text(proSubtitle(isPro))
                                 .font(.caption).foregroundStyle(.secondary)
@@ -210,26 +257,75 @@ struct DashboardView: View {
     }
 
     private func proSubtitle(_ isPro: Bool) -> String {
-        guard isPro else { return "Get featured + market insights. From $5/mo · 3 months free." }
-        let tier = pro?.insights == true ? "Insights" : "Sponsored"
-        if pro?.isTrialing == true, let ends = pro?.trialEndsAt?.shortDate {
-            return "\(tier) · free trial, renews \(ends). Tap to manage."
+        guard isPro else {
+            if let freeEnds = pro?.freeListingEndsAt?.shortDate, pro?.isListed == true {
+                return "Free month ends \(freeEnds). $10/mo after — includes Market Insights."
+            }
+            return "$10/mo to stay in search — includes Market Insights."
         }
-        return "\(tier) · active. Tap to manage."
+        if pro?.isTrialing == true, let ends = pro?.trialEndsAt?.shortDate {
+            return "Active · billing starts \(ends). Tap to manage."
+        }
+        return "Active · you're listed. Tap to manage."
     }
 
-    // Sponsored slot performance — the "is the $5 working?" card. Shown only
-    // while the subscription is live; impressions/clicks/CTR come straight from
-    // the dashboard payload so the numbers match what the server counted.
+    // ARL-compliant disclosure shown adjacent to the Subscribe button.
+    private var subscribeDisclosure: String {
+        var lines = "Automatically renews at $10/month until you cancel. Cancel anytime here in the app (Dashboard → Listing subscription); your listing stays live through the period you've paid for. Includes Market Insights."
+        if let freeEnds = pro?.freeListingEndsAt?.shortDate, pro?.isListed == true, pro?.isPro != true {
+            lines += " Your free month is still active — billing starts \(freeEnds)."
+        }
+        return lines
+    }
+
+    // Boost upsell: a one-time $5 payment for 7 days in the labeled "Boosted"
+    // row above search results. Slots are capped per city, first come.
     @ViewBuilder
-    private func sponsoredPerformanceCard(_ stats: DashboardStats) -> some View {
-        if pro?.isPro == true {
+    private var boostCard: some View {
+        if auth.currentUser?.business != nil, pro?.isListed == true {
+            Button { showBoostConfirm = true } label: {
+                RCCard {
+                    HStack(spacing: 14) {
+                        Image(systemName: pro?.isBoosted == true ? "bolt.circle.fill" : "bolt.circle")
+                            .font(.title2).foregroundStyle(Theme.primary)
+                            .frame(width: 40, height: 40)
+                            .background(Theme.primary.opacity(0.15)).clipShape(Circle())
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(pro?.isBoosted == true ? "You're boosted" : "Boost your profile")
+                                .font(.subheadline.weight(.semibold))
+                            Text(boostSubtitle)
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                    }
+                    .padding(16)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var boostSubtitle: String {
+        if pro?.isBoosted == true, let until = pro?.boostedUntil?.shortDate {
+            return "Top of search until \(until). Tap to extend another week."
+        }
+        return "$5 one-time · 7 days at the top of search. Limited slots per area."
+    }
+
+    // Boost performance — the "is the $5 working?" card. Shown while a boost
+    // is running or once it has ever collected numbers; impressions/clicks/CTR
+    // come straight from the dashboard payload so they match the server.
+    @ViewBuilder
+    private func boostPerformanceCard(_ stats: DashboardStats) -> some View {
+        if pro?.isBoosted == true || (stats.sponsoredImpressions ?? 0) > 0 {
             RCCard {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 8) {
-                        Image(systemName: "megaphone.fill")
+                        Image(systemName: "bolt.fill")
                             .foregroundStyle(Theme.primary)
-                        Text("Sponsored performance")
+                        Text("Boost performance")
                             .font(.subheadline.weight(.semibold))
                         Spacer()
                     }
@@ -267,15 +363,15 @@ struct DashboardView: View {
     private func sponsoredFooter(_ stats: DashboardStats) -> String {
         let impressions = stats.sponsoredImpressions ?? 0
         if impressions == 0 {
-            return "Your Sponsored placement is live — numbers appear as homeowners search in your categories."
+            return "Your Boost is live — numbers appear as homeowners search in your categories."
         }
-        return "Counts since your Sponsored placement went live. Profile opens are homeowners who tapped your Sponsored card."
+        return "Counts across your Boost weeks. Profile opens are homeowners who tapped your Boosted card."
     }
 
-    // Insights tier ($10) gets a dedicated market-data screen.
+    // Market Insights — included with the listing subscription.
     @ViewBuilder
     private var insightsLink: some View {
-        if pro?.insights == true {
+        if pro?.isPro == true {
             NavigationLink {
                 InsightsView()
             } label: {
@@ -367,10 +463,22 @@ struct DashboardView: View {
         pro = try? await APIService.shared.proStatus()
     }
 
-    private func startPro(plan: String) async {
+    private func startPro() async {
         proLoading = true
         defer { proLoading = false }
-        proCheckoutURL = try? await APIService.shared.proSubscribeURL(plan: plan)
+        proCheckoutURL = try? await APIService.shared.proSubscribeURL()
+    }
+
+    private func startBoost() async {
+        proLoading = true
+        defer { proLoading = false }
+        do {
+            proCheckoutURL = try await APIService.shared.boostURL()
+        } catch {
+            // Surfaces the 409s ("slots full in your area", "subscribe first")
+            // with the server's message rather than failing silently.
+            boostError = error.localizedDescription
+        }
     }
 
     private func cancelPro() async {
