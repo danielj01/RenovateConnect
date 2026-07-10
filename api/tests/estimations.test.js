@@ -45,4 +45,35 @@ describe('POST /estimations/guest', () => {
     expect(res.status).toBe(400);
     expect(ai.estimateRenovationCost).not.toHaveBeenCalled();
   });
+
+  // Security: an upstream provider error (e.g. Anthropic "your credit balance
+  // is too low") must never reach the client. The route lets the thrown error
+  // propagate; the global handler replaces the body unless it was marked safe.
+  test('an unexpected estimator failure returns a generic body, not the provider message', async () => {
+    const leaky = new Error('402 your credit balance is too low — go to Plans & Billing');
+    leaky.status = 400; // SDK errors carry their own status
+    ai.estimateRenovationCost.mockRejectedValueOnce(leaky);
+
+    const res = await request(app).post('/estimations/guest')
+      .attach('images', Buffer.from('fake-jpeg'), 'room.jpg')
+      .field('roomType', 'Kitchen');
+
+    expect(res.body.error).not.toMatch(/credit|balance|billing/i);
+    expect(res.body.error).toBe('Request could not be completed');
+  });
+
+  // A cleanly-mapped outage (httpError 503) IS surfaced — it's our own safe copy.
+  test('a mapped 503 outage surfaces its safe message', async () => {
+    const { httpError } = require('../src/utils/httpError');
+    ai.estimateRenovationCost.mockRejectedValueOnce(
+      httpError(503, 'This feature is temporarily unavailable. Please try again in a bit.')
+    );
+
+    const res = await request(app).post('/estimations/guest')
+      .attach('images', Buffer.from('fake-jpeg'), 'room.jpg')
+      .field('roomType', 'Kitchen');
+
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/temporarily unavailable/i);
+  });
 });

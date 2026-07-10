@@ -49,12 +49,33 @@ function milesBetween(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Query params for search. Coerced + bounded so junk input (`?page=abc`, a
+// huge `?limit`, or an array-valued `?state=a&state=b`) yields a clean 400
+// instead of a 500 or an unbounded scan. Unknown params are stripped, not
+// rejected, so clients can append cache-busters etc. `limit` is capped at 50.
+const searchQuerySchema = z.object({
+  specialty: z.string().max(60).optional(),
+  city: z.string().max(100).optional(),
+  state: z.string().max(2).optional(),
+  q: z.string().max(120).optional(),
+  costTier: z.string().max(20).optional(),
+  // page: invalid (non-numeric / < 1) is rejected as a 400 — a malformed
+  // client should fail loudly. limit: a valid count is clamped to 50 rather
+  // than rejected, so "give me everything" just returns a capped page.
+  page: z.coerce.number().int().min(1).max(100000).default(1),
+  limit: z.coerce.number().int().min(1).default(20).transform((n) => Math.min(n, 50)),
+  lat: z.coerce.number().min(-90).max(90).optional(),
+  lng: z.coerce.number().min(-180).max(180).optional(),
+  radiusMiles: z.coerce.number().min(0).max(3000).optional(),
+});
+
 // Public: search businesses
 router.get('/', async (req, res, next) => {
   try {
-    const { specialty, city, state, q, costTier, page = '1', limit = '20', lat, lng, radiusMiles } = req.query;
-    const pageNum = parseInt(page);
-    const take = parseInt(limit);
+    const {
+      specialty, city, state, q, costTier,
+      page: pageNum, limit: take, lat, lng, radiusMiles,
+    } = searchQuerySchema.parse(req.query);
     const skip = (pageNum - 1) * take;
 
     // Public search shows only admin-approved listings whose listing is active
@@ -122,15 +143,16 @@ router.get('/', async (req, res, next) => {
       }
     }
 
-    // "Near me" mode — viewer coordinates provided. Rank by distance instead of
-    // verified/rating. Done in JS (no PostGIS): fine at launch scale; we cap the
-    // candidate set so it never fans out unbounded.
-    const viewerLat = lat !== undefined ? parseFloat(lat) : null;
-    const viewerLng = lng !== undefined ? parseFloat(lng) : null;
+    // "Near me" mode — viewer coordinates provided (already coerced + bounded
+    // by the query schema). Rank by distance instead of verified/rating. Done
+    // in JS (no PostGIS): fine at launch scale; we cap the candidate set so it
+    // never fans out unbounded.
+    const viewerLat = lat ?? null;
+    const viewerLng = lng ?? null;
     const distanceMode = Number.isFinite(viewerLat) && Number.isFinite(viewerLng);
 
     if (distanceMode) {
-      const radius = radiusMiles !== undefined ? parseFloat(radiusMiles) : null;
+      const radius = radiusMiles ?? null;
       const candidates = await db.business.findMany({
         where, include, take: 500, orderBy: [{ verified: 'desc' }, { averageRating: 'desc' }],
       });

@@ -121,16 +121,22 @@ app.use((err, _req, res, _next) => {
     return res.status(400).json({ error: message });
   }
   console.error(err);
-  const status = err.status || 500;
-  // Client-error messages (4xx) are intentional — surface them. Server errors
-  // (5xx) often leak internals: Prisma's `*KnownRequestError.message` includes
-  // absolute file paths and source snippets; Stripe/Node errors can echo
-  // request bodies. Replace 5xx bodies with a generic message so the client
-  // never sees the stack — the real error is in the log + Sentry.
-  if (status >= 500) {
-    return res.status(status).json({ error: 'Internal server error' });
+  const status = err.status || err.statusCode || 500;
+  // A message is only echoed to the client when WE explicitly marked the error
+  // as safe (`err.expose === true`, set only by the httpError helper with a
+  // hardcoded string — e.g. a clean 503 for an upstream outage). Everything
+  // else gets a generic message by status class, so third-party SDK errors
+  // that carry their own status (the Anthropic client's 400 "your credit
+  // balance is too low", a Stripe error echoing request data) and Prisma
+  // errors whose messages embed file paths never leak. The real error is
+  // always in the log + Sentry.
+  if (err && err.expose === true && typeof err.message === 'string') {
+    return res.status(status).json({ error: err.message });
   }
-  res.status(status).json({ error: err.message || 'Request failed' });
+  const generic = status >= 500
+    ? 'Internal server error'
+    : 'Request could not be completed';
+  res.status(status).json({ error: generic });
 });
 
 const PORT = process.env.PORT || 3000;
