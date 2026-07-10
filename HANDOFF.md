@@ -43,24 +43,35 @@ adjacent to the Subscribe button) / `BusinessSearchView.swift` /
 
 ### Security audit findings (full report in the 2026-07-04 session transcript)
 
-Launch blockers, in priority order — none fixed yet unless noted:
-1. **Anthropic API account out of credits** — all AI estimation/chat is down.
-2. **Error handler leaks upstream 4xx messages** (e.g. the Anthropic billing
-   error) to clients — sanitize non-local errors (`app.js` error middleware).
-3. **No forgot/change-password flow and no email infra at all** — locked-out
-   users are unrecoverable; also blocks email verification.
-4. **Account pre-hijack**: no email verification + social sign-in merges by
-   email into any existing password account (`socialSignIn` in `routes/auth.js`).
-5. **Verification documents (incl. government IDs) on public S3 URLs** —
-   should be a private bucket + presigned GETs.
-6. **Web estimator media-type bug** — `services/ai.js` hardcodes
-   `image/jpeg`; web uploads of PNG (screenshots) fail at the Claude API and
-   HEIC (iPhone camera) is unsupported — sniff magic bytes + convert/reject.
-7. **`GET /businesses` query params unvalidated** — `?page=abc` → 500,
-   `?limit=999999` unbounded; same class: array-valued params (`?state=a&b`).
-8. Minor: search metrics (impressions/clicks) are forgeable by anonymous
-   requests; `/estimations/share` accepts up to 10MB JSON unauthenticated
-   (cap size + TTL); 30-day JWTs have no revocation.
+**FIXED (2026-07-04):**
+2. ✅ **Error-message leak** — global handler now echoes a message only when we
+   mark it safe (`err.expose`, via `utils/httpError.js`); all else is generic by
+   status class. AI service maps provider failures to a clean 503. (commit 1aa4d6e)
+6. ✅ **Estimator media-type bug** — `services/ai.js` now sniffs image magic
+   bytes (jpeg/png/gif/webp); HEIC/unknown → clean 415. (commit 1aa4d6e)
+7. ✅ **`GET /businesses` params** — coerced + bounded by zod (page rejected if
+   invalid, limit clamped to 50; array params → 400). Verified live. (1aa4d6e)
+8. ✅ **`/estimations/share`** now caps the stored blob at 20 KB. (commit 8377256)
+3+4. ✅ **Password reset + email verification + pre-hijack** — full SendGrid-
+   backed workstream (commits 44ccb0a API, 0cb5640/ae4144a iOS). Password
+   registration is now unverified until an emailed 6-digit code is confirmed;
+   login is blocked (403) until verified; unverified emails can be taken over by
+   a new registration; social sign-in rotates the password when adopting an
+   unverified account. forgot/reset/change-password endpoints + iOS UI
+   (VerifyEmailView, ForgotPasswordView, ChangePasswordView) shipped. Existing
+   users grandfathered verified. Email no-ops when unconfigured; dev/test get
+   `devCode` in the response. **Needs at deploy: SENDGRID_API_KEY + EMAIL_FROM
+   (authenticated domain).**
+
+**STILL OPEN:**
+1. **Anthropic API account out of credits** — all AI estimation/chat is down
+   until credits are topped up (not a code fix). Now fails with a clean 503.
+5. **Verification documents (incl. government IDs) on public S3 URLs** — NEXT UP:
+   decided approach is a private prefix/bucket + short-lived presigned GET URLs
+   (portfolio/avatars stay public). Needs the code change + bucket set private.
+8b. Minor/deferred: search metrics (impressions/clicks) forgeable by anon
+   requests; 30-day JWTs have no revocation (a tokenVersion claim would let
+   password-change/reset evict old sessions).
 
 ---
 
