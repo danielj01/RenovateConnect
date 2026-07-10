@@ -48,4 +48,12 @@ describe('saved-estimate handoff', () => {
     const res = await request(app).post('/estimations/share').send({ result: 'not-an-object' });
     expect(res.status).toBe(400);
   });
+
+  // This endpoint is an unauthenticated write — cap the stored blob so it
+  // can't be used to park megabytes of arbitrary JSON per request.
+  test('rejects an oversized result payload with 400', async () => {
+    const huge = { summary: 'x'.repeat(50_000), lineItems: [] };
+    const res = await request(app).post('/estimations/share').send({ result: huge });
+    expect(res.status).toBe(400);
+  });
 });

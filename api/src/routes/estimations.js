@@ -71,9 +71,18 @@ const estimateInputSchema = z.object({
   description: z.string().max(2000).optional(),
 });
 
+// A real estimate serializes to well under 20 KB. Bounding the stored blob
+// stops an unauthenticated caller from using this open write endpoint to park
+// megabytes of arbitrary JSON per request (the global body limit is 10 MB).
+const MAX_SHARE_RESULT_BYTES = 20_000;
+
 const shareSchema = z.object({
-  // Stored as-is for redisplay; we don't trust it as anything but view data.
-  result: z.record(z.any()),
+  // Stored as-is for redisplay; we don't trust it as anything but view data,
+  // but we DO cap its serialized size.
+  result: z.record(z.any()).refine(
+    (r) => Buffer.byteLength(JSON.stringify(r)) <= MAX_SHARE_RESULT_BYTES,
+    { message: 'Estimate payload is too large' },
+  ),
   roomType: z.string().max(60).optional(),
 });
 
