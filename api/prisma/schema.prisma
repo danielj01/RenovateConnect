@@ -111,6 +111,19 @@ model User {
   termsAcceptedAt DateTime?
   termsVersion    String?
 
+  // Email verification + password recovery (see services/email.js,
+  // routes/auth.js). `emailVerified` gates password login: a password account
+  // can't be used until the owner proves they control the address, which is
+  // what stops an attacker pre-registering someone else's email. Social
+  // sign-in (Apple/Google) provides a provider-verified email, so those
+  // accounts are created already-verified. Codes are stored hashed (SHA-256)
+  // with a short expiry and are single-use (cleared on success).
+  emailVerified          Boolean   @default(false)
+  emailVerifyCodeHash    String?
+  emailVerifyExpiresAt   DateTime?
+  passwordResetCodeHash  String?
+  passwordResetExpiresAt DateTime?
+
   business     Business?
   sentMessages     Message[]   @relation("SentMessages")
   conversations    Conversation[] @relation("ClientConversations")

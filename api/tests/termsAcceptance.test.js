@@ -38,9 +38,13 @@ describe('Clickwrap: Terms acceptance at registration', () => {
 describe('Terms status + re-acceptance', () => {
   test('GET /auth/me reports current version and no re-acceptance needed after register', async () => {
     const email = `d_${Date.now()}@t.com`;
+    // Register now returns a verification code (dev/test) rather than a token —
+    // verifying the email is what logs the new user in.
     const reg = await request(app).post('/auth/register')
       .send({ ...base, email, acceptedTerms: true });
-    const token = reg.body.token;
+    const verify = await request(app).post('/auth/verify-email')
+      .send({ email, code: reg.body.devCode });
+    const token = verify.body.token;
 
     const me = await request(app).get('/auth/me').set('Authorization', `Bearer ${token}`);
     expect(me.status).toBe(200);

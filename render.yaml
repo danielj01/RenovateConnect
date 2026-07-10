@@ -48,6 +48,11 @@ services:
         sync: false
       - key: SENTRY_DSN
         sync: false
+      # Transactional email (SendGrid) — email verification + password reset.
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
       - key: S3_BUCKET
         sync: false
       - key: AWS_REGION

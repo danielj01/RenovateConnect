@@ -38,6 +38,7 @@ async function createClient(overrides = {}) {
       name: overrides.name || 'Test Client',
       role: 'CLIENT',
       phone: overrides.phone,
+      emailVerified: true,
     },
   });
   return { user, token: tokenFor(user) };
@@ -50,6 +51,7 @@ async function createAdmin(overrides = {}) {
       passwordHash: 'x',
       name: overrides.name || 'Test Admin',
       role: 'ADMIN',
+      emailVerified: true,
     },
   });
   return { user, token: tokenFor(user) };
@@ -62,6 +64,7 @@ async function createBusiness(overrides = {}) {
       passwordHash: 'x',
       name: overrides.name || 'Test Owner',
       role: 'BUSINESS',
+      emailVerified: true,
     },
   });
   const business = await db.business.create({
