@@ -88,7 +88,7 @@ final class APIService {
     }
 
     func register(email: String, password: String, name: String, role: UserRole,
-                  acceptedTerms: Bool) async throws -> AuthResponse {
+                  acceptedTerms: Bool) async throws -> RegisterResponse {
         struct Body: Encodable {
             let email: String
             let password: String
@@ -100,6 +100,38 @@ final class APIService {
         return try await request("auth/register", method: "POST",
                                  body: Body(email: email, password: password, name: name,
                                             role: role.rawValue, acceptedTerms: acceptedTerms))
+    }
+
+    /// Confirm the emailed verification code; on success the account is verified
+    /// and the user is logged in (returns a token).
+    func verifyEmail(email: String, code: String) async throws -> AuthResponse {
+        try await request("auth/verify-email", method: "POST",
+                          body: ["email": email, "code": code])
+    }
+
+    /// Re-send the email-verification code. Always succeeds (never reveals
+    /// whether the address exists or is already verified).
+    func resendVerification(email: String) async throws {
+        try await requestNoContent("auth/resend-verification", method: "POST", body: ["email": email])
+    }
+
+    /// Begin a password reset — the server emails a code if the account exists.
+    /// Always succeeds regardless, so it can't be used to probe for accounts.
+    func forgotPassword(email: String) async throws {
+        try await requestNoContent("auth/forgot-password", method: "POST", body: ["email": email])
+    }
+
+    /// Complete a password reset with the emailed code + a new password. On
+    /// success the email is verified and the user is logged in (returns a token).
+    func resetPassword(email: String, code: String, password: String) async throws -> AuthResponse {
+        try await request("auth/reset-password", method: "POST",
+                          body: ["email": email, "code": code, "password": password])
+    }
+
+    /// Change the signed-in user's password (requires the current password).
+    func changePassword(currentPassword: String, newPassword: String) async throws {
+        try await requestNoContent("auth/change-password", method: "POST",
+                                   body: ["currentPassword": currentPassword, "newPassword": newPassword])
     }
 
     /// Record (re-)acceptance of the current Terms of Service for the signed-in

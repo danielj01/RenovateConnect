@@ -8,6 +8,7 @@ struct User: Codable, Identifiable {
     let phone: String?
     let avatarUrl: String?
     let business: Business?
+    var emailVerified: Bool?
     var pushEnabled: Bool?
     var notifyLeads: Bool?
     var notifyMessages: Bool?
@@ -476,6 +477,22 @@ struct ChatTurn: Codable, Identifiable {
 struct AuthResponse: Codable {
     let token: String
     let user: User
+}
+
+/// Response to POST /auth/register. Registration no longer returns a token —
+/// the account starts unverified and the user must confirm the emailed code
+/// (POST /auth/verify-email) before they can sign in.
+struct RegisterResponse: Codable {
+    let needsEmailVerification: Bool?
+    let email: String?
+}
+
+/// Identifiable target that drives the email-verification sheet. Set on the
+/// AuthStore after registration, or after a login that was blocked because the
+/// email isn't verified yet.
+struct PendingVerification: Identifiable, Equatable {
+    let email: String
+    var id: String { email }
 }
 
 struct BusinessSearchResponse: Codable {

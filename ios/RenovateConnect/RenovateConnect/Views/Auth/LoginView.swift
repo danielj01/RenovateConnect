@@ -64,7 +64,23 @@ struct LoginView: View {
 
     @State private var email        = ""
     @State private var password     = ""
-    @State private var showRegister = false
+
+    // A single sheet slot drives register / forgot-password / verify-email so
+    // they never collide (a view presents one sheet at a time). Verification is
+    // reached by mapping AuthStore.pendingVerification into this slot below.
+    private enum AuthSheet: Identifiable {
+        case register
+        case forgot(String)
+        case verify(String)
+        var id: String {
+            switch self {
+            case .register:        return "register"
+            case .forgot(let e):   return "forgot-\(e)"
+            case .verify(let e):   return "verify-\(e)"
+            }
+        }
+    }
+    @State private var sheet: AuthSheet?
 
     private static let termsURL = URL(string: "https://renovateconnect.app/terms")!
     private static let privacyURL = URL(string: "https://renovateconnect.app/privacy")!
@@ -100,8 +116,25 @@ struct LoginView: View {
             }
             googleHandler.onError = { msg in auth.error = msg }
         }
-        .sheet(isPresented: $showRegister) {
-            RegisterView().environmentObject(auth)
+        .sheet(item: $sheet) { which in
+            switch which {
+            case .register:
+                RegisterView().environmentObject(auth)
+            case .forgot(let email):
+                ForgotPasswordView(email: email).environmentObject(auth)
+            case .verify(let email):
+                VerifyEmailView(email: email).environmentObject(auth)
+            }
+        }
+        // Registration and a login blocked for an unverified email both set
+        // pendingVerification — map it into the sheet slot (swapping out the
+        // register sheet if it's up), and clear it when verification is cancelled.
+        .onChange(of: auth.pendingVerification) { _, pv in
+            if let pv {
+                sheet = .verify(pv.email)
+            } else if case .verify = sheet {
+                sheet = nil
+            }
         }
     }
 
@@ -161,6 +194,16 @@ struct LoginView: View {
 
                 InputField(icon: "lock", placeholder: "Password", text: $password, isSecure: true)
                     .textContentType(.password)
+
+                Button {
+                    sheet = .forgot(email)
+                } label: {
+                    Text("Forgot password?")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Theme.primary)
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+                .buttonStyle(.plain)
             }
 
             if let error = auth.error {
@@ -223,7 +266,7 @@ struct LoginView: View {
             }
 
             Button {
-                showRegister = true
+                sheet = .register
             } label: {
                 Text("Don't have an account? ").foregroundStyle(.secondary)
                 + Text("Create one").foregroundStyle(Theme.primary).bold()

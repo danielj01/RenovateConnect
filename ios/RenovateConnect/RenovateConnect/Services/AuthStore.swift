@@ -11,6 +11,10 @@ final class AuthStore: ObservableObject {
     // quote, book, pay). The guest shell observes this and presents sign-in.
     @Published var promptSignIn = false
 
+    // Set after registration, or after a login blocked for an unverified email.
+    // The auth screens observe this and present the email-verification sheet.
+    @Published var pendingVerification: PendingVerification?
+
     var isLoggedIn: Bool { currentUser != nil }
 
     /// Ask the guest to sign in before continuing a gated action. No-op if the
@@ -47,6 +51,11 @@ final class AuthStore: ObservableObject {
             // and not momentarily on the "set up your business" screen.
             await loadMe()
             landOnFirstTab()
+        } catch APIError.requestFailed(let code, _) where code == 403 {
+            // The account exists and the password was right, but the email isn't
+            // verified yet — route the user to the verification screen instead of
+            // showing a generic error.
+            pendingVerification = PendingVerification(email: email)
         } catch {
             self.error = Self.signInMessage(for: error)
         }
@@ -57,15 +66,82 @@ final class AuthStore: ObservableObject {
         error = nil
         defer { isLoading = false }
         do {
-            let resp = try await APIService.shared.register(
+            // Registration no longer logs the user in — it creates an unverified
+            // account and emails a code. Route to the verification screen.
+            _ = try await APIService.shared.register(
                 email: email, password: password, name: name, role: role, acceptedTerms: acceptedTerms
             )
-            AuthToken.set(resp.token)
-            await loadMe()
-            landOnFirstTab()
+            pendingVerification = PendingVerification(email: email)
         } catch {
             self.error = Self.registerMessage(for: error)
         }
+    }
+
+    /// Confirm the emailed verification code for `pendingVerification` and, on
+    /// success, complete sign-in.
+    func verifyEmail(code: String) async {
+        guard let email = pendingVerification?.email else { return }
+        isLoading = true
+        error = nil
+        defer { isLoading = false }
+        do {
+            let resp = try await APIService.shared.verifyEmail(email: email, code: code)
+            AuthToken.set(resp.token)
+            pendingVerification = nil
+            await loadMe()
+            landOnFirstTab()
+        } catch {
+            self.error = Self.codeMessage(for: error)
+        }
+    }
+
+    /// Re-send the verification code for the pending email. Best-effort.
+    func resendVerification() async {
+        guard let email = pendingVerification?.email else { return }
+        try? await APIService.shared.resendVerification(email: email)
+    }
+
+    /// Dismiss the verification screen (user backed out).
+    func cancelVerification() {
+        pendingVerification = nil
+        error = nil
+    }
+
+    /// Request a password-reset code. Always reports success (the server never
+    /// reveals whether the address exists).
+    func requestPasswordReset(email: String) async -> Bool {
+        error = nil
+        do {
+            try await APIService.shared.forgotPassword(email: email)
+            return true
+        } catch {
+            self.error = "We couldn't start a reset. Please check your connection and try again."
+            return false
+        }
+    }
+
+    /// Complete a password reset with the emailed code + new password; on success
+    /// the user is signed in.
+    func resetPassword(email: String, code: String, newPassword: String) async -> Bool {
+        isLoading = true
+        error = nil
+        defer { isLoading = false }
+        do {
+            let resp = try await APIService.shared.resetPassword(email: email, code: code, password: newPassword)
+            AuthToken.set(resp.token)
+            await loadMe()
+            landOnFirstTab()
+            return true
+        } catch {
+            self.error = Self.codeMessage(for: error)
+            return false
+        }
+    }
+
+    /// Change the signed-in user's password. Throws so the settings screen can
+    /// surface success/failure inline.
+    func changePassword(current: String, new: String) async throws {
+        try await APIService.shared.changePassword(currentPassword: current, newPassword: new)
     }
 
     func signInWithApple(identityToken: String, givenName: String?, familyName: String?, email: String?) async {
@@ -135,6 +211,21 @@ final class AuthStore: ObservableObject {
             }
         default:
             return "We couldn't create your account. Please check your connection and try again."
+        }
+    }
+
+    /// Messages for the code-entry flows (email verification, password reset).
+    /// The server returns a readable 400 for a bad/expired code.
+    private static func codeMessage(for error: Error) -> String {
+        switch error {
+        case APIError.requestFailed(let code, let message):
+            switch code {
+            case 400: return message.isEmpty ? "That code is invalid or has expired." : message
+            case 429: return "Too many attempts. Please wait a moment and try again."
+            default:  return "Something went wrong. Please try again."
+            }
+        default:
+            return "Something went wrong. Please check your connection and try again."
         }
     }
 

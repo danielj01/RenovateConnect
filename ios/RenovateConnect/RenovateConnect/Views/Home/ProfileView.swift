@@ -273,6 +273,27 @@ struct ProfileView: View {
                                     .padding(16)
                                 }
                                 .buttonStyle(.plain)
+
+                                Divider().padding(.horizontal, 16)
+
+                                NavigationLink {
+                                    ChangePasswordView()
+                                } label: {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "lock.rotation")
+                                            .foregroundStyle(Theme.primary).frame(width: 28)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Change Password").font(.subheadline)
+                                            Text("Update your account password")
+                                                .font(.caption).foregroundStyle(.secondary)
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption2).foregroundStyle(.secondary)
+                                    }
+                                    .padding(16)
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                         .padding(.horizontal, 16)
