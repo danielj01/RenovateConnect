@@ -10,7 +10,7 @@ struct ChangePasswordView: View {
     @State private var newPassword = ""
     @State private var confirm = ""
     @State private var busy = false
-    @State private var error: String?
+    @State private var errorText: String?
     @State private var done = false
 
     private var canSubmit: Bool {
@@ -29,8 +29,8 @@ struct ChangePasswordView: View {
             if !newPassword.isEmpty, confirm != newPassword {
                 Section { Text("Passwords don't match.").font(.caption).foregroundStyle(.red) }
             }
-            if let error {
-                Section { Text(error).font(.caption).foregroundStyle(.red) }
+            if let errorText {
+                Section { Text(errorText).font(.caption).foregroundStyle(.red) }
             }
             if done {
                 Section { Label("Password updated", systemImage: "checkmark.circle.fill").foregroundStyle(.green) }
@@ -54,7 +54,7 @@ struct ChangePasswordView: View {
 
     private func submit() async {
         busy = true
-        error = nil
+        errorText = nil
         defer { busy = false }
         do {
             try await auth.changePassword(current: current, new: newPassword)
@@ -62,9 +62,9 @@ struct ChangePasswordView: View {
             try? await Task.sleep(nanoseconds: 700_000_000)
             dismiss()
         } catch let APIError.requestFailed(code, message) {
-            error = code == 401 ? "Your current password is incorrect." : message
+            errorText = code == 401 ? "Your current password is incorrect." : message
         } catch {
-            error = "Couldn't update your password. Please try again."
+            errorText = "Couldn't update your password. Please try again."
         }
     }
 }
