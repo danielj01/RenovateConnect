@@ -216,6 +216,13 @@ async function main() {
             // out of the box. New (real) signups go through the admin queue.
             approvalStatus: 'APPROVED',
             reviewedAt: new Date(),
+            // Being APPROVED is not enough to be publicly listed — a business
+            // also needs a live listing subscription or an unexpired free month
+            // (services/listing.js). Seed them as paying subscribers so the demo
+            // marketplace stays visible indefinitely instead of silently
+            // emptying out once a seeded free month lapses.
+            proStatus: 'active',
+            freeListingEndsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             reviews: {
               create: reviews.map(r => ({
                 authorName: r.authorName,
