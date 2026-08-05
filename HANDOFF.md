@@ -75,6 +75,41 @@ adjacent to the Subscribe button) / `BusinessSearchView.swift` /
 
 ---
 
+## 2026-08-05 session: delisting warnings + a seed bug the pivot caused
+
+**The day-30 cliff is closed** (commit `728e409`). A business whose free month
+ended was being delisted silently — no email, push, or in-app notice — so leads
+just stopped with no explanation. Now two notices go out over **email + push +
+activity feed**: EXPIRING (free month ends within `LISTING_WARN_DAYS`, default
+5, and no subscription will carry them past it) and LAPSED (approved but no
+longer listed). Each is stamped send-once on the Business row
+(`listingExpiryWarnedAt` / `listingLapsedNoticeAt`); both clear when a
+subscription goes live so a later lapse warns again. Delivery failures still
+stamp, so a SendGrid outage can't cause a daily re-notify loop.
+
+- Service: `api/src/services/listingLifecycle.js`
+- Endpoint: `POST /internal/listing-sweep` (`api/src/routes/internal.js`),
+  guarded by `INTERNAL_API_KEY` in the `x-internal-key` header (constant-time
+  compare); the router **404s entirely** when the key is unset.
+- Cron: daily 15:00 UTC (~8am PT) in `render.yaml`, key shared `fromService`.
+- New `ActivityType.LISTING` + deep link → business screen.
+- +17 tests (**418 total**).
+
+⚠️ **Prisma NULL gotcha worth remembering:** `NOT: { proStatus: { in: [...] } }`
+does **not** match rows where `proStatus IS NULL` (SQL `NULL IN (…)` is NULL, so
+the negation isn't TRUE). That silently excluded every never-subscribed
+business — exactly who the sweep targets. Negative filters on nullable columns
+need an explicit `{ col: null }` OR branch (see `NOT_SUBSCRIBED`). The positive
+`listedWhere()` in `services/listing.js` is fine as written.
+
+**Also fixed** (commit `01aa659`): `prisma/seed.js` was never updated for the
+pivot — it set `approvalStatus: 'APPROVED'` but no subscription fields, so a
+fresh `npm run seed` produced a marketplace with **zero visible contractors**.
+The same gap had silently hidden all 9 local dev contractors once the migration's
+backfilled free month lapsed. Seed now creates them as active subscribers.
+
+---
+
 ## ⚠️ Biggest change this session: the in-app payment stack was REMOVED
 
 RenovateConnect is now a **pure referral / advertising platform**. Homeowners
