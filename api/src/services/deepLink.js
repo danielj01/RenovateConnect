@@ -25,6 +25,10 @@ function deepLinkFor(type, data) {
       return d.businessId ? { screen: 'business', id: d.businessId } : null;
     case 'SAVED_SEARCH':
       return d.businessId ? { screen: 'business', id: d.businessId } : null;
+    case 'LISTING':
+      // Listing notices open the contractor's own profile/dashboard context,
+      // where the Subscribe action lives.
+      return d.businessId ? { screen: 'business', id: d.businessId } : null;
     case 'PAYMENT':
       // Deposit/refund events point at the originating quote, falling back to
       // the contractor's profile.

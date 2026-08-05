@@ -34,6 +34,11 @@ enum ActivityType {
   REVIEW
   SAVED_SEARCH
   PAYMENT
+  // Listing lifecycle: free month ending, listing hidden after it lapsed.
+  // Deliberately NOT in notificationPrefs.PREF_COLUMN — these are
+  // account-critical billing notices, not a marketing category a contractor
+  // can mute into invisibility without knowing it.
+  LISTING
 }
 
 enum QuoteStatus {
@@ -319,6 +324,12 @@ model Business {
   // cheaply; purchase history lives in Boost rows.
   boostedUntil        DateTime?
   boosts              Boost[]
+
+  // Listing-lifecycle notice bookkeeping (services/listingLifecycle.js). Each
+  // stamp makes its notice send-once so the daily sweep can't spam; both are
+  // cleared when a subscription goes live, so a future lapse warns again.
+  listingExpiryWarnedAt DateTime? // "your free month ends soon" was sent
+  listingLapsedNoticeAt DateTime? // "your listing is now hidden" was sent
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt

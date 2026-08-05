@@ -78,6 +78,49 @@ function passwordResetEmail(code) {
   };
 }
 
+// --- Listing lifecycle ------------------------------------------------------
+//
+// Email is the channel that matters most here: a contractor whose listing is
+// about to disappear may not have opened the app in weeks, so push alone would
+// let them churn silently.
+
+function listingExpiringEmail({ companyName, daysLeft }) {
+  const when = daysLeft <= 1 ? 'tomorrow' : `in ${daysLeft} days`;
+  return {
+    subject: `${APP_NAME}: your free listing month ends ${when}`,
+    text: `Your free month for ${companyName} on ${APP_NAME} ends ${when}. `
+      + 'After that your profile is hidden from homeowners searching the app until you subscribe '
+      + '($10/month, includes Market Insights). Open the app and tap Subscribe on your Dashboard '
+      + 'to stay visible. Your profile, reviews, and leads are kept either way.',
+    html: `<p>Your free month for <strong>${companyName}</strong> on ${APP_NAME} ends <strong>${when}</strong>.</p>`
+      + '<p>After that, your profile is hidden from homeowners searching the app until you subscribe '
+      + '($10/month, includes Market Insights).</p>'
+      + '<p>Open the app and tap <strong>Subscribe</strong> on your Dashboard to stay visible. '
+      + 'Your profile, reviews, and leads are kept either way.</p>',
+  };
+}
+
+function listingLapsedEmail({ companyName }) {
+  return {
+    subject: `${APP_NAME}: ${companyName} is no longer visible to homeowners`,
+    text: `Your listing for ${companyName} is now hidden from search on ${APP_NAME}, so homeowners `
+      + 'can\'t find or contact you. Subscribe for $10/month to go live again — your profile, photos, '
+      + 'reviews, and past leads are all still here and reappear the moment you subscribe.',
+    html: `<p>Your listing for <strong>${companyName}</strong> is now hidden from search on ${APP_NAME}, `
+      + 'so homeowners can’t find or contact you.</p>'
+      + '<p>Subscribe for $10/month to go live again — your profile, photos, reviews, and past leads '
+      + 'are all still here and reappear the moment you subscribe.</p>',
+  };
+}
+
+function sendListingExpiringNotice(to, opts) {
+  return sendEmail({ to, ...listingExpiringEmail(opts) });
+}
+
+function sendListingLapsedNotice(to, opts) {
+  return sendEmail({ to, ...listingLapsedEmail(opts) });
+}
+
 function sendVerificationCode(to, code) {
   return sendEmail({ to, ...verificationEmail(code) });
 }
@@ -91,6 +134,10 @@ module.exports = {
   sendEmail,
   sendVerificationCode,
   sendPasswordResetCode,
+  sendListingExpiringNotice,
+  sendListingLapsedNotice,
   verificationEmail,
   passwordResetEmail,
+  listingExpiringEmail,
+  listingLapsedEmail,
 };

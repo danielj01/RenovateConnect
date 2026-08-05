@@ -39,6 +39,9 @@ services:
         value: https://renovateconnect.app
       - key: APNS_PRODUCTION
         value: "true"
+      # Shared with the listing-sweep cron below so it can authenticate.
+      - key: INTERNAL_API_KEY
+        generateValue: true
       # Secrets — set in the Render dashboard.
       - key: ANTHROPIC_API_KEY
         sync: false
@@ -69,3 +72,28 @@ services:
         sync: false
       - key: APNS_KEY
         sync: false
+
+  # Daily listing-lifecycle sweep: emails/pushes contractors whose free month is
+  # about to end, and those whose listing has just gone hidden. Without it a
+  # business is silently delisted at day 30 and never told why the leads stopped.
+  # Each notice is stamped send-once, so a retry or overlapping run is harmless.
+  # 15:00 UTC ≈ 8am PT — a business-hours nudge, not a 3am one.
+  - type: cron
+    name: renovate-connect-listing-sweep
+    runtime: docker
+    dockerfilePath: ./api/Dockerfile
+    dockerContext: ./api
+    plan: starter
+    schedule: "0 15 * * *"
+    dockerCommand: >
+      sh -c 'curl -fsS -X POST "$API_BASE_URL/internal/listing-sweep"
+      -H "x-internal-key: $INTERNAL_API_KEY"'
+    envVars:
+      - key: API_BASE_URL
+        value: https://api.renovateconnect.app
+      # Must match the web service's generated key above.
+      - key: INTERNAL_API_KEY
+        fromService:
+          name: renovate-connect-api
+          type: web
+          envVarKey: INTERNAL_API_KEY
