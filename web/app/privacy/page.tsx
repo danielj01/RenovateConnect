@@ -116,8 +116,8 @@ export default function PrivacyPage() {
       <p>
         If we make material changes to this policy we will update this page and
         the date above. Questions or requests:{' '}
-        <a href="mailto:privacy@renovateconnect.app">
-          privacy@renovateconnect.app
+        <a href="mailto:privacy@renovateconnect.com">
+          privacy@renovateconnect.com
         </a>
         .
       </p>

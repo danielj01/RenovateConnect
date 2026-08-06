@@ -29,7 +29,7 @@ final class APIService {
     private let base = URL(string: "http://Daniels-MacBook-Air-204.local:3000")!
     #else
     // Production API (Render service from render.yaml). Point this at the
-    // custom domain (e.g. https://api.renovateconnect.app) once DNS is set up.
+    // custom domain (e.g. https://api.renovateconnect.com) once DNS is set up.
     private let base = URL(string: "https://renovate-connect-api.onrender.com")!
     #endif
 

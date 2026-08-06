@@ -12,7 +12,7 @@ const { isListed, listedWhere } = require('../services/listing');
 // it's also where the future web landing page (apple-app-site-association
 // universal link) will resolve. Derived from APP_BASE_URL so it's env-driven.
 function shareUrlFor(id) {
-  const base = (process.env.APP_BASE_URL || 'https://renovateconnect.app').replace(/\/+$/, '');
+  const base = (process.env.APP_BASE_URL || 'https://renovateconnect.com').replace(/\/+$/, '');
   return `${base}/b/${id}`;
 }
 

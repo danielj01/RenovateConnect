@@ -181,13 +181,13 @@ Verified against current (2026) sources. Get a licensed CA attorney to sign off.
 - [ ] **Form the operating entity**; replace `OPERATOR` in `web/app/terms/page.tsx`.
 - [ ] **Register a DMCA agent** at dmca.copyright.gov ($6, renew every 3 yrs) —
       the Inspiration feed republishes contractor portfolio photos. Monitor
-      `legal@renovateconnect.app`.
+      `legal@renovateconnect.com`.
 - [ ] **CA Automatic-Renewal Law (AB 2863, eff 7/1/2025)** for Pro subs: on the
       subscribe screen show auto-renew + price + interval **adjacent to the buy
       button**, capture affirmative consent, same-medium (in-app) cancel,
       post-signup email, trial-conversion + price-change notices. (The federal
       FTC "click-to-cancel" rule was vacated 7/2025; state ARL + ROSCA bind.)
-- [ ] **Stand up inboxes**: `support@`, `legal@`, `privacy@renovateconnect.app`.
+- [ ] **Stand up inboxes**: `support@`, `legal@`, `privacy@renovateconnect.com`.
 - [ ] Finish the **App Store privacy label** (esp. the Pro Insights aggregated
       data); confirm Insights isn't a CCPA/CPRA "sale/share".
 
@@ -212,7 +212,7 @@ Full detail + primary sources: see the memory file
 - **ARL-compliant subscription screen** (see checklist) — the in-app Pro
   purchase UI needs the auto-renewal disclosure adjacent to the buy button.
 - **Launch track** (`LAUNCH_READINESS.md`): deploy API to Render + secrets,
-  deploy web to Vercel, domain split (`renovateconnect.app`→web /
+  deploy web to Vercel, domain split (`renovateconnect.com`→web /
   `api.`→API), Apple signing/bundle id, Push capability, Stripe **live** keys +
   prod webhook.
 - Deferred features: admin iOS UI for the verification queue,

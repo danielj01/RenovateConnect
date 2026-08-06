@@ -8,7 +8,7 @@
 //
 // SETUP: create a SendGrid API key (Mail Send scope), authenticate the sending
 // domain (SPF/DKIM), and set SENDGRID_API_KEY + EMAIL_FROM (a from-address on
-// the authenticated domain, e.g. "no-reply@renovateconnect.app").
+// the authenticated domain, e.g. "no-reply@renovateconnect.com").
 
 const SENDGRID_URL = 'https://api.sendgrid.com/v3/mail/send';
 

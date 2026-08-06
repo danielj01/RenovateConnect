@@ -369,7 +369,7 @@ export default function TermsPage() {
         work, the allegedly infringing material and its location, your contact
         information, a good-faith statement, and a statement under penalty of
         perjury that you are authorized to act) to{' '}
-        <a href="mailto:legal@renovateconnect.app">legal@renovateconnect.app</a>.
+        <a href="mailto:legal@renovateconnect.com">legal@renovateconnect.com</a>.
         We may remove allegedly infringing content and terminate repeat
         infringers.
       </p>
@@ -437,7 +437,7 @@ export default function TermsPage() {
       <p>
         <strong>30-day right to opt out.</strong> You may opt out of this
         arbitration and class-action-waiver section by emailing{' '}
-        <a href="mailto:legal@renovateconnect.app">legal@renovateconnect.app</a>{' '}
+        <a href="mailto:legal@renovateconnect.com">legal@renovateconnect.com</a>{' '}
         within 30 days of first accepting these Terms, stating your name, account
         email, and a clear statement that you opt out of arbitration. Opting out
         does not affect any other part of these Terms.
@@ -543,11 +543,11 @@ export default function TermsPage() {
       <h2>29. Contact</h2>
       <p>
         Questions about these Terms:{' '}
-        <a href="mailto:support@renovateconnect.app">
-          support@renovateconnect.app
+        <a href="mailto:support@renovateconnect.com">
+          support@renovateconnect.com
         </a>
         . Legal and copyright notices:{' '}
-        <a href="mailto:legal@renovateconnect.app">legal@renovateconnect.app</a>.
+        <a href="mailto:legal@renovateconnect.com">legal@renovateconnect.com</a>.
       </p>
     </main>
   );

@@ -82,8 +82,8 @@ struct LoginView: View {
     }
     @State private var sheet: AuthSheet?
 
-    private static let termsURL = URL(string: "https://renovateconnect.app/terms")!
-    private static let privacyURL = URL(string: "https://renovateconnect.app/privacy")!
+    private static let termsURL = URL(string: "https://renovateconnect.com/terms")!
+    private static let privacyURL = URL(string: "https://renovateconnect.com/privacy")!
 
     var body: some View {
         GeometryReader { geo in

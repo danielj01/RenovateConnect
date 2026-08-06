@@ -3,6 +3,6 @@ import type { MetadataRoute } from 'next';
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: { userAgent: '*', allow: '/' },
-    sitemap: 'https://renovateconnect.app/sitemap.xml',
+    sitemap: 'https://renovateconnect.com/sitemap.xml',
   };
 }

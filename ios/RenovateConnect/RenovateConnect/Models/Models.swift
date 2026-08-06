@@ -171,7 +171,7 @@ struct Business: Codable, Identifiable {
     /// it works even on lean payloads (e.g. the owner's own `currentUser`).
     var shareLink: URL {
         if let shareUrl, let url = URL(string: shareUrl) { return url }
-        return URL(string: "https://renovateconnect.app/b/\(id)")!
+        return URL(string: "https://renovateconnect.com/b/\(id)")!
     }
 }
 
@@ -865,7 +865,7 @@ struct DeepLink: Codable, Equatable, Identifiable {
     }
 
     /// Build a link from an incoming universal link (e.g. the contractor share
-    /// URL `https://renovateconnect.app/b/<id>`). Returns nil for paths we don't
+    /// URL `https://renovateconnect.com/b/<id>`). Returns nil for paths we don't
     /// route. Mirrors the web routes in `web/app`.
     init?(webURL url: URL) {
         let parts = url.pathComponents.filter { $0 != "/" }

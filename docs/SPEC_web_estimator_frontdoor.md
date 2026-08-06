@@ -77,12 +77,12 @@ Scan QR / tap link → /b/:id (public profile, reviews, portfolio)
   - `POST /estimations/guest` (already public, multipart image → breakdown).
   - `GET /businesses/:id` (already public, now returns `shareUrl`).
   - `GET /businesses?...` for matched/featured pros on the metro pages.
-- **Deploy:** Vercel (web) + the existing API host. Point `renovateconnect.app`
-  at the web app; API stays on its subdomain (e.g. `api.renovateconnect.app`).
+- **Deploy:** Vercel (web) + the existing API host. Point `renovateconnect.com`
+  at the web app; API stays on its subdomain (e.g. `api.renovateconnect.com`).
 - **Universal Links:** serve `/.well-known/apple-app-site-association` (JSON, no
   extension, `application/json`) listing the app's `appID` and the `/b/*`,
   `/estimate*`, `/e/*` paths. Add the Associated Domains entitlement in the iOS
-  app (`applinks:renovateconnect.app`).
+  app (`applinks:renovateconnect.com`).
 
 ### API gaps to fill (small)
 - [ ] **CORS**: allow the web origin(s) on the estimator + business GET routes
@@ -128,7 +128,7 @@ Scan QR / tap link → /b/:id (public profile, reviews, portfolio)
 
 - **Estimator cost exposure.** Open, unauthenticated Claude calls can be abused.
   Decide the per-IP cap + captcha before launch. (Hard requirement.)
-- **Domain split.** `renovateconnect.app` → web, `api.` → API. Confirm before
+- **Domain split.** `renovateconnect.com` → web, `api.` → API. Confirm before
   wiring `APP_BASE_URL` and AASA (the `shareUrl` already assumes the apex domain).
 - **SSR is non-negotiable for the SEO pages** — don't ship them as a client-only
   SPA or they won't rank.

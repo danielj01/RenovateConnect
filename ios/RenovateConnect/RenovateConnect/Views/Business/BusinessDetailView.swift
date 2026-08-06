@@ -895,9 +895,9 @@ struct VerifiedInfoSheet: View {
                         .foregroundStyle(.secondary)
                     HStack(spacing: 14) {
                         Link("Terms of Service",
-                             destination: URL(string: "https://renovateconnect.app/terms")!)
+                             destination: URL(string: "https://renovateconnect.com/terms")!)
                         Link("Privacy Policy",
-                             destination: URL(string: "https://renovateconnect.app/privacy")!)
+                             destination: URL(string: "https://renovateconnect.com/privacy")!)
                     }
                     .font(.caption)
                 }

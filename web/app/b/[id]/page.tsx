@@ -38,7 +38,7 @@ export default async function BusinessProfilePage({ params }: Props) {
   if (!business) notFound();
 
   const where = `${business.city}, ${business.state}`;
-  const openInApp = business.shareUrl || `https://renovateconnect.app/b/${business.id}`;
+  const openInApp = business.shareUrl || `https://renovateconnect.com/b/${business.id}`;
   const portfolio = (business.portfolio || []).filter((p) => p.imageUrls.length > 0);
   const reviews = business.reviews || [];
 

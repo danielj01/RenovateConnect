@@ -39,7 +39,7 @@ Visit `/b/<a-real-business-id>` to see a profile.
 
 | Var | Purpose |
 |---|---|
-| `API_BASE_URL` | Base URL of the Express API (server-side only). Prod: `https://api.renovateconnect.app` |
+| `API_BASE_URL` | Base URL of the Express API (server-side only). Prod: `https://api.renovateconnect.com` |
 | `IOS_APP_ID` | `<TeamID>.<BundleID>` for the AASA file. Set once the app has a real signing team + bundle id. |
 | `APP_STORE_URL` | App Store listing URL for "Get the app" CTAs |
 | `APPLE_APP_STORE_ID` | Numeric App Store id for the Safari Smart App Banner |
@@ -48,8 +48,8 @@ Visit `/b/<a-real-business-id>` to see a profile.
 
 1. Import the repo, set the project root to `web/`.
 2. Add the env vars above (Production + Preview).
-3. Point `renovateconnect.app` at this project; keep the API on a subdomain
-   (e.g. `api.renovateconnect.app`) so `API_BASE_URL` and the in-app `shareUrl`
+3. Point `renovateconnect.com` at this project; keep the API on a subdomain
+   (e.g. `api.renovateconnect.com`) so `API_BASE_URL` and the in-app `shareUrl`
    (`APP_BASE_URL`) agree on the apex domain.
 
 ## Security note

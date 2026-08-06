@@ -24,7 +24,7 @@ export default async function SavedEstimatePage({ params }: Props) {
 
   // This page's own URL is a universal link — tapping the button opens the app
   // (if installed) straight to this estimate; otherwise it stays on the web page.
-  const openInApp = `https://renovateconnect.app/e/${est.code}`;
+  const openInApp = `https://renovateconnect.com/e/${est.code}`;
 
   return (
     <main className="container">

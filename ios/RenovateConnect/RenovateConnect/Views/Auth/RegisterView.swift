@@ -11,8 +11,8 @@ struct RegisterView: View {
 
     // The marketing site that hosts the legal pages. Compiled in so the links
     // work in both DEBUG and release.
-    private static let termsURL = URL(string: "https://renovateconnect.app/terms")!
-    private static let privacyURL = URL(string: "https://renovateconnect.app/privacy")!
+    private static let termsURL = URL(string: "https://renovateconnect.com/terms")!
+    private static let privacyURL = URL(string: "https://renovateconnect.com/privacy")!
 
     private var canSubmit: Bool {
         !auth.isLoading && !name.isEmpty && !email.isEmpty && password.count >= 8 && agreedToTerms

@@ -13,7 +13,7 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 // Where Stripe sends the user back after a hosted Checkout flow. The app opens
 // these via a web auth session and closes on the success/cancel redirect.
-const APP_BASE_URL = () => process.env.APP_BASE_URL || 'https://renovateconnect.app';
+const APP_BASE_URL = () => process.env.APP_BASE_URL || 'https://renovateconnect.com';
 
 // Thin wrapper so route/handler code can verify webhook signatures without
 // importing the Stripe SDK directly (keeps everything mockable in tests).

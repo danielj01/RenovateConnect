@@ -1,7 +1,7 @@
 import type { MetadataRoute } from 'next';
 import { metros, categories } from '@/lib/costData';
 
-const BASE = 'https://renovateconnect.app';
+const BASE = 'https://renovateconnect.com';
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const staticPages: MetadataRoute.Sitemap = ['', '/estimate', '/cost', '/privacy', '/terms'].map(
