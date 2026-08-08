@@ -138,7 +138,7 @@ function ResultView({ result, roomType, onReset }: { result: EstimateResult; roo
           source="estimate"
           context={roomType}
           title="Want a real quote for this?"
-          subtitle="We’re launching soon with vetted local contractors, payment protection, and no spam. Leave your email and we’ll match you the moment we go live in your area."
+          subtitle="We’re launching soon with vetted local contractors and no spam. Leave your email and we’ll match you the moment we go live in your area."
           cta="Match me at launch"
         />
       </div>

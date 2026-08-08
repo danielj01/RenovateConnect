@@ -9,8 +9,8 @@ export default function Home() {
         Know what your renovation will cost — before you call anyone.
       </h1>
       <p className="muted" style={{ fontSize: 18, marginTop: 0 }}>
-        Snap a photo, get an instant AI estimate, then hire a vetted Bay Area
-        contractor with payment protection. No spam. No lead-selling.
+        Snap a photo, get an instant AI estimate, then connect directly with a
+        vetted Bay Area contractor. No spam. No lead-selling.
       </p>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 24 }}>
@@ -23,7 +23,7 @@ export default function Home() {
         <ul className="muted" style={{ marginBottom: 0 }}>
           <li>Instant, itemized AI cost estimates from a photo</li>
           <li>You choose the contractor — your number is never sold or blasted</li>
-          <li>Milestone payment protection: funds release as the work gets done</li>
+          <li>You pay the contractor directly — no platform holding your money, no hidden fees</li>
           <li>Admin-verified pros, not pay-to-badge</li>
         </ul>
       </div>

@@ -5,7 +5,7 @@ import { siteName, tagline, appleAppStoreId } from '@/lib/config';
 export const metadata: Metadata = {
   title: { default: `${siteName} — ${tagline}`, template: `%s · ${siteName}` },
   description:
-    'Get an instant AI renovation estimate from a photo, then hire a vetted Bay Area contractor with payment protection — no spam, no lead-selling.',
+    'Get an instant AI renovation estimate from a photo, then connect directly with a vetted Bay Area contractor — no spam, no lead-selling.',
   metadataBase: new URL('https://renovateconnect.com'),
   // Smart App Banner so iOS Safari offers to open/install the app.
   ...(appleAppStoreId
