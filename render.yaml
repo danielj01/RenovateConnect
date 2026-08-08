@@ -52,10 +52,13 @@ services:
       - key: SENTRY_DSN
         sync: false
       # Transactional email (SendGrid) — email verification + password reset.
+      # NEVER put the key here: this file is committed to git. `sync: false`
+      # means "set this value in the Render dashboard", which is where secrets
+      # belong. EMAIL_FROM isn't secret, so it can live in the blueprint.
       - key: SENDGRID_API_KEY
         sync: false
       - key: EMAIL_FROM
-        sync: false
+        value: no-reply@renovateconnect.com
       - key: S3_BUCKET
         sync: false
       - key: AWS_REGION

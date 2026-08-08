@@ -33,6 +33,7 @@ const verificationDocumentsRoutes = require('./routes/verificationDocuments');
 const internalRoutes = require('./routes/internal');
 
 const { assertStorageConfigured } = require('./services/storage');
+const { assertEmailConfigured } = require('./services/email');
 
 const app = express();
 
@@ -148,6 +149,9 @@ if (process.env.NODE_ENV !== 'test' && require.main === module) {
   // Fail fast in prod if image storage would silently fall back to the
   // ephemeral local disk (uploads vanish on every deploy otherwise).
   assertStorageConfigured();
+  // Likewise if transactional email is unconfigured — signup and password
+  // reset would silently no-op for every user.
+  assertEmailConfigured();
 
   app.listen(PORT, () => console.log(`API running on :${PORT}`));
 }

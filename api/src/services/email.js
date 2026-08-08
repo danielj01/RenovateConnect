@@ -16,6 +16,22 @@ function isConfigured() {
   return Boolean(process.env.SENDGRID_API_KEY && process.env.EMAIL_FROM);
 }
 
+// Called at boot. Email is load-bearing for authentication: registration is
+// gated on a verification code and there is no other account-recovery path, so
+// a production deploy without SendGrid doesn't degrade — it silently breaks
+// signup and password reset for every user, with a success response and no
+// error anywhere. Fail fast instead, exactly like storage does for S3.
+function assertEmailConfigured() {
+  if (process.env.NODE_ENV === 'production' && !isConfigured()) {
+    throw new Error(
+      '[email] SendGrid is required in production (set SENDGRID_API_KEY and '
+      + 'EMAIL_FROM). Refusing to start: without it, email verification and '
+      + 'password reset silently no-op, so nobody can register or recover an '
+      + 'account. EMAIL_FROM must be on a SendGrid-authenticated domain.'
+    );
+  }
+}
+
 // Send one email. Resolves { skipped: true } when unconfigured, { ok: true } on
 // a 2xx from SendGrid, and throws on a non-2xx (callers that don't want a send
 // failure to break the request — e.g. resend flows — should catch it).
@@ -131,6 +147,7 @@ function sendPasswordResetCode(to, code) {
 
 module.exports = {
   isConfigured,
+  assertEmailConfigured,
   sendEmail,
   sendVerificationCode,
   sendPasswordResetCode,
