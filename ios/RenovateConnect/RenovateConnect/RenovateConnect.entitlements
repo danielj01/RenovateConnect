@@ -6,11 +6,11 @@
 	     App Store / TestFlight distribution builds. -->
 	<key>aps-environment</key>
 	<string>development</string>
-	<!-- Universal Links: lets the app open https://renovateconnect.app/b/:id and
+	<!-- Universal Links: lets the app open https://renovateconnect.com/b/:id and
 	     /estimate links (matches web/app routes + the AASA paths). -->
 	<key>com.apple.developer.associated-domains</key>
 	<array>
-		<string>applinks:renovateconnect.app</string>
+		<string>applinks:renovateconnect.com</string>
 	</array>
 </dict>
 </plist>

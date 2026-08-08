@@ -28,9 +28,9 @@ final class APIService {
     // To find this name on the Mac: `scutil --get LocalHostName` (+ ".local").
     private let base = URL(string: "http://Daniels-MacBook-Air-204.local:3000")!
     #else
-    // Production API (Render service from render.yaml). Point this at the
-    // custom domain (e.g. https://api.renovateconnect.com) once DNS is set up.
-    private let base = URL(string: "https://renovate-connect-api.onrender.com")!
+    // Production API (Render service from render.yaml), served via the
+    // custom domain now that DNS/TLS are set up (see LAUNCH_READINESS.md).
+    private let base = URL(string: "https://api.renovateconnect.com")!
     #endif
 
     private var token: String? {
