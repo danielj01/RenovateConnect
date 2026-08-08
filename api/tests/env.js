@@ -31,3 +31,11 @@ process.env.EMAIL_FROM = '';
 // the live endpoint — burning quota and making the suite depend on a network
 // call. Tests that exercise the provider set the key themselves and stub fetch.
 process.env.NVIDIA_API_KEY = '';
+
+// ...and for S3. Note this one bites even with the PLACEHOLDER values copied
+// out of .env.example: `AWS_ACCESS_KEY_ID=...` is a truthy string, so
+// s3Configured() returns true and the suite attempts real S3 calls with
+// nonsense credentials. Tests needing S3 mock services/storage instead.
+process.env.AWS_ACCESS_KEY_ID = '';
+process.env.AWS_SECRET_ACCESS_KEY = '';
+process.env.S3_BUCKET = '';

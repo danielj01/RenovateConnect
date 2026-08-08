@@ -128,6 +128,14 @@ router.post('/portfolio/:projectId/reject', async (req, res, next) => {
 });
 
 const { recomputeBusinessVerified } = require('../services/verification');
+const { presignedUrlFor } = require('../services/storage');
+
+// Verification documents are private (they include government IDs) — hand the
+// admin a short-lived presigned URL rather than any durable link.
+async function withReadableUrl(doc) {
+  const signed = await presignedUrlFor(doc.storageKey);
+  return { ...doc, fileUrl: signed || doc.fileUrl };
+}
 const { recomputeBusinessCostTier } = require('../services/costTier');
 
 // ─── VERIFICATION DOCUMENTS ───────────────────────────────────────────────────
@@ -156,7 +164,7 @@ router.get('/verifications', async (req, res, next) => {
         business: { select: { id: true, companyName: true, city: true, state: true } },
       },
     });
-    res.json(docs);
+    res.json(await Promise.all(docs.map(withReadableUrl)));
   } catch (err) {
     next(err);
   }

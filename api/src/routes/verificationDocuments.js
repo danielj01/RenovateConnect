@@ -12,7 +12,16 @@ const { z } = require('zod');
 const db = require('../services/db');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 const documentUpload = require('../middleware/documentUpload');
-const { uploadFile } = require('../services/storage');
+const { uploadFile, uploadPrivateFile, presignedUrlFor, s3Configured } = require('../services/storage');
+
+// Documents are private (they include government IDs), so we never return a
+// durable link. When the row has a private `storageKey` we mint a short-lived
+// presigned URL at read time; legacy rows (and local dev without S3) fall back
+// to the stored `fileUrl`.
+async function withReadableUrl(doc) {
+  const signed = await presignedUrlFor(doc.storageKey);
+  return { ...doc, fileUrl: signed || doc.fileUrl };
+}
 
 const DOC_TYPES = ['LICENSE', 'INSURANCE', 'IDENTITY'];
 
@@ -44,20 +53,32 @@ router.post('/', authMiddleware, requireRole('BUSINESS', 'ADMIN'),
       expiresAt:      z.string().datetime().optional(),
     }).parse(req.body);
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const fileUrl = await uploadFile(req.file.buffer, req.file.mimetype, baseUrl);
+    // Private prefix in prod. Local dev without S3 has no private store — the
+    // uploads dir is served publicly — so it falls back to the ordinary path
+    // rather than failing; production can't boot without S3 anyway.
+    let storageKey = null;
+    let fileUrl;
+    if (s3Configured()) {
+      storageKey = await uploadPrivateFile(req.file.buffer, req.file.mimetype);
+      // Nothing durable to store: reads go through a presigned URL.
+      fileUrl = '';
+    } else {
+      const baseUrl = `${req.protocol}://${req.get('host')}`;
+      fileUrl = await uploadFile(req.file.buffer, req.file.mimetype, baseUrl);
+    }
 
     const doc = await db.verificationDocument.create({
       data: {
         businessId: business.id,
         type,
         fileUrl,
+        storageKey,
         documentNumber: documentNumber || null,
         issuer: issuer || null,
         expiresAt: expiresAt ? new Date(expiresAt) : null,
       },
     });
-    res.status(201).json(doc);
+    res.status(201).json(await withReadableUrl(doc));
   } catch (err) {
     next(err);
   }
@@ -72,7 +93,7 @@ router.get('/', authMiddleware, requireRole('BUSINESS', 'ADMIN'), async (req, re
       where: { businessId: business.id },
       orderBy: { createdAt: 'desc' },
     });
-    res.json(docs);
+    res.json(await Promise.all(docs.map(withReadableUrl)));
   } catch (err) {
     next(err);
   }

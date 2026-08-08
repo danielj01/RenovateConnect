@@ -1,4 +1,5 @@
-const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -96,4 +97,55 @@ async function uploadFile(buffer, mimetype, baseUrl) {
 // content types and expected the same return shape.
 const uploadImage = uploadFile;
 
-module.exports = { uploadImage, uploadFile, assertStorageConfigured, s3Configured };
+// --- Private objects (contractor verification documents) ---------------------
+//
+// License, insurance, and government-ID scans must NOT be world-readable. They
+// go under a `private/` prefix that the bucket policy denies public access to,
+// and are handed to admins/owners as short-lived presigned URLs instead of
+// permanent links. We store the KEY, never a URL — a stored URL would either
+// expire (useless) or be permanent (the thing we're fixing).
+const PRIVATE_PREFIX = 'private/verification';
+
+const PRESIGN_TTL_SECONDS = () => parseInt(process.env.PRIVATE_URL_TTL_SECONDS || '300', 10);
+
+// Upload a private document and return its S3 key. Throws when S3 isn't
+// configured: unlike images, there is no acceptable local fallback for a
+// government ID — the local `uploads/` dir is served publicly at /uploads, so
+// falling back there would defeat the entire point. Production already can't
+// boot without S3 (assertStorageConfigured), so this only bites in local dev,
+// where the caller degrades gracefully instead.
+async function uploadPrivateFile(buffer, mimetype) {
+  if (!s3Configured()) {
+    throw new Error('[storage] S3 is required for private document uploads');
+  }
+  const key = `${PRIVATE_PREFIX}/${crypto.randomUUID()}.${extFor(mimetype)}`;
+  await s3Client().send(new PutObjectCommand({
+    Bucket: bucket(),
+    Key: key,
+    Body: buffer,
+    ContentType: mimetype,
+  }));
+  return key;
+}
+
+// Mint a short-lived read URL for a private key. Returns null when S3 isn't
+// configured so callers can fall back to whatever they stored previously.
+async function presignedUrlFor(key, { expiresIn = PRESIGN_TTL_SECONDS() } = {}) {
+  if (!key || !s3Configured()) return null;
+  return getSignedUrl(
+    s3Client(),
+    new GetObjectCommand({ Bucket: bucket(), Key: key }),
+    { expiresIn },
+  );
+}
+
+module.exports = {
+  uploadImage,
+  uploadFile,
+  uploadPrivateFile,
+  presignedUrlFor,
+  assertStorageConfigured,
+  s3Configured,
+  PRIVATE_PREFIX,
+  PRESIGN_TTL_SECONDS,
+};

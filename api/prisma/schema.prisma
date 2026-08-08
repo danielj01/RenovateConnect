@@ -371,7 +371,14 @@ model VerificationDocument {
   id              String                @id @default(cuid())
   businessId      String
   type            VerificationDocType
+  // Legacy: a directly-fetchable URL. Retained for rows created before private
+  // storage and for local dev without S3 — NOT used for new uploads.
   fileUrl         String
+  // Private S3 object key (under the `private/` prefix the bucket policy blocks
+  // public reads on). When set, the API mints a short-lived presigned URL at
+  // read time rather than ever handing out a durable link. These documents
+  // include government IDs, so they must never be world-readable.
+  storageKey      String?
   // Free-form metadata the contractor enters at upload time so admins (and
   // expired-doc re-uploads) have context: state-issued license number, policy
   // number, etc., plus the issuing authority (e.g. "California CSLB", "GEICO").
