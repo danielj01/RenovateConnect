@@ -8,12 +8,19 @@
 #
 # The web app (web/) deploys separately (Vercel); point renovateconnect.com at
 # it and this API at api.renovateconnect.com (see LAUNCH_READINESS.md).
+#
+# COST: web service + Postgres are on the Free plan (deliberate, 2026-08-07).
+# The cron job can't be free (Render doesn't offer free cron instances), so it
+# stays on Starter. ⚠️ Free Postgres is deleted 30 days after creation + a
+# 14-day grace period unless upgraded before then — fine for pre-launch
+# testing, NOT fine once there's real user data. Upgrade both plans before
+# accepting real signups.
 
 databases:
   - name: renovate-connect-db
     databaseName: renovate_connect
     user: renovate
-    plan: basic-256mb
+    plan: free
 
 services:
   - type: web
@@ -21,7 +28,7 @@ services:
     runtime: docker
     dockerfilePath: ./api/Dockerfile
     dockerContext: ./api
-    plan: starter
+    plan: free
     healthCheckPath: /health
     autoDeploy: true
     envVars:
