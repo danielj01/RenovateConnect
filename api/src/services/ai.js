@@ -1,5 +1,6 @@
 const Anthropic = require('@anthropic-ai/sdk');
 const { httpError } = require('../utils/httpError');
+const aiProvider = require('./aiProvider');
 
 const client = new Anthropic();
 const MODEL = 'claude-opus-4-7';
@@ -112,6 +113,12 @@ Return ONLY the JSON, no prose.`,
   return parseEstimateJson(response);
 }
 
+// The chatbot is pure text, so it can run on any provider. When an
+// OpenAI-compatible endpoint is configured (NVIDIA NIM / DeepSeek — see
+// services/aiProvider.js) chat routes there; otherwise it falls back to
+// Anthropic. The photo estimator above deliberately does NOT get this
+// treatment: it is image-in, and DeepSeek-class text models cannot accept
+// images at all.
 async function chatWithAssistant({ message, businessSummaries, history }) {
   const businessContext = businessSummaries
     .map((b) => `- ${b.companyName} (${b.city}, ${b.state}): specialties: ${b.specialties.join(', ')}. Rating: ${b.averageRating}/5.`)
@@ -122,16 +129,22 @@ async function chatWithAssistant({ message, businessSummaries, history }) {
     { role: 'user', content: message },
   ];
 
-  const response = await callModel({
-    model: MODEL,
-    max_tokens: 512,
-    system: `You are a helpful assistant for RenovateConnect, a marketplace for home renovation contractors.
+  const system = `You are a helpful assistant for RenovateConnect, a marketplace for home renovation contractors.
 Help clients find the right contractor for their project. Be friendly and concise.
 
 Available businesses on the platform:
 ${businessContext}
 
-When recommending businesses, use their exact company name. If no business fits perfectly, say so honestly.`,
+When recommending businesses, use their exact company name. If no business fits perfectly, say so honestly.`;
+
+  if (aiProvider.isConfigured()) {
+    return aiProvider.chatCompletion({ system, messages, maxTokens: 512 });
+  }
+
+  const response = await callModel({
+    model: MODEL,
+    max_tokens: 512,
+    system,
     messages,
   });
 

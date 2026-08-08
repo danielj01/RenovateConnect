@@ -25,3 +25,9 @@ process.env.STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || 'sk_test_dummy'
 // send short-circuits to { skipped: true }.
 process.env.SENDGRID_API_KEY = '';
 process.env.EMAIL_FROM = '';
+
+// Same reasoning for the OpenAI-compatible text provider (NVIDIA NIM /
+// DeepSeek): a real NVIDIA_API_KEY in .env would otherwise route chat tests at
+// the live endpoint — burning quota and making the suite depend on a network
+// call. Tests that exercise the provider set the key themselves and stub fetch.
+process.env.NVIDIA_API_KEY = '';
