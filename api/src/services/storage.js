@@ -3,8 +3,19 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
-const BUCKET = process.env.S3_BUCKET;
-const s3 = new S3Client({ region: process.env.AWS_REGION });
+// Read config lazily rather than freezing it at module load. Constructing the
+// S3Client eagerly threw "Region is missing" from deep inside the AWS SDK the
+// moment this module was required without AWS_REGION set — crashing the process
+// with an opaque @smithy/core stack trace BEFORE assertStorageConfigured()
+// could report the actual problem in plain language. That's precisely the
+// first-deploy case the guard exists for.
+const bucket = () => process.env.S3_BUCKET;
+
+let _s3;
+function s3Client() {
+  if (!_s3) _s3 = new S3Client({ region: process.env.AWS_REGION });
+  return _s3;
+}
 
 // Local fallback directory (served at /uploads by app.js). Used in development
 // when S3 isn't configured, or when an S3 upload fails (e.g. missing/expired
@@ -12,7 +23,7 @@ const s3 = new S3Client({ region: process.env.AWS_REGION });
 const LOCAL_DIR = path.join(__dirname, '..', '..', 'uploads');
 
 function s3Configured() {
-  return Boolean(BUCKET && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
+  return Boolean(bucket() && process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY);
 }
 
 function isProduction() {
@@ -57,10 +68,10 @@ async function uploadFile(buffer, mimetype, baseUrl) {
 
   if (s3Configured()) {
     try {
-      await s3.send(
-        new PutObjectCommand({ Bucket: BUCKET, Key: key, Body: buffer, ContentType: mimetype })
+      await s3Client().send(
+        new PutObjectCommand({ Bucket: bucket(), Key: key, Body: buffer, ContentType: mimetype })
       );
-      return `https://${BUCKET}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+      return `https://${bucket()}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
     } catch (err) {
       // In production the local-disk fallback is ephemeral, so silently saving
       // there would lose the image on the next deploy. Surface the failure
