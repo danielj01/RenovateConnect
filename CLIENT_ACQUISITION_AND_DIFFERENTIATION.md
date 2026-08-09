@@ -39,11 +39,19 @@ Real, documented frustration we can attack (not guesses):
 | Opaque pricing; fear of **hidden costs / overruns** | Top homeowner anxiety in renovation | **Instant AI itemized estimate** before you talk to anyone. |
 | "Certified Pro" badges that are **misleading** (Angi settled with VT AG, Oct 2025, $100k) | Legal record | **Admin-curated verification**, not pay-to-badge. |
 | Spam texts (TCPA class action), **1.96/5 BBB** avg | Public record | Permission-first, no lead reselling. |
-| You pay/commit **before** knowing if the contractor is even real | Contractor + homeowner complaints | **Escrow / milestone payment protection** — money released as work is done. |
+| You pay/commit **before** knowing if the contractor is even real | Contractor + homeowner complaints | **Admin-verified, licensed pros only** — no pay-to-list, license # shown on every profile. |
+
+> **⚠️ 2026-06-26 update:** the original wedge below leaned on in-app escrow /
+> milestone payment protection. That entire flow was **removed** for CSLB
+> compliance (California treats platform-held construction payments as a
+> licensing/money-transmission risk) — see `project_renovate_connect_legal`.
+> RenovateConnect is now pure referral: homeowners pay their contractor
+> directly, off-platform. The wedge is reworded below to match.
 
 **The one-line wedge:**
-> **"Know what it'll cost before you call anyone — then hire with payment
-> protection and zero spam."** The anti-Angi.
+> **"Know what it'll cost before you call anyone — then talk directly to a
+> vetted, licensed pro. No spam, no lead-selling, no middleman holding your
+> money."** The anti-Angi.
 
 ---
 
@@ -59,13 +67,15 @@ Features get copied. Sort our differentiators by how durable they are:
    actual photo of the actual space. Lean into that gap.
 2. **Compounding SEO content** around renovation cost (see §4). A moat competitors
    can't buy overnight; it gets cheaper per-acquisition over time.
-3. **Trust/reputation data + the integrated estimate→hire→escrow→review loop.**
-   The more real projects flow through, the better the data and the harder to
+3. **Trust/reputation data + the integrated estimate→hire→review loop.** The
+   more real projects flow through, the better the data and the harder to
    replicate the experience.
 
 **Tier 2 — strong positioning (use in messaging, but copyable):**
 - No lead fees / you-choose model.
-- Escrow payment protection.
+- "We never touch your renovation payment" — actually a trust *plus*, not a
+  gap: no platform-held escrow to distrust, homeowner and contractor deal
+  directly like they always have, we just made the introduction.
 - Curated (not paid) verification.
 
 **Strategic focus discipline:** win **one metro densely** (recommend East Bay)
@@ -123,6 +133,27 @@ Ordered by fit for a bootstrapped, cold-start, single-metro launch (best first).
   pour fuel: **Meta lead forms** (reportedly 15–20% booking rates for home
   services) and **Google high-intent** ("contractor near me"). Track CAC against
   realistic LTV — remember home services paid CAC is punishing.
+- **Concrete budget, by phase (2026 benchmarks — see §8):**
+  - *Phase 0–1 (supply seeding, pre-liquidity):* **$0–100/mo.** Nextdoor
+    business page + organic posting is free; nothing else earns a paid test
+    yet — there's no funnel to amplify.
+  - *Phase 2 (first Bay Area liquidity, funnel testing):* **$300–800/mo**
+    total. Start on **Nextdoor** — cheapest, most trust-aligned channel
+    (~$100–300/mo covers a solo operator testing 3–5 East Bay
+    neighborhoods with a Local Deal + Promoted Posts). Layer in a **small
+    Google Ads test** (~$300–500/mo) on exact-match, hyper-local long-tail
+    terms only ("kitchen remodel cost oakland," not "contractor") — home
+    services CPCs run **$5–14** depending on trade (Construction &
+    Contractors ≈ $5.31; Electrical ≈ $12.18), so this buys real signal, not
+    scale. Skip Meta at this budget: CPL for home-services categories runs
+    **$27–120** and needs volume to read as data.
+  - *Phase 3 (funnel proven, scaling):* **$1,500–3,000/mo**, split
+    Google/Meta/Nextdoor by measured CAC, only once estimator→install→match
+    conversion is instrumented and positive.
+  - **Sanity check against reality:** Angi's fully-loaded CAC runs
+    **>$1,400 per booked job**. Any paid spend here is a top-of-funnel
+    install/estimate driver, not a booking-guarantee — the organic wedge
+    (web estimator + SEO + supply-driven sharing) has to do the real work.
 
 ---
 
@@ -137,10 +168,10 @@ Realtor / inspector referral            ─┘            │
                           "Save estimate / get matched"  →  App install
                                                        │
                                                        ▼
-                          Browse vetted pros → message → quote → deposit (escrow)
+                          Browse vetted pros → message → quote → hire directly
                                                        │
                                                        ▼
-                          Milestone release → review → saved to "My Projects"
+                          Job done off-platform → review → saved to "My Projects"
                                                        │
                                                        ▼
                           Re-engagement: saved pros, maintenance, next project
@@ -196,3 +227,10 @@ quotes, escrow, reviews, favorites/My Projects, and push. The missing top is the
 - [Calculate Renovation Costs — Block Renovation](https://www.blockrenovation.com/tools/calculate-renovation-cost-estimations)
 - [Instant Remodeling & Renovation Estimates — Snaptimate](https://snaptimate.com/)
 - [House Renovation Cost Calculator by ZIP — Remodelum](https://www.remodelum.com/renovation-cost-estimator)
+- [Google Ads Cost for Home Services: 2026 CPC Data — M.Wolf Media](https://mwolfmedia.com/google-ads-cost-for-home-service-businesses/)
+- [Google Ads Cost for Home Services: 2026 Pricing & ROI Guide — Built Right Digital](https://builtrightdigital.com/google-ads-cost-for-home-services/)
+- [Meta Ads Cost Per Lead Benchmarks by Industry (2026) — Adamigo](https://www.adamigo.ai/blog/meta-ads-cost-per-lead-benchmarks-industry-2026)
+- [Facebook Ads Cost for Contractors: $35–$120 CPL in 2026 — M.Wolf Media](https://mwolfmedia.com/how-much-do-facebook-ads-cost-for-contractors/)
+- [Tips for selecting a budget for Nextdoor Ads — Nextdoor Business](https://business.nextdoor.com/en-us/blog/tips-for-selecting-a-budget-for-nextdoor-ads)
+- [Nextdoor Local Business Advertising: Complete Guide for 2026 — MAK Digital](https://makdigitaldesign.com/search-engine-optimization/nextdoor-local-business-advertising/)
+- [App Marketing Budget Allocation by Growth Stage: A 2026 Framework — SEM Nexus](https://semnexus.com/app-marketing-budget-allocation-by-growth-stage-2026)

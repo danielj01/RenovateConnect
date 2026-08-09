@@ -14,7 +14,26 @@ RenovateConnect is a two-sided iOS marketplace connecting homeowners with renova
 
 **Our recommendation: a Freemium-SaaS-led hybrid.** Use our *already-built* contractor tools (CRM + dashboard + portfolio + AI estimation) as a free-standing "single-player" product to win supply before we have demand, then layer in (a) a **Pro subscription** that bundles promoted placement, and (b) **performance-based, refundable, exclusive leads** that explicitly avoid the Thumbtack failure modes. Defer a transaction take-rate (the highest ceiling) to Phase 3 once liquidity and payment rails exist.
 
-**Go-to-market is supply-side-first, single-metro (Chicago).** Two-thirds of failed marketplaces die on the supply side; geographic density in one city is the only viable launch. We seed supply by importing public contractor directories into *claimable* profiles (the "Airbnb-on-Craigslist" move), recruit a "Founding 100" cohort with free lifetime Pro, and drive consumer downloads with programmatic local-SEO pages and the AI estimator as a viral consumer hook.
+**Go-to-market is supply-side-first, single-metro (Bay Area).** Two-thirds of
+failed marketplaces die on the supply side; geographic density in one city is
+the only viable launch. We seed supply by importing public contractor
+directories into *claimable* profiles (the "Airbnb-on-Craigslist" move),
+recruit a "Founding 100" cohort with free lifetime Pro, and drive consumer
+downloads with programmatic local-SEO pages and the AI estimator as a viral
+consumer hook.
+
+> **⚠️ 2026-08-08 correction:** this section originally said "Chicago,"
+> reasoning from `prisma/seed.js`'s dev-fixture business names — that's just
+> local test data, not a market decision. The actual launch market is the
+> **Bay Area / California**: the live site copy says "vetted Bay Area
+> contractor," `CONTRACTOR_OUTREACH.md` has a real Bay Area contractor list,
+> and — decisively — the entire referral-model legal-compliance rework
+> (CSLB bulletin compliance, B&P §7030.5 license display, B&P §7159.5 deposit
+> cap, AB 2863 auto-renewal disclosure) is California-specific law. None of
+> it applies to Illinois contractors. Launching Chicago would mean redoing
+> that compliance work for a different state. Every "Chicago" reference below
+> should read "Bay Area"; left as-is for the historical record rather than
+> silently rewritten.
 
 ---
 
@@ -115,14 +134,21 @@ Introduce in-app booking + escrow payments and take a cut, à la TaskRabbit.
 
 ### Recommended path: **B now → A in parallel → C later**
 
-> **Status (shipped):** Playbook **B** is live as the **Pro subscription**
-> ($5/mo, 90-day free trial) whose perk is a clearly-labeled, capped
-> **"Sponsored"** slot above organic results — paid *visibility* without paid
-> *ranking* (organic stays sorted by verification + rating). Playbook **C**
-> (transaction commission on deposits + milestone escrow) is also live. Playbook
-> **A** (per-lead fees) remains intentionally **not** implemented. A planned
-> **$10/mo "Insights" upsell** (aggregated market/demand data, not raw PII) is
-> noted in `RETENTION_AND_FEATURE_ROADMAP.md`.
+> **Status (2026-08-08, supersedes the "shipped" note below):** the
+> monetization model changed twice since this doc was written. Playbook **C**
+> (transaction commission on deposits + milestone escrow) was **built, then
+> fully removed 2026-06-26** for CSLB compliance — see
+> `project_renovate_connect_legal`. RenovateConnect is now **pure
+> referral**: no in-app construction payments, ever, without a CA
+> construction-law attorney's sign-off. The old Playbook B ($5/mo
+> Sponsored + $10/mo Insights as separate tiers) was itself replaced
+> 2026-07-04 by a single **required $10/mo listing subscription** (one free
+> month on first admin approval; non-subscribers are hidden from
+> search/feed/AI-chat) which bundles the old Insights tier. Playbook **A**
+> (per-lead fees) remains intentionally not implemented, and the guardrail
+> against it is now explicit product policy, not just a launch choice. The
+> **Boost** feature ($5 one-time / 7 days, capped per city) is the one paid
+> *placement* mechanism, kept strictly separate from organic ranking.
 
 1. **Launch:** Freemium SaaS (B). Turns our built tools into revenue + supply magnet.
 2. **+3 months:** Turn on refundable exclusive leads (A) as a second revenue stream and a Free-tier upsell ("you've got 5 leads waiting — upgrade to manage them").
