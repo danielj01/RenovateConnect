@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: `How ${siteName} collects, uses, and protects your information.`,
 };
 
-const UPDATED = 'June 11, 2026';
+const UPDATED = 'August 8, 2026';
 
 export default function PrivacyPage() {
   return (
@@ -47,8 +47,11 @@ export default function PrivacyPage() {
           token) — for reliability and the notifications you turn on.
         </li>
         <li>
-          <strong>Payments</strong> — deposits and subscriptions are processed
-          by Stripe. We never see or store full card numbers.
+          <strong>Payments</strong> — your listing subscription and optional
+          Boost payments are processed by Stripe. We never see or store full
+          card numbers. Payment for your actual renovation goes directly to
+          your contractor, off-platform — RenovateConnect never handles or
+          holds that money.
         </li>
       </ul>
 
@@ -68,11 +71,13 @@ export default function PrivacyPage() {
 
       <h2>AI processing</h2>
       <p>
-        Photo estimates and the in-app assistant are powered by Anthropic&rsquo;s
-        Claude models. Photos and messages you submit for an estimate are sent
-        to Anthropic for processing under our service agreement; they are not
-        used to train models and are not shared with contractors unless you
-        send them in a chat.
+        Photo estimates are powered by Anthropic&rsquo;s Claude models. The
+        in-app assistant (chat) is powered by Anthropic&rsquo;s Claude models
+        or, depending on system configuration, DeepSeek models hosted by
+        NVIDIA — both under service agreements with us. Photos and messages
+        you submit are sent only to the provider handling that feature for
+        processing; they are not used to train models and are not shared with
+        contractors unless you send them in a chat.
       </p>
 
       <h2>Where your data lives</h2>
