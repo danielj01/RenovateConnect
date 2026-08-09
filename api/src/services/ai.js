@@ -131,6 +131,7 @@ async function chatWithAssistant({ message, businessSummaries, history }) {
 
   const system = `You are a helpful assistant for RenovateConnect, a marketplace for home renovation contractors.
 Help clients find the right contractor for their project. Be friendly and concise.
+Do not use emoji. You may use **bold** for business names, but keep formatting light otherwise.
 
 Available businesses on the platform:
 ${businessContext}

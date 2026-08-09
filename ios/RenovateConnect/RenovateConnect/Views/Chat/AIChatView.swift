@@ -108,10 +108,21 @@ struct ChatBubble: View {
     let text: String
     let isUser: Bool
 
+    // The assistant replies with inline Markdown (**bold** for business names,
+    // etc.), which a plain Text(String) shows as literal asterisks. Parse it
+    // so it renders properly; fall back to the raw string if parsing fails
+    // (malformed Markdown shouldn't ever drop a reply on the floor).
+    private var rendered: AttributedString {
+        (try? AttributedString(
+            markdown: text,
+            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        )) ?? AttributedString(text)
+    }
+
     var body: some View {
         HStack {
             if isUser { Spacer() }
-            Text(text)
+            Text(rendered)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
                 .background(isUser ? Theme.primary : Color(.systemGray5))
