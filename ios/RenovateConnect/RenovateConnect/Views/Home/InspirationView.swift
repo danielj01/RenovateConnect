@@ -159,38 +159,51 @@ struct InspirationView: View {
 private struct FeedCard: View {
     let item: FeedItem
 
+    // Pinterest-style tile: full-bleed photo, no boxed text panel, no price
+    // (cost stays in the detail view — a grid full of dollar signs reads as
+    // an ad feed, not inspiration). The business name is a light on-image
+    // caption rather than a separate white strip, so the photo does the work.
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .topLeading) {
-                AsyncImage(url: URL(string: item.imageUrl)) { phase in
-                    switch phase {
-                    case .success(let image): image.resizable().scaledToFit()
-                    case .failure: Color(.systemGray5).frame(height: 160).overlay(Image(systemName: "photo").foregroundStyle(.secondary))
-                    default: Color(.systemGray6).frame(height: 160).overlay(ProgressView())
+        ZStack(alignment: .bottom) {
+            AsyncImage(url: URL(string: item.imageUrl)) { phase in
+                switch phase {
+                case .success(let image): image.resizable().scaledToFit()
+                case .failure: Color(.systemGray5).frame(height: 160).overlay(Image(systemName: "photo").foregroundStyle(.secondary))
+                default: Color(.systemGray6).frame(height: 160).overlay(ProgressView())
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .clipped()
+
+            LinearGradient(colors: [.black.opacity(0.55), .clear], startPoint: .bottom, endPoint: .top)
+                .frame(height: 54)
+                .allowsHitTesting(false)
+
+            HStack {
+                Text(item.business.companyName)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.bottom, 8)
+
+            if item.isBeforeAfter {
+                VStack {
+                    HStack {
+                        Text("Before & After")
+                            .font(.caption2.weight(.bold))
+                            .padding(.horizontal, 8).padding(.vertical, 4)
+                            .background(.ultraThinMaterial, in: Capsule())
+                        Spacer(minLength: 0)
                     }
+                    Spacer(minLength: 0)
                 }
-                .frame(maxWidth: .infinity)
-                .clipped()
-
-                if item.isBeforeAfter {
-                    Text("Before & After")
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-                        .background(.ultraThinMaterial, in: Capsule())
-                        .padding(8)
-                }
+                .padding(8)
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.business.companyName).font(.caption.weight(.semibold)).lineLimit(1)
-                if let cost = item.costText {
-                    Text(cost).font(.caption2).foregroundStyle(.secondary)
-                }
-            }
-            .padding(8)
         }
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 14))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
     }
 }
 
