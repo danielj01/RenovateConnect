@@ -58,7 +58,7 @@ services:
       - key: NVIDIA_API_KEY
         sync: false
       - key: NVIDIA_CHAT_MODEL
-        value: deepseek-ai/deepseek-v4-pro
+        value: deepseek-ai/deepseek-v4-flash-0731
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
