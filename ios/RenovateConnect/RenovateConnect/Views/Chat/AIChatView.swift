@@ -27,7 +27,7 @@ struct AIChatView: View {
                             }
 
                             if chat.isLoading {
-                                ChatBubble(text: "…", isUser: false)
+                                TypingIndicatorBubble()
                             }
                         }
                         .padding()
@@ -131,5 +131,37 @@ struct ChatBubble: View {
                 .frame(maxWidth: 280, alignment: isUser ? .trailing : .leading)
             if !isUser { Spacer() }
         }
+    }
+}
+
+/// Three dots that bounce in sequence while the assistant is composing a
+/// reply — replaces a static "…" so a slow response reads as "thinking",
+/// not "frozen".
+struct TypingIndicatorBubble: View {
+    @State private var bounce = false
+
+    var body: some View {
+        HStack {
+            HStack(spacing: 4) {
+                ForEach(0..<3) { i in
+                    Circle()
+                        .frame(width: 7, height: 7)
+                        .foregroundStyle(.secondary)
+                        .offset(y: bounce ? -4 : 0)
+                        .animation(
+                            .easeInOut(duration: 0.5)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(i) * 0.15),
+                            value: bounce
+                        )
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(Color(.systemGray5))
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+            Spacer()
+        }
+        .onAppear { bounce = true }
     }
 }
