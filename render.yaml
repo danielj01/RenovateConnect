@@ -15,6 +15,13 @@
 # 14-day grace period unless upgraded before then — fine for pre-launch
 # testing, NOT fine once there's real user data. Upgrade both plans before
 # accepting real signups.
+#
+# Key Value (Redis-compatible) backs the rate limiter's counters so they
+# survive the free web service's restarts/cold-starts instead of resetting an
+# in-memory count — a live brute-force test against /auth/login went
+# unthrottled before this was added (see api/src/middleware/rateLimit.js).
+# Also free (2026-08-13); no external access needed, so ipAllowList is empty —
+# only the api service (same account, private network) can reach it.
 
 databases:
   - name: renovate-connect-db
@@ -23,6 +30,11 @@ databases:
     plan: free
 
 services:
+  - type: keyvalue
+    name: renovate-connect-redis
+    plan: free
+    ipAllowList: []
+
   - type: web
     name: renovate-connect-api
     runtime: docker
@@ -35,6 +47,11 @@ services:
       - key: DATABASE_URL
         fromDatabase:
           name: renovate-connect-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: renovate-connect-redis
+          type: keyvalue
           property: connectionString
       - key: NODE_ENV
         value: production
