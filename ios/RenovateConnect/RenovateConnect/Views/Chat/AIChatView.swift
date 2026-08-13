@@ -28,6 +28,7 @@ struct AIChatView: View {
 
                             if chat.isLoading {
                                 TypingIndicatorBubble()
+                                    .id("typing-indicator")
                             }
                         }
                         .padding()
@@ -35,6 +36,15 @@ struct AIChatView: View {
                     .onChange(of: chat.messages.count) {
                         if let last = chat.messages.last {
                             withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        }
+                    }
+                    // Sending a message scrolls to the new user turn (above), but the
+                    // typing indicator that appears right after isn't a new message —
+                    // isLoading flips with no count change — so without this it can
+                    // render below the fold until the reply lands.
+                    .onChange(of: chat.isLoading) {
+                        if chat.isLoading {
+                            withAnimation { proxy.scrollTo("typing-indicator", anchor: .bottom) }
                         }
                     }
                 }

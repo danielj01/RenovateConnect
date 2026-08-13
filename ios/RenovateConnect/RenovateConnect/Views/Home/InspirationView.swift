@@ -11,6 +11,7 @@ struct InspirationView: View {
     @State private var isLoading = false
     @State private var loadingMore = false
     @State private var error: String?
+    @State private var loadMoreError: String?
     @State private var category: String?
 
     private let categories = ["Kitchen", "Bathroom", "Bedroom", "Living room", "Whole home", "Exterior"]
@@ -63,6 +64,13 @@ struct InspirationView: View {
 
                     if loadingMore {
                         ProgressView().padding(.vertical, 16)
+                    } else if let loadMoreError {
+                        VStack(spacing: 6) {
+                            Text(loadMoreError).font(.caption).foregroundStyle(.secondary)
+                            Button("Retry") { Task { await load(reset: false) } }
+                                .font(.caption.weight(.semibold))
+                        }
+                        .padding(.vertical, 16)
                     }
                 }
             }
@@ -123,7 +131,10 @@ struct InspirationView: View {
     }
 
     private func maybeLoadMore(after item: FeedItem) {
-        guard hasMore, !loadingMore else { return }
+        // Don't auto-retry a load that already failed — the user has to tap
+        // Retry, otherwise a persistent failure would refire on every scroll
+        // near the bottom and hammer the API with no visible change.
+        guard hasMore, !loadingMore, loadMoreError == nil else { return }
         // Trigger when one of the last few items appears.
         if let idx = items.firstIndex(where: { $0.id == item.id }), idx >= items.count - 4 {
             Task { await load(reset: false) }
@@ -135,12 +146,14 @@ struct InspirationView: View {
             isLoading = true
             page = 1
             hasMore = true
+            error = nil
+            loadMoreError = nil
         } else {
             guard hasMore, !loadingMore else { return }
             loadingMore = true
+            loadMoreError = nil
         }
         defer { isLoading = false; loadingMore = false }
-        error = nil
         do {
             let resp = try await APIService.shared.feed(page: reset ? 1 : page, category: category)
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -149,7 +162,11 @@ struct InspirationView: View {
             hasMore = resp.hasMore
             page = resp.page + 1
         } catch {
-            self.error = error.localizedDescription
+            if reset {
+                self.error = error.localizedDescription
+            } else {
+                loadMoreError = error.localizedDescription
+            }
         }
     }
 }
