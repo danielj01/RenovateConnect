@@ -16,6 +16,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: business.companyName,
     description: `${business.companyName} — ${where}. ${business.description}`.slice(0, 160),
+    alternates: { canonical: `/b/${business.id}` },
     openGraph: {
       title: business.companyName,
       description: `${business.companyName} in ${where} on RenovateConnect`,

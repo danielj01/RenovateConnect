@@ -43,6 +43,11 @@
   --blue-tint: rgba(10, 102, 224, 0.1);
   --blue-tint-strong: rgba(10, 102, 224, 0.16);
 
+  /* Brand mark. The navy is the logo's own colour; dark mode lightens it or it
+     disappears against black. */
+  --logo-ink: #1b2a47;
+  --logo-accent: #5b7ca6;
+
   --amber: #b45309;
   --amber-tint: rgba(180, 83, 9, 0.1);
   --green: #067647;
@@ -113,6 +118,9 @@
     --blue-text: #6cb0ff;
     --blue-tint: rgba(43, 127, 255, 0.16);
     --blue-tint-strong: rgba(43, 127, 255, 0.24);
+
+    --logo-ink: #eef2f8;
+    --logo-accent: #7fa3cf;
 
     --amber: #f0a33c;
     --amber-tint: rgba(240, 163, 60, 0.16);
@@ -318,11 +326,6 @@ main td a:hover { text-decoration: underline; }
   white-space: nowrap;
 }
 .brand-mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--blue);
-  color: #fff;
   display: grid;
   place-items: center;
   flex: none;

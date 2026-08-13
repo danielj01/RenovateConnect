@@ -5,7 +5,7 @@ import { ArrowRightIcon } from '@/components/Icons';
 export const metadata: Metadata = {
   title: 'Bay Area Renovation Cost Guides (2026)',
   description:
-    'Real 2026 cost ranges for kitchen, bathroom, and whole-home remodels across San Francisco, Oakland, Berkeley, San Jose, Palo Alto, and Fremont — plus a free instant photo estimate.',
+    'Real 2026 cost ranges for kitchen, bathroom, and whole-home remodels across San Francisco, Oakland, Berkeley, San Jose, and Palo Alto.',
   alternates: { canonical: '/cost' },
 };
 

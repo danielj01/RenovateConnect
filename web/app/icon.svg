@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" role="img" aria-label="RenovateConnect">
+  <title>RenovateConnect</title>
+  <!--
+    Monogram: an R whose descending leg becomes the left slope of a house roof.
+    Two tones — navy for the R and the left slope, a lighter blue for the right
+    slope and the window — so the house reads even at favicon size.
+  -->
+  <!-- R: stem + bowl. evenodd punches the counter out of the bowl. -->
+  <path fill="#1b2a47" fill-rule="evenodd"
+        d="M22 14h18v52H22Zm18 0h17a19 19 0 0 1 0 38H40V40h15a7 7 0 0 0 0-14H40Z"/>
+  <!-- Roof, left slope — reads as the R's leg. -->
+  <path fill="#1b2a47" d="M50 39 8 82h18l24-24.5Z"/>
+  <!-- Roof, right slope. -->
+  <path fill="#5b7ca6" d="M50 39l42 43H74L50 57.5Z"/>
+  <!-- Window, centred under the apex. -->
+  <g fill="#5b7ca6">
+    <rect x="41" y="63" width="9" height="9" rx="2"/>
+    <rect x="52" y="63" width="9" height="9" rx="2"/>
+    <rect x="41" y="74" width="9" height="9" rx="2"/>
+    <rect x="52" y="74" width="9" height="9" rx="2"/>
+  </g>
+</svg>

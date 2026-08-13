@@ -1,19 +1,62 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { siteName, tagline, appleAppStoreId } from '@/lib/config';
+import { BrandLogo } from '@/components/BrandLogo';
+
+// Canonical host. The apex 308-redirects to www, so www is the real address —
+// pointing canonicals, OG urls, and the sitemap at the apex would make every
+// one of them a redirect hop for crawlers.
+const SITE_URL = 'https://www.renovateconnect.com';
 
 export const metadata: Metadata = {
-  title: { default: `${siteName} — ${tagline}`, template: `%s · ${siteName}` },
+  // The full tagline runs to 69 characters once the brand is prepended, and
+  // Google cuts titles around 60. This leads with brand + primary keyword +
+  // geography instead; the tagline still carries the brand voice on social,
+  // where length isn't clipped.
+  title: {
+    default: `${siteName} — Bay Area Renovation Cost Estimates`,
+    template: `%s · ${siteName}`,
+  },
+  // Descriptions are kept under ~155 characters — past that Google truncates
+  // mid-sentence and the snippet reads as broken.
   description:
-    'Get an instant AI renovation estimate from a photo, then connect directly with a licensed Bay Area contractor — no spam, no lead-selling, no middleman holding your money.',
-  metadataBase: new URL('https://renovateconnect.com'),
+    'Get a free AI renovation estimate from one photo, then connect directly with a licensed Bay Area contractor. No spam and no lead-selling.',
+  metadataBase: new URL(SITE_URL),
+  // Every page sets its own canonical; this is the fallback for any that don't,
+  // and it stops query-string variants (?for=contractor, utm_*) being indexed
+  // as separate pages.
+  alternates: { canonical: '/' },
+  applicationName: siteName,
+  keywords: [
+    'renovation cost estimate',
+    'home renovation Bay Area',
+    'kitchen remodel cost San Francisco',
+    'bathroom remodel cost',
+    'licensed contractors Bay Area',
+    'AI renovation estimate',
+  ],
+  authors: [{ name: siteName, url: SITE_URL }],
+  creator: siteName,
+  publisher: siteName,
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      'max-image-preview': 'large',
+      'max-snippet': -1,
+      'max-video-preview': -1,
+    },
+  },
   openGraph: {
     type: 'website',
     siteName,
+    locale: 'en_US',
     title: `${siteName} — ${tagline}`,
     description:
       'Know what your renovation costs before you call anyone, then connect directly with a licensed Bay Area contractor.',
-    url: 'https://renovateconnect.com',
+    url: SITE_URL,
     images: [{ url: '/img/kitchen.jpg', width: 1600, height: 1000, alt: 'A renovated kitchen' }],
   },
   twitter: {
@@ -23,6 +66,38 @@ export const metadata: Metadata = {
     images: ['/img/kitchen.jpg'],
   },
   ...(appleAppStoreId ? { appleWebApp: { capable: true } } : {}),
+};
+
+// Organization + WebSite structured data. This is what lets Google show a real
+// site name and logo next to the result instead of guessing — worth having
+// given the domain's stale parking-page entry needs replacing.
+const structuredData = {
+  '@context': 'https://schema.org',
+  '@graph': [
+    {
+      '@type': 'Organization',
+      '@id': `${SITE_URL}/#organization`,
+      name: siteName,
+      url: SITE_URL,
+      logo: { '@type': 'ImageObject', url: `${SITE_URL}/icon.svg`, width: 100, height: 100 },
+      description:
+        'A referral marketplace connecting Bay Area homeowners with licensed renovation contractors, with free AI cost estimates from a photo.',
+      email: 'support@renovateconnect.com',
+      areaServed: {
+        '@type': 'AdministrativeArea',
+        name: 'San Francisco Bay Area, California',
+      },
+    },
+    {
+      '@type': 'WebSite',
+      '@id': `${SITE_URL}/#website`,
+      url: SITE_URL,
+      name: siteName,
+      description: tagline,
+      publisher: { '@id': `${SITE_URL}/#organization` },
+      inLanguage: 'en-US',
+    },
+  ],
 };
 
 // `viewport-fit=cover` lets the safe-area insets in globals.css do their job on
@@ -40,11 +115,8 @@ export const viewport: Viewport = {
 
 function BrandMark() {
   return (
-    <span className="brand-mark" aria-hidden="true">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M3 11.2 12 4l9 7.2" />
-        <path d="M5.5 9.8V20h13V9.8" />
-      </svg>
+    <span className="brand-mark">
+      <BrandLogo size={26} />
     </span>
   );
 }
@@ -58,6 +130,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {appleAppStoreId ? (
           <meta name="apple-itunes-app" content={`app-id=${appleAppStoreId}`} />
         ) : null}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+        />
       </head>
       <body>
         <a className="skip-link" href="#main">Skip to content</a>

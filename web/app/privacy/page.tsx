@@ -3,7 +3,8 @@ import { siteName } from '@/lib/config';
 
 export const metadata: Metadata = {
   title: 'Privacy Policy',
-  description: `How ${siteName} collects, uses, and protects your information.`,
+  description: `How ${siteName} collects, uses, and protects your information. We never sell your contact details, and you pay your contractor directly.`,
+  alternates: { canonical: '/privacy' },
 };
 
 const UPDATED = 'August 8, 2026';

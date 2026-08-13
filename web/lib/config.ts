@@ -1,5 +1,15 @@
 // Public-facing config derived from env, with safe fallbacks for local dev.
 
+/**
+ * Canonical origin for the marketing site.
+ *
+ * MUST be the www host: renovateconnect.com issues a 308 to
+ * www.renovateconnect.com, so canonicals, OG urls, sitemap entries, and the
+ * robots.txt sitemap line all have to point here or every crawler hit becomes a
+ * redirect hop — and Google may keep treating the two hosts as separate sites.
+ */
+export const SITE_URL = 'https://www.renovateconnect.com';
+
 export const appStoreUrl =
   process.env.APP_STORE_URL || 'https://apps.apple.com/app/renovateconnect';
 

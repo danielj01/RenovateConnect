@@ -3,7 +3,8 @@ import { siteName } from '@/lib/config';
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
-  description: `The terms that govern your use of ${siteName}.`,
+  description: `The terms governing your use of ${siteName} — how the referral marketplace works, contractor listings, disputes, and arbitration.`,
+  alternates: { canonical: '/terms' },
 };
 
 const UPDATED = 'June 26, 2026';

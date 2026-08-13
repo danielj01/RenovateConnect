@@ -4,7 +4,7 @@ import { WaitlistLanding } from '@/components/WaitlistLanding';
 export const metadata: Metadata = {
   title: 'Join the waitlist',
   description:
-    'Be first to know when RenovateConnect launches in your Bay Area city — instant AI renovation estimates and licensed contractors, with no lead-selling. Contractors can claim a founding spot.',
+    'Be first when RenovateConnect opens in your Bay Area city: free AI renovation estimates and licensed contractors, no lead-selling. Contractors welcome.',
   alternates: { canonical: '/waitlist' },
   openGraph: {
     title: 'Join the RenovateConnect waitlist',

@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import {
   metros, categories, metroBySlug, categoryBySlug, scaledCost, money,
 } from '@/lib/costData';
-import { appStoreUrl, hasAppStoreListing } from '@/lib/config';
+import { appStoreUrl, hasAppStoreListing, SITE_URL } from '@/lib/config';
 
 interface Props { params: { metro: string; category: string } }
 
@@ -41,15 +41,29 @@ export default function CostPage({ params }: Props) {
   // fallback) prices the same metro the visitor was just reading about.
   const estimateHref = `/estimate?room=${encodeURIComponent(category.roomType)}&metro=${metro.slug}`;
 
-  // FAQPage structured data — eligible for rich results in search.
-  const faqJsonLd = {
+  // FAQPage + BreadcrumbList structured data — both are eligible for rich
+  // results, and the breadcrumb is what turns the ugly URL in the SERP into
+  // "Cost guides › San Francisco › Kitchen Remodel".
+  const jsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'FAQPage',
-    mainEntity: category.faqs.map((f) => ({
-      '@type': 'Question',
-      name: f.q,
-      acceptedAnswer: { '@type': 'Answer', text: f.a },
-    })),
+    '@graph': [
+      {
+        '@type': 'FAQPage',
+        mainEntity: category.faqs.map((f) => ({
+          '@type': 'Question',
+          name: f.q,
+          acceptedAnswer: { '@type': 'Answer', text: f.a },
+        })),
+      },
+      {
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Cost guides', item: `${SITE_URL}/cost` },
+          { '@type': 'ListItem', position: 2, name: metro.name, item: `${SITE_URL}/cost/${metro.slug}/${category.slug}` },
+          { '@type': 'ListItem', position: 3, name: category.name },
+        ],
+      },
+    ],
   };
 
   const otherCategories = categories.filter((c) => c.slug !== category.slug);
@@ -57,7 +71,7 @@ export default function CostPage({ params }: Props) {
 
   return (
     <main className="container">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <nav className="muted" style={{ fontSize: '0.8125rem' }}>
         <a href="/cost">Cost guides</a> · {metro.name}
