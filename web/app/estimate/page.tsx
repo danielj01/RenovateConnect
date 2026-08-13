@@ -1,157 +1,23 @@
-'use client';
+import type { Metadata } from 'next';
+import { EstimateClient } from '@/components/EstimateClient';
 
-import { useEffect, useState } from 'react';
-import { type EstimateResult } from '@/lib/estimate';
-import { EstimateBreakdown } from '@/components/EstimateBreakdown';
-import { WaitlistForm } from '@/components/WaitlistForm';
-
-const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
-
-const ROOM_TYPES = ['Kitchen', 'Bathroom', 'Bedroom', 'Living room', 'Whole home', 'Exterior', 'Other'];
+// The estimator itself is interactive (file input, fetch, result state), so it
+// lives in a client component. This server wrapper exists purely so the page
+// still ships real metadata — /estimate is a top-of-funnel landing page and a
+// `'use client'` page can't export any.
+export const metadata: Metadata = {
+  title: 'Free instant renovation estimate from a photo',
+  description:
+    'Snap a photo of your kitchen, bathroom, or any room and get an itemized renovation cost range in seconds. Free, no account needed, Bay Area pricing.',
+  alternates: { canonical: '/estimate' },
+  openGraph: {
+    title: 'Free instant renovation estimate from a photo',
+    description:
+      'Get an itemized renovation cost range in seconds — free, no account needed.',
+    images: [{ url: '/img/kitchen.jpg', width: 1600, height: 1000, alt: 'A renovated kitchen' }],
+  },
+};
 
 export default function EstimatePage() {
-  const [files, setFiles] = useState<File[]>([]);
-  const [roomType, setRoomType] = useState(ROOM_TYPES[0]);
-  const [description, setDescription] = useState('');
-  const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
-  const [result, setResult] = useState<EstimateResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  // Prefill the room from ?room= (the SEO cost pages link in pre-filled). Read
-  // on mount via window so the page stays statically rendered.
-  useEffect(() => {
-    const room = new URLSearchParams(window.location.search).get('room');
-    if (room && ROOM_TYPES.includes(room)) setRoomType(room);
-  }, []);
-
-  const previews = files.map((f) => URL.createObjectURL(f));
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (files.length === 0) { setError('Add at least one photo.'); return; }
-    setStatus('loading');
-    setError(null);
-    try {
-      const form = new FormData();
-      files.slice(0, 5).forEach((f) => form.append('images', f));
-      form.append('roomType', roomType);
-      if (description) form.append('description', description);
-
-      const res = await fetch(`${API_BASE}/estimations/guest`, { method: 'POST', body: form });
-      if (res.status === 429) {
-        setStatus('error');
-        setError('You’ve hit the free estimate limit for now. Get the app to keep going.');
-        return;
-      }
-      if (!res.ok) throw new Error(`Estimate failed (${res.status})`);
-      const data = await res.json();
-      setResult(data.result as EstimateResult);
-      setStatus('done');
-    } catch (err) {
-      setStatus('error');
-      setError(err instanceof Error ? err.message : 'Something went wrong.');
-    }
-  }
-
-  function reset() {
-    setFiles([]); setResult(null); setError(null); setStatus('idle'); setDescription('');
-  }
-
-  if (status === 'done' && result) {
-    return <ResultView result={result} roomType={roomType} onReset={reset} />;
-  }
-
-  return (
-    <main className="container">
-      <h1 style={{ fontSize: 28, margin: '8px 0 6px' }}>Get your instant estimate</h1>
-      <p className="muted" style={{ marginTop: 0 }}>
-        Add a photo of your space and we’ll return an itemized cost range in seconds. Free, no account needed.
-      </p>
-
-      <form onSubmit={submit} style={{ marginTop: 20 }}>
-        <label className="card" style={{ display: 'block', cursor: 'pointer', textAlign: 'center', borderStyle: 'dashed' }}>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            // `capture` hints the rear camera on mobile browsers.
-            capture="environment"
-            style={{ display: 'none' }}
-            onChange={(e) => setFiles(Array.from(e.target.files || []).slice(0, 5))}
-          />
-          {files.length === 0 ? (
-            <span className="muted" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 9a2 2 0 0 1 2-2h1.5l1-1.5h9l1 1.5H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
-                <circle cx="12" cy="13" r="3.5" />
-              </svg>
-              Tap to add up to 5 photos
-            </span>
-          ) : (
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
-              {previews.map((src, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={i} src={src} alt={`Photo ${i + 1}`} style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 10 }} />
-              ))}
-            </div>
-          )}
-        </label>
-
-        <div style={{ marginTop: 16 }}>
-          <label className="muted" style={{ fontSize: 14 }}>Room / project</label>
-          <select
-            value={roomType}
-            onChange={(e) => setRoomType(e.target.value)}
-            style={{ width: '100%', height: 48, borderRadius: 12, border: '1px solid var(--border)', padding: '0 12px', marginTop: 6, fontSize: 16 }}
-          >
-            {ROOM_TYPES.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </div>
-
-        <div style={{ marginTop: 16 }}>
-          <label className="muted" style={{ fontSize: 14 }}>Anything specific? (optional)</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="e.g. replace cabinets and countertops, keep the layout"
-            rows={3}
-            style={{ width: '100%', borderRadius: 12, border: '1px solid var(--border)', padding: 12, marginTop: 6, fontSize: 16, fontFamily: 'inherit', resize: 'vertical' }}
-          />
-        </div>
-
-        {error ? <p style={{ color: '#b91c1c', marginTop: 14 }}>{error}</p> : null}
-
-        <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: 18 }} disabled={status === 'loading'}>
-          {status === 'loading' ? 'Analyzing your photos…' : 'Get my estimate'}
-        </button>
-        <p className="muted" style={{ fontSize: 13, textAlign: 'center', marginTop: 10 }}>
-          Estimates are AI-generated ranges to help you plan — not a quote.
-        </p>
-      </form>
-    </main>
-  );
-}
-
-function ResultView({ result, roomType, onReset }: { result: EstimateResult; roomType: string; onReset: () => void }) {
-  return (
-    <main className="container">
-      <EstimateBreakdown result={result} />
-
-      {/* Pre-launch conversion gate — capture the email now, match them at
-          launch. Carries the room type as context so we know what they want. */}
-      <div style={{ marginTop: 26 }}>
-        <WaitlistForm
-          source="estimate"
-          context={roomType}
-          title="Want a real quote for this?"
-          subtitle="We’re launching soon with vetted local contractors and no spam. Leave your email and we’ll match you the moment we go live in your area."
-          cta="Match me at launch"
-        />
-      </div>
-
-      <button onClick={onReset} className="btn btn-secondary btn-block" style={{ marginTop: 12 }}>
-        Estimate another space
-      </button>
-    </main>
-  );
+  return <EstimateClient />;
 }

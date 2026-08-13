@@ -129,6 +129,70 @@ function listingLapsedEmail({ companyName }) {
   };
 }
 
+// --- Waitlist ---------------------------------------------------------------
+//
+// The one email a pre-launch signup gets. It exists to prove the address works
+// and to set the expectation that nothing else is coming until launch — which
+// is also what the landing page promises, so the copy has to match it.
+// Deliberately has no tracking pixel, no unsubscribe funnel, and no link the
+// reader is expected to click.
+
+// Where the marketing site lives. Falls back to APP_BASE_URL (already set in
+// render.yaml) before the hardcoded default, so a deploy doesn't need a new
+// variable just to get the links right.
+const SITE_URL = process.env.WEB_BASE_URL
+  || process.env.APP_BASE_URL
+  || 'https://www.renovateconnect.com';
+
+function waitlistWelcomeEmail({ role = 'HOMEOWNER' } = {}) {
+  const contractor = role === 'CONTRACTOR';
+
+  const subject = contractor
+    ? `${APP_NAME}: your founding contractor spot is saved`
+    : `You're on the ${APP_NAME} waitlist`;
+
+  const lead = contractor
+    ? `Thanks for claiming a founding spot on ${APP_NAME}. We'll reach out personally `
+      + 'to verify your license and build your profile with you before we open to homeowners.'
+    : `Thanks for joining the ${APP_NAME} waitlist. We'll email you once there are `
+      + 'licensed contractors live in your area — one message, when it actually matters.';
+
+  const points = contractor
+    ? [
+      '$10/month to be listed, with your first month free after approval.',
+      'No per-lead fees and no commission — every job you win is 100% yours.',
+      'Placement is earned through verification and ratings, never sold.',
+    ]
+    : [
+      'Free for homeowners — estimating, browsing, and messaging all cost nothing.',
+      'We never sell or resell your contact details to anyone.',
+      'You hire and pay the contractor directly; we never hold your money.',
+    ];
+
+  const closer = contractor
+    ? `In the meantime, the homeowner-facing estimator is live at ${SITE_URL}/estimate if you want to see what your future customers see.`
+    : `Don't want to wait? The free photo estimator is already live at ${SITE_URL}/estimate — no account needed.`;
+
+  const text = `${lead}\n\n`
+    + points.map((p) => `- ${p}`).join('\n')
+    + `\n\n${closer}\n\n`
+    + `You're getting this because you signed up at ${SITE_URL}. `
+    + "If that wasn't you, ignore this email and you'll hear nothing further.";
+
+  const html = `<p>${lead}</p>`
+    + `<ul>${points.map((p) => `<li>${p}</li>`).join('')}</ul>`
+    + `<p>${closer}</p>`
+    + `<p style="color:#6b7280;font-size:13px">You're getting this because you signed up at `
+    + `<a href="${SITE_URL}">${APP_NAME}</a>. If that wasn't you, ignore this email and `
+    + 'you\'ll hear nothing further.</p>';
+
+  return { subject, text, html };
+}
+
+function sendWaitlistWelcome(to, opts) {
+  return sendEmail({ to, ...waitlistWelcomeEmail(opts) });
+}
+
 function sendListingExpiringNotice(to, opts) {
   return sendEmail({ to, ...listingExpiringEmail(opts) });
 }
@@ -153,8 +217,10 @@ module.exports = {
   sendPasswordResetCode,
   sendListingExpiringNotice,
   sendListingLapsedNotice,
+  sendWaitlistWelcome,
   verificationEmail,
   passwordResetEmail,
   listingExpiringEmail,
   listingLapsedEmail,
+  waitlistWelcomeEmail,
 };

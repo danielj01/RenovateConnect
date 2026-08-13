@@ -7,11 +7,18 @@
 // The public POST is rate-limited per IP (it's an unauthenticated write to the
 // open web). Re-submitting the same email updates the row rather than erroring,
 // so a homeowner hitting "notify me" twice never sees a failure.
+//
+// Joining also sends one role-specific confirmation email via SendGrid
+// (`services/email.js`), stamped on `welcomeSentAt` so a re-submit never
+// re-sends it. Email is a no-op when SendGrid is unconfigured (dev/CI), and a
+// send failure is logged rather than surfaced — a broken mailer must not make a
+// captured signup look like it failed.
 
 const router = require('express').Router();
 const { z } = require('zod');
 const rateLimit = require('express-rate-limit');
 const db = require('../services/db');
+const { sendWaitlistWelcome } = require('../services/email');
 const { authMiddleware, requireRole } = require('../middleware/auth');
 
 const joinLimiter = rateLimit({
@@ -54,6 +61,25 @@ router.post('/', joinLimiter, async (req, res, next) => {
         context: data.context || undefined,
       },
     });
+    // Confirmation email. Sent at most once per address (the row is stamped
+    // only after SendGrid accepts it), and awaited rather than fired and
+    // forgotten so a stamped row always means a real send — but a delivery
+    // failure must never turn a successful signup into an error for the
+    // visitor, so it's caught and logged instead.
+    if (!entry.welcomeSentAt) {
+      try {
+        const sent = await sendWaitlistWelcome(entry.email, { role: entry.role });
+        if (sent?.ok) {
+          await db.waitlistEntry.update({
+            where: { id: entry.id },
+            data: { welcomeSentAt: new Date() },
+          });
+        }
+      } catch (mailErr) {
+        console.error(`[waitlist] welcome email failed for entry ${entry.id}:`, mailErr.message);
+      }
+    }
+
     res.status(201).json({ ok: true, id: entry.id });
   } catch (err) {
     next(err);

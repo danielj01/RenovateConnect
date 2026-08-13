@@ -4,13 +4,13 @@ import { metros, categories } from '@/lib/costData';
 const BASE = 'https://renovateconnect.com';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticPages: MetadataRoute.Sitemap = ['', '/estimate', '/cost', '/privacy', '/terms'].map(
-    (p) => ({
+  const staticPages: MetadataRoute.Sitemap = [
+    '', '/estimate', '/waitlist', '/cost', '/privacy', '/terms',
+  ].map((p) => ({
     url: `${BASE}${p}`,
     changeFrequency: 'weekly',
-      priority: p === '' ? 1 : 0.8,
-    }),
-  );
+    priority: p === '' ? 1 : 0.8,
+  }));
 
   const costPages: MetadataRoute.Sitemap = metros.flatMap((m) =>
     categories.map((c) => ({

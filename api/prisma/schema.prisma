@@ -677,6 +677,10 @@ model WaitlistEntry {
   // Set when we've sent them the launch announcement, so a future blast can
   // skip already-notified entries.
   notifiedAt DateTime?
+  // Set once the "you're on the list" confirmation has actually been accepted
+  // by SendGrid. Joining is idempotent on email, so this — not the insert — is
+  // what keeps a re-submit from re-sending the welcome.
+  welcomeSentAt DateTime?
   createdAt DateTime     @default(now())
 
   @@index([role, createdAt])

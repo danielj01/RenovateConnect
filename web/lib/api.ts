@@ -37,6 +37,13 @@ export interface Business {
   yearsInBusiness: number;
   website?: string | null;
   verified?: boolean;
+  /**
+   * CSLB contractor license number. A public profile is "advertising" under CA
+   * Bus. & Prof. Code § 7030.5, which requires the license number to appear in
+   * it — so this is a compliance field, not a nice-to-have. Required at signup,
+   * hence non-optional on the wire; typed loosely only to survive legacy rows.
+   */
+  licenseNumber?: string | null;
   reviews?: Review[];
   portfolio?: PortfolioProject[];
   shareUrl?: string;
