@@ -42,8 +42,11 @@ services:
         generateValue: true
       - key: APP_BASE_URL
         value: https://renovateconnect.com
+      # Both hosts: the apex 308-redirects to www, so a browser's Origin is
+      # always the www one. app.js pairs www/apex automatically now, but listing
+      # both keeps the intent obvious to whoever reads this next.
       - key: WEB_ORIGINS
-        value: https://renovateconnect.com
+        value: https://renovateconnect.com,https://www.renovateconnect.com
       - key: APNS_PRODUCTION
         value: "true"
       # Shared with the listing-sweep cron below so it can authenticate.

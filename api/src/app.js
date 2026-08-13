@@ -45,9 +45,35 @@ app.use(helmet());
 
 // CORS: native iOS app sends no Origin (allowed), browsers must be on the
 // allowlist. WEB_ORIGINS is a comma-separated list; defaults cover local dev.
-const allowedOrigins = (process.env.WEB_ORIGINS
-  || 'http://localhost:3000,http://localhost:3001')
-  .split(',').map((s) => s.trim()).filter(Boolean);
+//
+// Each entry also admits its www/apex counterpart. This is not convenience —
+// it's a bug fix. renovateconnect.com 308-redirects to www, so every real
+// visitor's Origin is `https://www.renovateconnect.com` while WEB_ORIGINS was
+// set to the apex. The mismatch silently CORS-blocked every browser write
+// (waitlist signups included) with no server-side error to notice. Pairing the
+// two stays within one registrable domain — it is NOT wildcard subdomain
+// matching, so `evil.renovateconnect.com` is still refused.
+function withWwwVariants(origins) {
+  const out = new Set();
+  for (const origin of origins) {
+    out.add(origin);
+    try {
+      const url = new URL(origin);
+      const paired = url.hostname.startsWith('www.')
+        ? url.hostname.slice(4)
+        : `www.${url.hostname}`;
+      out.add(`${url.protocol}//${paired}${url.port ? `:${url.port}` : ''}`);
+    } catch {
+      // Not a parseable URL (e.g. a bare hostname) — keep the literal only.
+    }
+  }
+  return [...out];
+}
+
+const allowedOrigins = withWwwVariants(
+  (process.env.WEB_ORIGINS || 'http://localhost:3000,http://localhost:3001')
+    .split(',').map((s) => s.trim()).filter(Boolean),
+);
 app.use(cors({
   origin(origin, cb) {
     // No Origin header → native app / curl / server-to-server. Allow.
