@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct LeadsView: View {
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var completion: ProfileCompletionStore
     @State private var leads: [Lead] = []
     @State private var isLoading = true
     @State private var loadError: String?
@@ -27,7 +29,12 @@ struct LeadsView: View {
             }
             .background(Color(.systemBackground))
             .navigationTitle("Leads")
-            .task { await load() }
+            .task {
+                await load()
+                if let businessId = auth.currentUser?.business?.id {
+                    await completion.refresh(businessId: businessId)
+                }
+            }
             .refreshable { await load() }
             .sheet(item: $selected) { lead in
                 LeadDetailSheet(lead: lead) { updated in
@@ -82,14 +89,37 @@ struct LeadsView: View {
         }
     }
 
+    // "No leads yet" reads very differently depending on whether the profile
+    // is actually ready to convert a homeowner or still has a blank
+    // portfolio/no verification — in the second case the empty inbox isn't
+    // bad luck, it's the profile not giving anyone a reason to reach out yet.
     private var emptyState: some View {
         VStack(spacing: 12) {
             Image(systemName: "person.2.slash")
                 .font(.system(size: 44)).foregroundStyle(.secondary)
-            Text("No leads yet").font(.headline)
-            Text("When a homeowner contacts you, they'll show up here so you can track them.")
-                .font(.subheadline).foregroundStyle(.secondary)
-                .multilineTextAlignment(.center).padding(.horizontal, 40)
+            if completion.hasLoaded && !completion.isComplete {
+                Text("No leads yet — finish your profile first").font(.headline)
+                    .multilineTextAlignment(.center)
+                Text("A profile with a real project photo and a verified license converts homeowners far more often than a bare one.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center).padding(.horizontal, 40)
+                // Portfolio is the single highest-leverage action, so it's the
+                // one destination this shortcut needs — the fuller checklist
+                // (with verification too) lives on the Dashboard card.
+                NavigationLink {
+                    PortfolioManagerView()
+                } label: {
+                    Text("Finish setting up").font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Theme.primary)
+                .padding(.top, 4)
+            } else {
+                Text("No leads yet").font(.headline)
+                Text("When a homeowner contacts you, they'll show up here so you can track them.")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center).padding(.horizontal, 40)
+            }
         }
     }
 

@@ -14,6 +14,12 @@ struct MainTabView: View {
 
     // First-run welcome flow; flipped true once the user finishes or skips.
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    // One-time Profile Strength interstitial for a new contractor, shown once
+    // right after business setup. Once dismissed it doesn't come back — the
+    // Dashboard's ProfileStrengthCard carries the same nudge afterward for as
+    // long as the profile stays incomplete.
+    @AppStorage("hasSeenProfileChecklist") private var hasSeenProfileChecklist = false
+    @StateObject private var profileCompletion = ProfileCompletionStore.shared
 
     // A tapped push/activity that targets a pushable screen (appointment/quote/
     // business) is presented as a sheet; conversations route via the tab bar.
@@ -42,6 +48,10 @@ struct MainTabView: View {
                 // them behind a one-time setup form.
                 if auth.currentUser?.business == nil {
                     BusinessProfileSetupView()
+                } else if !hasSeenProfileChecklist {
+                    ProfileStrengthChecklistView {
+                        hasSeenProfileChecklist = true
+                    }
                 } else {
                     businessTabs
                 }
@@ -54,6 +64,7 @@ struct MainTabView: View {
         .environmentObject(chat)
         .environmentObject(router)
         .environmentObject(activity)
+        .environmentObject(profileCompletion)
         .task {
             inbox.startPolling()
             activity.startPolling()

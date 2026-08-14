@@ -238,6 +238,7 @@ final class AuthStore: ObservableObject {
         UserDefaults.standard.removeObject(forKey: "aiChatHistory")
         // Re-show the welcome flow for whoever signs in next (role may differ).
         UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
+        UserDefaults.standard.removeObject(forKey: "hasSeenProfileChecklist")
         currentUser = nil
     }
 

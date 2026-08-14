@@ -38,6 +38,9 @@ struct DashboardView: View {
                     }
 
                     delistedBanner
+                    if let business = auth.currentUser?.business {
+                        ProfileStrengthCard(businessId: business.id)
+                    }
                     verificationLink
                     shareProfileCard
                     proCard
