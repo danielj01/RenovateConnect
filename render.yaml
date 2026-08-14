@@ -72,13 +72,16 @@ services:
       # Secrets — set in the Render dashboard.
       - key: ANTHROPIC_API_KEY
         sync: false
-      # Text chat provider (services/aiProvider.js) — used when set, else chat
-      # falls back to Anthropic. Vision (photo estimator) always uses Anthropic
-      # regardless of this, since DeepSeek-class models can't accept images.
+      # Shared key for both AI paths (services/aiProvider.js). Chat only falls
+      # back to Anthropic when this is unset; the photo estimator (vision)
+      # falls back on ANY runtime failure too, not just when unset — see the
+      # comment above estimateRenovationCost in services/ai.js.
       - key: NVIDIA_API_KEY
         sync: false
       - key: NVIDIA_CHAT_MODEL
         value: deepseek-ai/deepseek-v4-flash-0731
+      - key: NVIDIA_VISION_MODEL
+        value: nvidia/nemotron-nano-12b-v2-vl
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET

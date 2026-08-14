@@ -46,44 +46,28 @@ async function callModel(params) {
   }
 }
 
-// Pull the JSON object out of a model response. Tolerates a markdown code
-// fence or stray prose around the object; throws a descriptive error when the
-// response was cut off mid-object (stop_reason max_tokens) so the route layer
-// logs something actionable instead of a bare SyntaxError.
-function parseEstimateJson(response) {
-  const raw = response.content[0].text;
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) {
-    if (response.stop_reason === 'max_tokens') {
-      throw new Error('Estimator response truncated at max_tokens before JSON completed');
-    }
-    throw new Error('Estimator response contained no JSON object');
-  }
-  try {
-    return JSON.parse(raw.slice(start, end + 1));
-  } catch (err) {
-    if (response.stop_reason === 'max_tokens') {
-      throw new Error('Estimator response truncated at max_tokens (invalid JSON)');
-    }
-    throw err;
-  }
-}
+// Shared between both providers so a NVIDIA vs. Anthropic estimate never
+// drifts in what's asked for — only how the request/response is shaped.
+//
+// The explicit "do NOT price furniture/decor" block below exists because of a
+// real, repeatable failure mode found while evaluating free NVIDIA vision
+// models for this feature: given the original, shorter prompt, they'd default
+// to appraising whatever objects were visible in the photo (a bed, a wine
+// rack, decorative jars) instead of pricing renovation work — a bedroom photo
+// came back as "Bed: $500-1000, Fireplace: $500-1000" rather than actual
+// contractor-scoped line items. Rewriting the prompt to explicitly redefine
+// the task and give negative examples fixed it on every model tested (see the
+// NVIDIA_VISION_MODEL comment in render.yaml for the model-selection side of
+// this). Kept on the shared prompt rather than an NVIDIA-only branch because
+// the extra precision doesn't cost Claude anything and this way both
+// providers are held to the same explicit standard.
+const ESTIMATE_SYSTEM_PROMPT = `You are a professional renovation contractor with 20 years of experience, estimating the cost to RENOVATE the room in the photo — that is, the labor and materials cost for construction work: painting, flooring installation or replacement, tiling, cabinetry, countertops, fixture replacement, drywall, lighting installation, and similar contractor work.
 
-async function estimateRenovationCost({ imageBase64Array, roomType, description }) {
-  const imageContent = imageBase64Array.map((b64) => ({
-    type: 'image',
-    source: { type: 'base64', media_type: mediaTypeFromBase64(b64), data: b64 },
-  }));
+Do NOT price or list furniture, decor, artwork, rugs, plants, electronics, or any movable/decorative item visible in the photo — those are not renovation costs, even if they're the most visually prominent thing in the image. For example, if you see a bed, sofa, bar stools, a wine rack, decorative jars, a lamp, or a TV, do NOT list them as line items. Only list construction/renovation work.
 
-  const response = await callModel({
-    model: MODEL,
-    // Detailed estimates (many line items + notes) regularly exceed 1024
-    // tokens — at 1024 the JSON was truncated mid-string and JSON.parse threw,
-    // 500ing every estimate that ran long.
-    max_tokens: 3000,
-    system: `You are a professional renovation cost estimator with 20 years of experience.
-Analyze the provided photos and return a JSON object with this exact shape:
+First silently identify the renovatable surfaces and systems visible (floor, walls, ceiling, cabinetry, countertops, fixtures, tile), then estimate realistic contractor-level costs for renovating them — real material + labor pricing, not retail object prices.
+
+Return a JSON object with this exact shape:
 {
   "summary": "brief description of what you see",
   "lineItems": [
@@ -95,22 +79,121 @@ Analyze the provided photos and return a JSON object with this exact shape:
   "confidence": "low|medium|high",
   "notes": "any caveats or assumptions"
 }
-Return ONLY the JSON, no prose.`,
+Return ONLY the JSON, no prose.`;
+
+function estimatePrompt(roomType, description) {
+  return `Room type: ${roomType || 'unknown'}. Additional context: ${description || 'none provided'}.`;
+}
+
+// Low-level "find the {...} and parse it" shared by both response parsers
+// below. Tolerates a markdown code fence or stray prose around the object.
+function extractJsonBetweenBraces(text) {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) return null;
+  return text.slice(start, end + 1);
+}
+
+// Pull the JSON object out of an Anthropic response. Throws a descriptive
+// error when the response was cut off mid-object (stop_reason max_tokens) so
+// the route layer logs something actionable instead of a bare SyntaxError.
+function parseEstimateJson(response) {
+  const raw = response.content[0].text;
+  const slice = extractJsonBetweenBraces(raw);
+  if (!slice) {
+    if (response.stop_reason === 'max_tokens') {
+      throw new Error('Estimator response truncated at max_tokens before JSON completed');
+    }
+    throw new Error('Estimator response contained no JSON object');
+  }
+  try {
+    return JSON.parse(slice);
+  } catch (err) {
+    if (response.stop_reason === 'max_tokens') {
+      throw new Error('Estimator response truncated at max_tokens (invalid JSON)');
+    }
+    throw err;
+  }
+}
+
+// Same idea, for the OpenAI-shaped { text, truncated } that aiProvider's
+// visionCompletion returns.
+function parseEstimateJsonFromText(text, truncated) {
+  const slice = extractJsonBetweenBraces(text);
+  if (!slice) {
+    if (truncated) throw new Error('Estimator response truncated before JSON completed');
+    throw new Error('Estimator response contained no JSON object');
+  }
+  try {
+    return JSON.parse(slice);
+  } catch (err) {
+    if (truncated) throw new Error('Estimator response truncated (invalid JSON)');
+    throw err;
+  }
+}
+
+async function estimateWithAnthropic({ imageBase64Array, mediaTypes, roomType, description }) {
+  const imageContent = imageBase64Array.map((b64, i) => ({
+    type: 'image',
+    source: { type: 'base64', media_type: mediaTypes[i], data: b64 },
+  }));
+
+  const response = await callModel({
+    model: MODEL,
+    // Detailed estimates (many line items + notes) regularly exceed 1024
+    // tokens — at 1024 the JSON was truncated mid-string and JSON.parse threw,
+    // 500ing every estimate that ran long.
+    max_tokens: 3000,
+    system: ESTIMATE_SYSTEM_PROMPT,
     messages: [
       {
         role: 'user',
-        content: [
-          ...imageContent,
-          {
-            type: 'text',
-            text: `Room type: ${roomType || 'unknown'}. Additional context: ${description || 'none provided'}.`,
-          },
-        ],
+        content: [...imageContent, { type: 'text', text: estimatePrompt(roomType, description) }],
       },
     ],
   });
 
   return parseEstimateJson(response);
+}
+
+// NVIDIA NIM only documents JPEG/PNG support for the vision model — unlike
+// the 4 formats Anthropic accepts (see mediaTypeFromBuffer above), so a
+// GIF/WebP upload skips NVIDIA and goes straight to Anthropic rather than
+// risking an upstream error on an unsupported format.
+const NVIDIA_VISION_SUPPORTED_TYPES = new Set(['image/jpeg', 'image/png']);
+
+async function estimateWithNvidia({ imageBase64Array, mediaTypes, roomType, description }) {
+  const imageDataUrls = imageBase64Array.map((b64, i) => `data:${mediaTypes[i]};base64,${b64}`);
+  const { text, truncated } = await aiProvider.visionCompletion({
+    system: ESTIMATE_SYSTEM_PROMPT,
+    imageDataUrls,
+    prompt: estimatePrompt(roomType, description),
+    maxTokens: 3000,
+  });
+  return parseEstimateJsonFromText(text, truncated);
+}
+
+// NVIDIA (free) is primary; Anthropic is a runtime fallback, not just a
+// config-time one — if NVIDIA is simply unconfigured OR its call fails for
+// any reason (rate limit, format rejection, a retired/renamed model — see the
+// NVIDIA_CHAT_MODEL incident in render.yaml's history), this request still
+// completes instead of 503ing. chatWithAssistant below only falls back when
+// NVIDIA is unconfigured, not on a runtime failure; the estimator gets the
+// stronger guarantee because it's the app's core "aha moment" — a homeowner
+// hitting a dead end here is a much worse outcome than an extra Anthropic call.
+async function estimateRenovationCost({ imageBase64Array, roomType, description }) {
+  const mediaTypes = imageBase64Array.map(mediaTypeFromBase64);
+  const nvidiaCompatible = mediaTypes.every((t) => NVIDIA_VISION_SUPPORTED_TYPES.has(t));
+
+  if (aiProvider.isConfigured() && nvidiaCompatible) {
+    try {
+      return await estimateWithNvidia({ imageBase64Array, mediaTypes, roomType, description });
+    } catch (err) {
+      console.error('[ai] NVIDIA vision failed, falling back to Anthropic:', err && err.message);
+    }
+  }
+
+  return estimateWithAnthropic({ imageBase64Array, mediaTypes, roomType, description });
 }
 
 // The chatbot is pure text, so it can run on any provider. When an
@@ -156,6 +239,7 @@ module.exports = {
   estimateRenovationCost,
   chatWithAssistant,
   parseEstimateJson,
+  parseEstimateJsonFromText,
   mediaTypeFromBase64,
   mediaTypeFromBuffer,
 };
