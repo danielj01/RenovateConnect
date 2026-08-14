@@ -3,6 +3,7 @@ import CoreLocation
 
 struct BusinessSearchView: View {
     @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var router: TabRouter
     @StateObject private var location = LocationManager()
     @State private var query = ""
     @State private var selectedSpecialty: String? = nil
@@ -118,6 +119,24 @@ struct BusinessSearchView: View {
             .onChange(of: selectedSpecialty) {
                 saveState = .idle
                 Task { await search() }
+            }
+            // Hand-off from elsewhere in the app (e.g. "Find contractors for
+            // this project" on an estimate result) — apply once, then clear it
+            // so switching back to this tab later doesn't silently re-apply a
+            // stale filter from an unrelated earlier action.
+            .onChange(of: router.pendingSearchSpecialty) { _, newValue in
+                guard let newValue else { return }
+                // Mirrors the specialty-chip tap handler above — clears stale
+                // results under a cross-fade, then relies on
+                // .onChange(of: selectedSpecialty) to actually run the search,
+                // rather than also triggering it here and double-fetching.
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedSpecialty = newValue
+                    businesses = []
+                    sponsored = []
+                }
+                router.pendingSearchSpecialty = nil
+                saveState = .idle
             }
             .navigationTitle("Explore")
             .toolbar {

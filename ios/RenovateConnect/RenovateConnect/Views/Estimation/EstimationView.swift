@@ -342,6 +342,17 @@ struct EstimationResultView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var router: TabRouter
 
+    // Only pre-filter Explore when the estimate's room type maps onto an
+    // actual contractor trade/specialty — "Kitchen"/"Bathroom"/"Basement" line
+    // up directly with BusinessSearchView's specialty chips, but a room like
+    // "Bedroom" or "Garage" doesn't correspond to one trade, and guessing one
+    // (e.g. defaulting to "Flooring") would misdirect the search rather than
+    // help it. Nil here just means Explore opens unfiltered, same as today.
+    private var matchingSpecialty: String? {
+        guard let roomType = estimation.roomType else { return nil }
+        return ["Kitchen", "Bathroom", "Basement"].first { $0 == roomType }
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -381,6 +392,7 @@ struct EstimationResultView: View {
                 // contractors instead of letting the result dead-end.
                 Section {
                     Button {
+                        router.pendingSearchSpecialty = matchingSpecialty
                         dismiss()
                         router.selection = TabRouter.explore
                     } label: {

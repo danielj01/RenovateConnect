@@ -13,6 +13,13 @@ final class TabRouter: ObservableObject {
 
     @Published var selection: Int = 0
 
+    // Hand-off for a specialty filter to apply the next time BusinessSearchView
+    // observes it — e.g. "Find contractors for this project" after an estimate,
+    // so a homeowner who just estimated a kitchen lands on kitchen contractors
+    // instead of an unfiltered list. Consumed once (set back to nil) so it
+    // doesn't stick around and re-apply on an unrelated later tab switch.
+    @Published var pendingSearchSpecialty: String?
+
     // Client tab bar: Explore(0) · Estimate(1) · AI Chat(2) · Messages(3) · Profile(4)
     static let explore = 0
     static let estimate = 1
