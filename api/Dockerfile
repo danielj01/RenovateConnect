@@ -4,9 +4,11 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Prisma needs OpenSSL on the slim image.
+# Prisma needs OpenSSL on the slim image. curl is needed by the listing-sweep
+# cron (scripts/listing-sweep.sh) — this same image is used for both the web
+# service and the cron job, so it goes here rather than a second Dockerfile.
 RUN apt-get update -y \
-  && apt-get install -y --no-install-recommends openssl \
+  && apt-get install -y --no-install-recommends openssl curl \
   && rm -rf /var/lib/apt/lists/*
 
 # Install deps first for better layer caching.
