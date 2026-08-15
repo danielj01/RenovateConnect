@@ -7,8 +7,12 @@ WORKDIR /app
 # Prisma needs OpenSSL on the slim image. curl is needed by the listing-sweep
 # cron (scripts/listing-sweep.sh) — this same image is used for both the web
 # service and the cron job, so it goes here rather than a second Dockerfile.
+# ca-certificates has to be explicit too: it's normally pulled in as a
+# "Recommends" of curl, which --no-install-recommends deliberately skips —
+# without it curl can't verify TLS certs at all ("error setting certificate
+# file: /etc/ssl/certs/ca-certificates.crt"), so every HTTPS request fails.
 RUN apt-get update -y \
-  && apt-get install -y --no-install-recommends openssl curl \
+  && apt-get install -y --no-install-recommends openssl curl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
 # Install deps first for better layer caching.
