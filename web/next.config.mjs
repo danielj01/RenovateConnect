@@ -19,7 +19,10 @@ const securityHeaders = [
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-  { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+  // camera=(self): the estimator captures photos in-page via getUserMedia, so
+  // this origin needs it. A blanket camera=() would block that outright — mic
+  // and geolocation stay fully denied since nothing here uses them.
+  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=()' },
   {
     key: 'Content-Security-Policy',
     value: [

@@ -5,6 +5,7 @@ import { type EstimateResult } from '@/lib/estimate';
 import { categories, metroBySlug, metros, scaledCost } from '@/lib/costData';
 import { EstimateBreakdown } from '@/components/EstimateBreakdown';
 import { WaitlistForm } from '@/components/WaitlistForm';
+import { CameraCapture } from '@/components/CameraCapture';
 import { BoltIcon, CameraIcon, InfoIcon, ArrowRightIcon } from '@/components/Icons';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
@@ -57,6 +58,28 @@ export function EstimateClient() {
   // Flips once the request has actually landed, so the bar can visibly finish
   // instead of cutting away mid-climb.
   const [loadDone, setLoadDone] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  // Resolved on the client only — checking during render would either mismatch
+  // hydration or, with a typeof-window guard, latch to false forever.
+  const [cameraSupported, setCameraSupported] = useState(false);
+
+  useEffect(() => {
+    setCameraSupported(Boolean(navigator.mediaDevices?.getUserMedia));
+  }, []);
+
+  const atPhotoLimit = files.length >= MAX_PHOTOS;
+
+  /** Both sources append rather than replace, so taking a photo and then
+   *  picking from the library doesn't silently discard the first one. */
+  function addFiles(incoming: File[]) {
+    if (incoming.length === 0) return;
+    setFiles((prev) => [...prev, ...incoming].slice(0, MAX_PHOTOS));
+    setError(null);
+  }
+
+  function removePhoto(index: number) {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }
 
   // Prefill the room from ?room= (the SEO cost pages link in pre-filled). Read
   // on mount via window so the page stays statically rendered.
@@ -189,7 +212,7 @@ export function EstimateClient() {
             textAlign: 'center',
             borderStyle: 'dashed',
             borderWidth: 2,
-            padding: files.length ? 16 : 34,
+            padding: 30,
             background: 'var(--bg-secondary)',
           }}
         >
@@ -197,39 +220,54 @@ export function EstimateClient() {
             type="file"
             accept="image/*"
             multiple
-            // `capture` hints the rear camera on mobile browsers.
-            capture="environment"
             className="visually-hidden"
+            disabled={atPhotoLimit}
             onChange={(e) => {
-              setFiles(Array.from(e.target.files || []).slice(0, MAX_PHOTOS));
-              setError(null);
+              addFiles(Array.from(e.target.files || []));
+              // Reset so re-picking the same file still fires a change.
+              e.target.value = '';
             }}
           />
-          {files.length === 0 ? (
-            <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
-              <span className="feature-icon" style={{ marginBottom: 0 }}><CameraIcon /></span>
-              <strong>Add up to {MAX_PHOTOS} photos</strong>
-              <span className="muted" style={{ fontSize: '0.875rem' }}>
-                Tap to take one or choose from your library
-              </span>
+          <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+            <span className="feature-icon" style={{ marginBottom: 0 }}><CameraIcon /></span>
+            <strong>{atPhotoLimit ? `${MAX_PHOTOS} photos added` : `Add up to ${MAX_PHOTOS} photos`}</strong>
+            <span className="muted" style={{ fontSize: '0.875rem' }}>
+              {atPhotoLimit ? 'Remove one to add another' : 'Choose from your library'}
             </span>
-          ) : (
-            <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
-              {previews.map((src, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={src}
-                  src={src}
-                  alt={`Photo ${i + 1} of the space`}
-                  style={{ width: 76, height: 76, objectFit: 'cover', borderRadius: 'var(--r-sm)' }}
-                />
-              ))}
-              <span className="muted" style={{ fontSize: '0.875rem', width: '100%', marginTop: 8 }}>
-                {files.length} photo{files.length === 1 ? '' : 's'} — tap to change
-              </span>
-            </span>
-          )}
+          </span>
         </label>
+
+        {/* Only offered where a camera is actually reachable. `<input capture>`
+            is deliberately not used: it's ignored on desktop, so it would open
+            a plain file dialog on the one platform with no other way to shoot. */}
+        {cameraSupported ? (
+          <button
+            type="button"
+            className="btn btn-secondary btn-block mt-3"
+            onClick={() => setShowCamera(true)}
+            disabled={atPhotoLimit}
+          >
+            Take a photo
+          </button>
+        ) : null}
+
+        {files.length > 0 ? (
+          <div className="photo-strip mt-4">
+            {previews.map((src, i) => (
+              <span key={src} className="photo-thumb">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={src} alt={`Photo ${i + 1} of the space`} />
+                <button
+                  type="button"
+                  onClick={() => removePhoto(i)}
+                  aria-label={`Remove photo ${i + 1}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         <div className="mt-6">
           <label className="field" htmlFor="room">
@@ -299,6 +337,13 @@ export function EstimateClient() {
         </p>
       </form>
       )}
+
+      {showCamera ? (
+        <CameraCapture
+          onCapture={(file) => addFiles([file])}
+          onClose={() => setShowCamera(false)}
+        />
+      ) : null}
 
       {status === 'error' ? (
         <div className="mt-8">

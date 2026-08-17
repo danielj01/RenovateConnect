@@ -186,7 +186,12 @@ private struct EstimatorFormView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthStore
     @State private var selectedItems: [PhotosPickerItem] = []
+    // One source of truth for both sources. The library picker used to replace
+    // this outright, which would have silently dropped a camera photo the
+    // moment someone also picked from their library — both now append.
     @State private var selectedImages: [UIImage] = []
+    @State private var showCamera = false
+    private let maxPhotos = 5
     @State private var roomType = ""
     // Mid-range by default: the most common choice, and it means the estimate
     // comes back narrow out of the box rather than only once someone finds
@@ -210,22 +215,52 @@ private struct EstimatorFormView: View {
                 EstimateLoadingView(isComplete: $loadingComplete)
             } else {
                 Form {
-                    Section("Photos (up to 5)") {
-                        PhotosPicker(selection: $selectedItems, maxSelectionCount: 5, matching: .images) {
-                            Label("Select photos", systemImage: "photo.badge.plus")
+                    Section("Photos (up to \(maxPhotos))") {
+                        // Hidden in the Simulator and anywhere without a usable
+                        // camera, rather than opening a picker with nothing behind it.
+                        if CameraPicker.isAvailable {
+                            Button { showCamera = true } label: {
+                                Label("Take a photo", systemImage: "camera.fill")
+                            }
+                            .disabled(isPhotoLimitReached)
                         }
-                        .onChange(of: selectedItems) { loadImages() }
+
+                        PhotosPicker(selection: $selectedItems,
+                                     maxSelectionCount: maxPhotos,
+                                     matching: .images) {
+                            Label("Choose from library", systemImage: "photo.on.rectangle.angled")
+                        }
+                        .disabled(isPhotoLimitReached)
+                        .onChange(of: selectedItems) { _, items in
+                            guard !items.isEmpty else { return }
+                            Task { await appendPicked(items) }
+                        }
 
                         if !selectedImages.isEmpty {
-                            ScrollView(.horizontal) {
-                                HStack {
-                                    ForEach(Array(selectedImages.enumerated()), id: \.offset) { _, img in
-                                        Image(uiImage: img)
-                                            .resizable().aspectRatio(contentMode: .fill)
-                                            .frame(width: 80, height: 80)
-                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 10) {
+                                    ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, img in
+                                        ZStack(alignment: .topTrailing) {
+                                            Image(uiImage: img)
+                                                .resizable().aspectRatio(contentMode: .fill)
+                                                .frame(width: 80, height: 80)
+                                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            // Camera shots have no other source
+                                            // of truth to re-pick from, so they
+                                            // need an explicit way out.
+                                            Button {
+                                                selectedImages.remove(at: index)
+                                            } label: {
+                                                Image(systemName: "xmark.circle.fill")
+                                                    .foregroundStyle(.white, .black.opacity(0.6))
+                                            }
+                                            .buttonStyle(.borderless)
+                                            .padding(3)
+                                            .accessibilityLabel("Remove photo \(index + 1)")
+                                        }
                                     }
                                 }
+                                .padding(.vertical, 4)
                             }
                         }
                     }
@@ -271,6 +306,12 @@ private struct EstimatorFormView: View {
         }
         .navigationTitle("New Estimate")
         .navigationBarTitleDisplayMode(.inline)
+        .fullScreenCover(isPresented: $showCamera) {
+            CameraPicker { image in
+                selectedImages = Array((selectedImages + [image]).prefix(maxPhotos))
+            }
+            .ignoresSafeArea()
+        }
         .sheet(item: $estimation, onDismiss: {
             // Once the result's been viewed and closed, pop back to the cost
             // estimator landing page rather than leaving a stale,
@@ -283,16 +324,21 @@ private struct EstimatorFormView: View {
         }
     }
 
-    private func loadImages() {
-        Task {
-            selectedImages = []
-            for item in selectedItems {
-                if let data = try? await item.loadTransferable(type: Data.self),
-                   let img = UIImage(data: data) {
-                    selectedImages.append(img)
-                }
+    private var isPhotoLimitReached: Bool { selectedImages.count >= maxPhotos }
+
+    /// Load the picked library items and append them. `selectedItems` is reset
+    /// afterwards so picking the same photo again still registers as a change
+    /// (same pattern as the portfolio editor).
+    private func appendPicked(_ items: [PhotosPickerItem]) async {
+        var loaded: [UIImage] = []
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self),
+               let img = UIImage(data: data) {
+                loaded.append(img)
             }
         }
+        selectedImages = Array((selectedImages + loaded).prefix(maxPhotos))
+        selectedItems = []
     }
 
     private func submit() async {
