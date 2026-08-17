@@ -179,7 +179,11 @@ private struct EstimatorIntroView: View {
 // MARK: - Estimator form
 
 private struct EstimatorFormView: View {
-    @EnvironmentObject private var notifications: NotificationManager
+    // Pops this view off the NavigationStack it was pushed onto (back to
+    // EstimatorIntroView) — distinct from EstimationResultView's own
+    // \.dismiss, which closes its sheet. SwiftUI resolves each to the right
+    // action for how that particular view was presented.
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var auth: AuthStore
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
@@ -187,66 +191,77 @@ private struct EstimatorFormView: View {
     @State private var description = ""
     @State private var estimation: Estimation?
     @State private var isLoading = false
+    // Flips true once the real network call has actually succeeded, so the
+    // loading screen can visibly finish the bar instead of freezing mid-fill
+    // and vanishing the instant the response lands.
+    @State private var loadingComplete = false
     @State private var error: String?
 
     let roomTypes = ["Kitchen", "Bathroom", "Living Room", "Bedroom", "Basement", "Garage", "Exterior", "Other"]
 
     var body: some View {
-            Form {
-                Section("Photos (up to 5)") {
-                    PhotosPicker(selection: $selectedItems, maxSelectionCount: 5, matching: .images) {
-                        Label("Select photos", systemImage: "photo.badge.plus")
-                    }
-                    .onChange(of: selectedItems) { loadImages() }
+        Group {
+            if isLoading {
+                EstimateLoadingView(isComplete: $loadingComplete)
+            } else {
+                Form {
+                    Section("Photos (up to 5)") {
+                        PhotosPicker(selection: $selectedItems, maxSelectionCount: 5, matching: .images) {
+                            Label("Select photos", systemImage: "photo.badge.plus")
+                        }
+                        .onChange(of: selectedItems) { loadImages() }
 
-                    if !selectedImages.isEmpty {
-                        ScrollView(.horizontal) {
-                            HStack {
-                                ForEach(Array(selectedImages.enumerated()), id: \.offset) { _, img in
-                                    Image(uiImage: img)
-                                        .resizable().aspectRatio(contentMode: .fill)
-                                        .frame(width: 80, height: 80)
-                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                        if !selectedImages.isEmpty {
+                            ScrollView(.horizontal) {
+                                HStack {
+                                    ForEach(Array(selectedImages.enumerated()), id: \.offset) { _, img in
+                                        Image(uiImage: img)
+                                            .resizable().aspectRatio(contentMode: .fill)
+                                            .frame(width: 80, height: 80)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
                                 }
                             }
                         }
                     }
-                }
 
-                Section("Room type") {
-                    Picker("Type", selection: $roomType) {
-                        Text("Select…").tag("")
-                        ForEach(roomTypes, id: \.self) { Text($0).tag($0) }
-                    }
-                }
-
-                Section("Additional details (optional)") {
-                    TextField("Describe what you'd like done…", text: $description, axis: .vertical)
-                        .lineLimit(3...6)
-                }
-
-                if let error {
-                    Section { Text(error).foregroundStyle(.red).font(.caption) }
-                }
-
-                Section {
-                    Button {
-                        Task { await submit() }
-                    } label: {
-                        if isLoading {
-                            HStack { ProgressView(); Text("Analyzing photos…") }
-                        } else {
-                            Text("Get AI estimate")
+                    Section("Room type") {
+                        Picker("Type", selection: $roomType) {
+                            Text("Select…").tag("")
+                            ForEach(roomTypes, id: \.self) { Text($0).tag($0) }
                         }
                     }
-                    .disabled(selectedImages.isEmpty || isLoading)
+
+                    Section("Additional details (optional)") {
+                        TextField("Describe what you'd like done…", text: $description, axis: .vertical)
+                            .lineLimit(3...6)
+                    }
+
+                    if let error {
+                        Section { Text(error).foregroundStyle(.red).font(.caption) }
+                    }
+
+                    Section {
+                        Button("Get AI estimate") {
+                            Task { await submit() }
+                        }
+                        .disabled(selectedImages.isEmpty)
+                    }
                 }
             }
-            .navigationTitle("New Estimate")
-            .navigationBarTitleDisplayMode(.inline)
-            .sheet(item: $estimation) { est in
-                EstimationResultView(estimation: est)
-            }
+        }
+        .navigationTitle("New Estimate")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $estimation, onDismiss: {
+            // Once the result's been viewed and closed, pop back to the cost
+            // estimator landing page rather than leaving a stale,
+            // already-filled-in upload form sitting on the stack — there's no
+            // reason to linger there once you have your number, and starting
+            // a new estimate should start clean.
+            dismiss()
+        }) { est in
+            EstimationResultView(estimation: est)
+        }
     }
 
     private func loadImages() {
@@ -263,6 +278,7 @@ private struct EstimatorFormView: View {
 
     private func submit() async {
         isLoading = true
+        loadingComplete = false
         error = nil
         defer { isLoading = false }
         do {
@@ -272,9 +288,16 @@ private struct EstimatorFormView: View {
             if auth.isLoggedIn {
                 estimation = try await APIService.shared.createEstimation(
                     images: imageData, roomType: rt, description: desc)
-                // A completed estimate is a high-value moment — a good time to prime
-                // notification permission (so we can tell them "your estimate is ready").
-                notifications.considerPriming()
+                // Push priming used to fire right here, but that races another
+                // sheet (EstimationResultView, below) against MainTabView's own
+                // .sheet(isPresented: $notifications.showPriming) — two sheet
+                // presentations from different points in the hierarchy landing
+                // near-simultaneously, which SwiftUI doesn't handle cleanly:
+                // one wins and the other silently never appears (looked like
+                // the estimate "going back to the upload screen" instead of
+                // showing a result). Moved to EstimationResultView's
+                // .onDisappear so it only fires once that sheet is actually
+                // gone, not while it's trying to present.
             } else {
                 // Guest path: run the estimate without an account, wrap the result
                 // in a throwaway Estimation so the result UI is identical.
@@ -289,8 +312,115 @@ private struct EstimatorFormView: View {
                     createdAt: ISO8601DateFormatter().string(from: Date())
                 )
             }
+            // Let the bar visibly reach 100% before this view disappears,
+            // rather than cutting away mid-animation. The animate() loop only
+            // notices isComplete when it wakes from its own 300ms sleep, so
+            // this needs enough margin for that worst case plus the 300ms
+            // fill animation itself — 650ms covers both comfortably.
+            loadingComplete = true
+            try? await Task.sleep(nanoseconds: 650_000_000)
         } catch {
             self.error = error.localizedDescription
+        }
+    }
+}
+
+// MARK: - Loading state
+
+/// A determinate-looking progress bar that isn't actually tracking real
+/// progress (the API gives no intermediate signal) — it glides toward, but
+/// never quite reaches, 93% and holds there for as long as the request takes,
+/// so a slow response (this can run 15–40+ seconds depending on provider)
+/// reads as "still working" instead of frozen. `isComplete` is a binding
+/// rather than a plain value so the "jump to 100%" reaction sees the live
+/// flag, not a stale copy from when the view first appeared.
+///
+/// The climb is ONE continuous `withAnimation` over a long duration, not a
+/// loop of many small ones — re-triggering a fresh ease curve every tick
+/// decelerates to a stop and then jumps into a new one, which reads as
+/// stuttering rather than motion. A single long curve lets SwiftUI
+/// interpolate every frame in between, so it actually glides.
+private struct EstimateLoadingView: View {
+    @Binding var isComplete: Bool
+    @State private var progress: Double = 0
+    @State private var messageIndex = 0
+    @State private var iconPulse = false
+
+    private let messages = [
+        "Analyzing your photos…",
+        "Identifying materials and condition…",
+        "Estimating labor and material costs…",
+        "Pricing out the details…",
+        "Wrapping up your estimate…",
+    ]
+
+    var body: some View {
+        VStack(spacing: 28) {
+            Spacer()
+
+            ZStack {
+                Circle().fill(Theme.primaryLight).frame(width: 90, height: 90)
+                Image(systemName: "sparkles")
+                    .font(.system(size: 36, weight: .semibold))
+                    .foregroundStyle(Theme.primary)
+                    .scaleEffect(iconPulse ? 1.12 : 0.92)
+                    .animation(
+                        .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+                        value: iconPulse
+                    )
+            }
+            .onAppear { iconPulse = true }
+
+            VStack(spacing: 10) {
+                Text(isComplete ? "Done!" : messages[messageIndex])
+                    .font(.headline)
+                    .multilineTextAlignment(.center)
+                    .contentTransition(.opacity)
+                    .animation(.easeInOut(duration: 0.25), value: isComplete)
+                    .animation(.easeInOut(duration: 0.25), value: messageIndex)
+                if !isComplete {
+                    Text("This usually takes under a minute.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .transition(.opacity)
+                }
+            }
+            .frame(height: 50)
+
+            VStack(spacing: 8) {
+                ProgressView(value: progress)
+                    .tint(Theme.primary)
+                    .frame(maxWidth: 260)
+                Text("\(Int(progress * 100))%")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+            Spacer()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(24)
+        .task {
+            // Timed to front-load: ease-out spends most of its motion early,
+            // so a typical ~20s response already reads as mostly-done rather
+            // than sitting in the middle of the bar when it finishes. A
+            // request that runs long just holds near 93% instead of stalling
+            // dead — never claims to be finished before it is.
+            withAnimation(.easeOut(duration: 22)) { progress = 0.93 }
+            await rotateMessages()
+        }
+        .onChange(of: isComplete) { _, done in
+            guard done else { return }
+            withAnimation(.easeOut(duration: 0.3)) { progress = 1.0 }
+        }
+    }
+
+    private func rotateMessages() async {
+        for index in 1..<messages.count {
+            try? await Task.sleep(nanoseconds: 3_200_000_000)
+            if isComplete || Task.isCancelled { return }
+            messageIndex = index
         }
     }
 }
@@ -341,6 +471,8 @@ struct EstimationResultView: View {
     let estimation: Estimation
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var router: TabRouter
+    @EnvironmentObject private var auth: AuthStore
+    @EnvironmentObject private var notifications: NotificationManager
 
     // Only pre-filter Explore when the estimate's room type maps onto an
     // actual contractor trade/specialty — "Kitchen"/"Bathroom"/"Basement" line
@@ -403,6 +535,16 @@ struct EstimationResultView: View {
             }
             .navigationTitle("Estimate")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+        // A completed, viewed estimate is a high-value moment — a good time to
+        // prime notification permission (so we can tell them "your estimate is
+        // ready" on a future one). Fired on disappear, not while this sheet is
+        // presenting: doing it earlier raced this sheet against MainTabView's
+        // own .sheet(isPresented: $notifications.showPriming) — two sheets
+        // from different points in the hierarchy landing at once, which
+        // silently drops one of them instead of showing both in sequence.
+        .onDisappear {
+            if auth.isLoggedIn { notifications.considerPriming() }
         }
     }
 
