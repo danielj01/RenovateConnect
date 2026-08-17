@@ -1,16 +1,29 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { type EstimateResult } from '@/lib/estimate';
 import { categories, metroBySlug, metros, scaledCost } from '@/lib/costData';
 import { EstimateBreakdown } from '@/components/EstimateBreakdown';
 import { WaitlistForm } from '@/components/WaitlistForm';
-import { CameraIcon, InfoIcon, ArrowRightIcon } from '@/components/Icons';
+import { BoltIcon, CameraIcon, InfoIcon, ArrowRightIcon } from '@/components/Icons';
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000').replace(/\/+$/, '');
 
 const ROOM_TYPES = ['Kitchen', 'Bathroom', 'Bedroom', 'Living room', 'Whole home', 'Exterior', 'Other'];
 const MAX_PHOTOS = 5;
+
+const LOADING_MESSAGES = [
+  'Analyzing your photos…',
+  'Identifying materials and condition…',
+  'Estimating labor and material costs…',
+  'Pricing out the details…',
+  'Wrapping up your estimate…',
+];
+/** How long the bar takes to glide to its holding point, in ms. */
+const CLIMB_MS = 22_000;
+/** Where it stops and waits. Never 100 — the request isn't finished yet. */
+const CLIMB_TARGET = 93;
+const MESSAGE_EVERY_MS = 3_200;
 
 /** How the estimate on screen was produced — this drives what we're allowed to claim. */
 type Mode = 'ai' | 'guide';
@@ -24,6 +37,9 @@ export function EstimateClient() {
   const [result, setResult] = useState<EstimateResult | null>(null);
   const [mode, setMode] = useState<Mode>('ai');
   const [error, setError] = useState<string | null>(null);
+  // Flips once the request has actually landed, so the bar can visibly finish
+  // instead of cutting away mid-climb.
+  const [loadDone, setLoadDone] = useState(false);
 
   // Prefill the room from ?room= (the SEO cost pages link in pre-filled). Read
   // on mount via window so the page stays statically rendered.
@@ -66,10 +82,18 @@ export function EstimateClient() {
     };
   }
 
+  /** Let the bar reach 100% and register before the result replaces it. */
+  async function finishLoading() {
+    setLoadDone(true);
+    await new Promise((r) => setTimeout(r, 600));
+    setStatus('done');
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (files.length === 0) { setError('Add at least one photo of the space.'); return; }
     setStatus('loading');
+    setLoadDone(false);
     setError(null);
     try {
       const form = new FormData();
@@ -95,13 +119,13 @@ export function EstimateClient() {
       const data = await res.json();
       setResult(data.result as EstimateResult);
       setMode('ai');
-      setStatus('done');
+      await finishLoading();
     } catch {
       const fallback = guideFallback();
       if (fallback) {
         setResult(fallback);
         setMode('guide');
-        setStatus('done');
+        await finishLoading();
         return;
       }
       setStatus('error');
@@ -114,6 +138,7 @@ export function EstimateClient() {
     setResult(null);
     setError(null);
     setStatus('idle');
+    setLoadDone(false);
     setDescription('');
     setMode('ai');
   }
@@ -125,11 +150,14 @@ export function EstimateClient() {
   return (
     <main className="container" style={{ maxWidth: 640 }}>
       <h1>Get your instant estimate</h1>
-      <p className="lede">
-        Add a photo of the space and we&rsquo;ll return an itemized cost range in
-        seconds. Free, and no account needed.
-      </p>
+      {status !== 'loading' ? (
+        <p className="lede">
+          Add a photo of the space and we&rsquo;ll return an itemized cost range in
+          seconds. Free, and no account needed.
+        </p>
+      ) : null}
 
+      {status === 'loading' ? <EstimateLoading done={loadDone} /> : (
       <form onSubmit={submit} className="mt-8">
         <label
           className="card"
@@ -210,14 +238,17 @@ export function EstimateClient() {
 
         {error ? <p className="form-error" role="alert">{error}</p> : null}
 
-        <button type="submit" className="btn btn-primary btn-block mt-6" disabled={status === 'loading'}>
-          {status === 'loading' ? 'Analyzing your photos…' : 'Get my estimate'}
+        {/* No in-button loading state: the whole form is replaced by
+            <EstimateLoading /> while the request is in flight. */}
+        <button type="submit" className="btn btn-primary btn-block mt-6">
+          Get my estimate
         </button>
         <p className="form-note">
           Estimates are AI-generated planning ranges, not quotes. Photos are used
           for the estimate and not published.
         </p>
       </form>
+      )}
 
       {status === 'error' ? (
         <div className="mt-8">
@@ -231,6 +262,98 @@ export function EstimateClient() {
         </div>
       ) : null}
     </main>
+  );
+}
+
+/**
+ * Progress that isn't real progress — the API returns no intermediate signal.
+ * The bar glides toward, but never reaches, CLIMB_TARGET and holds there for as
+ * long as the request takes, so a slow response reads as "still working" rather
+ * than frozen or finished.
+ *
+ * The climb runs per-frame off one continuous easing curve rather than a series
+ * of stepped CSS transitions — restarting a transition every tick decelerates
+ * to a stop and jump-starts again, which reads as stuttering. Width is written
+ * straight to the node so 60fps updates don't re-render React; the percentage
+ * is state, but React bails on a setState that doesn't change the value, so
+ * that's ~93 renders across the whole run rather than ~1,300.
+ */
+function EstimateLoading({ done }: { done: boolean }) {
+  const fillRef = useRef<HTMLDivElement>(null);
+  const [pct, setPct] = useState(0);
+  const [messageIndex, setMessageIndex] = useState(0);
+  const [reducedMotion] = useState(
+    () => typeof window !== 'undefined'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+
+  useEffect(() => {
+    if (done || reducedMotion) return;
+    const start = performance.now();
+    let frame = 0;
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / CLIMB_MS, 1);
+      const value = (1 - (1 - t) ** 3) * CLIMB_TARGET; // easeOutCubic
+      if (fillRef.current) fillRef.current.style.width = `${value}%`;
+      setPct(Math.round(value));
+      if (t < 1) frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [done, reducedMotion]);
+
+  useEffect(() => {
+    if (done) return;
+    const id = setInterval(
+      () => setMessageIndex((i) => Math.min(i + 1, LOADING_MESSAGES.length - 1)),
+      MESSAGE_EVERY_MS,
+    );
+    return () => clearInterval(id);
+  }, [done]);
+
+  // Reduced motion: step the bar once per stage instead of animating each frame.
+  useEffect(() => {
+    if (!reducedMotion || done) return;
+    const value = ((messageIndex + 1) / LOADING_MESSAGES.length) * CLIMB_TARGET;
+    if (fillRef.current) fillRef.current.style.width = `${value}%`;
+    setPct(Math.round(value));
+  }, [reducedMotion, done, messageIndex]);
+
+  // Landed — close the bar out from wherever the climb reached.
+  useEffect(() => {
+    if (!done) return;
+    if (fillRef.current) {
+      // Literal rather than var(--ease-out) so a CSSOM quirk can't silently
+      // drop the transition and make this snap.
+      fillRef.current.style.transition = 'width 300ms cubic-bezier(0.16, 1, 0.3, 1)';
+      fillRef.current.style.width = '100%';
+    }
+    setPct(100);
+  }, [done]);
+
+  return (
+    <div className="estimate-loading">
+      <span className="feature-icon"><BoltIcon size={24} /></span>
+
+      <div>
+        <p className="loading-headline" aria-live="polite">
+          {done ? 'Done!' : LOADING_MESSAGES[messageIndex]}
+        </p>
+        <p className="loading-sub">{done ? '' : 'This usually takes under a minute.'}</p>
+      </div>
+
+      <div
+        className="progress-track"
+        role="progressbar"
+        aria-label="Estimate progress"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct}
+      >
+        <div className="progress-fill" ref={fillRef} />
+      </div>
+      <p className="progress-pct">{pct}%</p>
+    </div>
   );
 }
 

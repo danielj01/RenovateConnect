@@ -919,6 +919,72 @@ textarea:focus {
   white-space: nowrap;
 }
 
+/* --- Estimate loading ----------------------------------------------------- */
+
+/* The photo estimator can run 15–40s depending on which AI provider answers,
+   which is far too long for a button that just says "Analyzing…". This replaces
+   the form outright while it works. */
+.estimate-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 52px 0 44px;
+  text-align: center;
+}
+
+.estimate-loading .feature-icon {
+  margin-bottom: 0;
+  animation: pulse-soft 1800ms var(--ease) infinite;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { transform: scale(0.94); opacity: 0.86; }
+  50%      { transform: scale(1.06); opacity: 1; }
+}
+
+/* Both lines reserve their height so swapping the stage text mid-run doesn't
+   shift the bar underneath it. */
+.loading-headline {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  min-height: 1.6em;
+}
+
+.loading-sub {
+  margin: 0;
+  font-size: 0.9375rem;
+  color: var(--label-secondary);
+  min-height: 1.5em;
+}
+
+.progress-track {
+  width: 100%;
+  max-width: 280px;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+
+/* Width is driven per-frame from JS, so no transition here by default — one is
+   attached only for the final jump to 100%. */
+.progress-fill {
+  width: 0;
+  height: 100%;
+  background: var(--blue);
+  border-radius: inherit;
+}
+
+.progress-pct {
+  margin: 0;
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.8125rem;
+  color: var(--label-tertiary);
+}
+
 /* --- Motion --------------------------------------------------------------- */
 
 @keyframes rise {
