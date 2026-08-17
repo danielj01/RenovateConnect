@@ -924,12 +924,16 @@ textarea:focus {
 /* The photo estimator can run 15–40s depending on which AI provider answers,
    which is far too long for a button that just says "Analyzing…". This replaces
    the form outright while it works. */
+/* Centres itself: with the page heading hidden during the run, this is the
+   only thing on screen, so anchoring it to the top would leave it stranded. */
 .estimate-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 20px;
-  padding: 52px 0 44px;
+  min-height: 58vh;
+  padding: 32px 0;
   text-align: center;
 }
 

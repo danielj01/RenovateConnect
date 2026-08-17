@@ -149,12 +149,16 @@ export function EstimateClient() {
 
   return (
     <main className="container" style={{ maxWidth: 640 }}>
-      <h1>Get your instant estimate</h1>
+      {/* Heading and lede both drop out while the estimate runs — the loading
+          view is its own full statement and doesn't need a form title over it. */}
       {status !== 'loading' ? (
-        <p className="lede">
-          Add a photo of the space and we&rsquo;ll return an itemized cost range in
-          seconds. Free, and no account needed.
-        </p>
+        <>
+          <h1>Get your instant estimate</h1>
+          <p className="lede">
+            Add a photo of the space and we&rsquo;ll return an itemized cost range in
+            seconds. Free, and no account needed.
+          </p>
+        </>
       ) : null}
 
       {status === 'loading' ? <EstimateLoading done={loadDone} /> : (
