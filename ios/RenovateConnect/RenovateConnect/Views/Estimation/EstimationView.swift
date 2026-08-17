@@ -335,11 +335,8 @@ private struct EstimatorFormView: View {
 /// rather than a plain value so the "jump to 100%" reaction sees the live
 /// flag, not a stale copy from when the view first appeared.
 ///
-/// The climb is ONE continuous `withAnimation` over a long duration, not a
-/// loop of many small ones — re-triggering a fresh ease curve every tick
-/// decelerates to a stop and then jumps into a new one, which reads as
-/// stuttering rather than motion. A single long curve lets SwiftUI
-/// interpolate every frame in between, so it actually glides.
+/// See `climb()` for why the motion is computed here per frame rather than
+/// handed to SwiftUI as one long `withAnimation`.
 private struct EstimateLoadingView: View {
     @Binding var isComplete: Bool
     @State private var progress: Double = 0
@@ -401,28 +398,50 @@ private struct EstimateLoadingView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(24)
-        .task {
-            // Timed to front-load: ease-out spends most of its motion early,
-            // so a typical ~20s response already reads as mostly-done rather
-            // than sitting in the middle of the bar when it finishes. A
-            // request that runs long just holds near 93% instead of stalling
-            // dead — never claims to be finished before it is.
-            withAnimation(.easeOut(duration: 22)) { progress = 0.93 }
-            await rotateMessages()
-        }
+        .task { await climb() }
         .onChange(of: isComplete) { _, done in
             guard done else { return }
             withAnimation(.easeOut(duration: 0.3)) { progress = 1.0 }
         }
     }
 
-    private func rotateMessages() async {
-        for index in 1..<messages.count {
-            try? await Task.sleep(nanoseconds: 3_200_000_000)
-            if isComplete || Task.isCancelled { return }
-            messageIndex = index
+    /// Drives the bar frame by frame off an explicit easing curve rather than
+    /// handing SwiftUI one long `withAnimation`.
+    ///
+    /// That was the original approach and it did not work: `withAnimation` sets
+    /// the state value immediately and only interpolates *animatable rendered
+    /// properties*, so `ProgressView` snapped rather than honouring a
+    /// 22-second curve, and the `Text` percentage — which reads the state
+    /// directly and isn't animatable at all — never moved off its start value.
+    /// Computing the eased value here means the bar and the number are the same
+    /// real state, updated together, which is also exactly how the web
+    /// estimator does it.
+    private func climb() async {
+        let start = Date()
+        while !Task.isCancelled && !isComplete {
+            let elapsed = Date().timeIntervalSince(start)
+            let t = min(elapsed / Self.climbSeconds, 1)
+            // easeOutCubic — front-loaded, so a typical ~20s response already
+            // reads as nearly done rather than sitting mid-bar when it lands.
+            progress = (1 - pow(1 - t, 3)) * Self.climbTarget
+
+            let index = min(Int(elapsed / Self.messageEvery), messages.count - 1)
+            if index != messageIndex {
+                withAnimation(.easeInOut(duration: 0.25)) { messageIndex = index }
+            }
+
+            // Parked at the target. Nothing left to move until the request
+            // lands, which `onChange(of: isComplete)` picks up.
+            if t >= 1 { break }
+            try? await Task.sleep(nanoseconds: 16_000_000) // ~60fps
         }
     }
+
+    /// Seconds to glide from empty to `climbTarget`.
+    private static let climbSeconds: Double = 22
+    /// Where the bar parks and waits. Never 1.0 — the request isn't done yet.
+    private static let climbTarget: Double = 0.93
+    private static let messageEvery: Double = 3.2
 }
 
 /// Loads a web-saved estimate by its share code (the estimator handoff —
