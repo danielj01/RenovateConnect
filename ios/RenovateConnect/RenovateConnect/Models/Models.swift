@@ -72,6 +72,21 @@ enum CostTier: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    /// Concrete materials for the estimator's finish-level picker. "Budget"
+    /// means very different things to different people, so the examples do the
+    /// real work — they mirror FINISH_GUIDANCE in the API's services/ai.js,
+    /// which is what the model actually prices against.
+    var estimateHint: String {
+        switch self {
+        case .low:
+            return "Stock cabinets, laminate counters, vinyl or laminate floors — existing layout stays put."
+        case .medium:
+            return "Quartz counters, semi-custom cabinets, tile or engineered hardwood. Minor layout tweaks."
+        case .high:
+            return "Stone counters, custom cabinetry, designer fixtures. Layout and structural changes in scope."
+        }
+    }
+
     /// Recognize a price keyword typed into the search bar ("high"/"medium"/
     /// "low", "$$$", "budget", "premium", …) and map it to a tier. Mirrors the
     /// server's `tierForQuery` (api/src/services/costTier.js) so the UI can

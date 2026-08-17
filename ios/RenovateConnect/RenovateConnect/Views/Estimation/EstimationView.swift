@@ -188,6 +188,11 @@ private struct EstimatorFormView: View {
     @State private var selectedItems: [PhotosPickerItem] = []
     @State private var selectedImages: [UIImage] = []
     @State private var roomType = ""
+    // Mid-range by default: the most common choice, and it means the estimate
+    // comes back narrow out of the box rather than only once someone finds
+    // this control. Pinning the finish level is what removes most of the
+    // low–high spread (see FINISH_GUIDANCE in the API's services/ai.js).
+    @State private var costTier: CostTier = .medium
     @State private var description = ""
     @State private var estimation: Estimation?
     @State private var isLoading = false
@@ -230,6 +235,20 @@ private struct EstimatorFormView: View {
                             Text("Select…").tag("")
                             ForEach(roomTypes, id: \.self) { Text($0).tag($0) }
                         }
+                    }
+
+                    Section {
+                        Picker("Finish level", selection: $costTier) {
+                            ForEach(CostTier.allCases) { tier in
+                                Text("\(tier.dollars)  \(tier.label)").tag(tier)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
+                    } header: {
+                        Text("Finish level")
+                    } footer: {
+                        Text(costTier.estimateHint)
                     }
 
                     Section("Additional details (optional)") {
@@ -287,7 +306,7 @@ private struct EstimatorFormView: View {
             let desc = description.isEmpty ? nil : description
             if auth.isLoggedIn {
                 estimation = try await APIService.shared.createEstimation(
-                    images: imageData, roomType: rt, description: desc)
+                    images: imageData, roomType: rt, description: desc, costTier: costTier)
                 // Push priming used to fire right here, but that races another
                 // sheet (EstimationResultView, below) against MainTabView's own
                 // .sheet(isPresented: $notifications.showPriming) — two sheet
@@ -302,7 +321,7 @@ private struct EstimatorFormView: View {
                 // Guest path: run the estimate without an account, wrap the result
                 // in a throwaway Estimation so the result UI is identical.
                 let result = try await APIService.shared.guestEstimation(
-                    images: imageData, roomType: rt, description: desc)
+                    images: imageData, roomType: rt, description: desc, costTier: costTier)
                 estimation = Estimation(
                     id: UUID().uuidString,
                     imageUrls: [],

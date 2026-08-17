@@ -63,6 +63,39 @@ describe('estimateRenovationCost routing', () => {
     expect(userMessage.content[1].type).toBe('text');
   });
 
+  test('a costTier puts concrete materials and a tighten-the-range instruction in the prompt', async () => {
+    process.env.NVIDIA_API_KEY = 'nvapi-fake';
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(nvidiaFetchOk(fakeEstimate));
+
+    await ai.estimateRenovationCost({
+      imageBase64Array: [JPEG_B64], roomType: 'Kitchen', costTier: 'LOW',
+    });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const prompt = body.messages.find((m) => m.role === 'user').content
+      .find((c) => c.type === 'text').text;
+
+    // The label alone isn't enough for the model — the materials are the point.
+    expect(prompt).toMatch(/stock cabinets/i);
+    expect(prompt).toMatch(/laminate/i);
+    // …and the whole reason for asking: a narrower low–high spread.
+    expect(prompt).toMatch(/1\.3–1\.4x the low/);
+    // Don't leak a different tier's spec into the same prompt.
+    expect(prompt).not.toMatch(/custom cabinetry/i);
+  });
+
+  test('no costTier leaves the prompt free of finish-level guidance', async () => {
+    process.env.NVIDIA_API_KEY = 'nvapi-fake';
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(nvidiaFetchOk(fakeEstimate));
+
+    await ai.estimateRenovationCost({ imageBase64Array: [JPEG_B64], roomType: 'Kitchen' });
+
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const prompt = body.messages.find((m) => m.role === 'user').content
+      .find((c) => c.type === 'text').text;
+    expect(prompt).not.toMatch(/finish level/i);
+  });
+
   test('falls back to Anthropic when NVIDIA is not configured', async () => {
     delete process.env.NVIDIA_API_KEY;
     mockAnthropicCreate.mockResolvedValueOnce(anthropicResponse(fakeEstimate));

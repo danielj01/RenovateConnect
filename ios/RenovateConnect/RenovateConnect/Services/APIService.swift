@@ -485,7 +485,8 @@ final class APIService {
     }
 
     // Estimations
-    func createEstimation(images: [Data], roomType: String?, description: String?) async throws -> Estimation {
+    func createEstimation(images: [Data], roomType: String?, description: String?,
+                          costTier: CostTier? = nil) async throws -> Estimation {
         let url = base.appendingPathComponent("estimations")
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -504,6 +505,7 @@ final class APIService {
         }
         if let rt = roomType { append("--\(boundary)\r\nContent-Disposition: form-data; name=\"roomType\"\r\n\r\n\(rt)\r\n") }
         if let d = description { append("--\(boundary)\r\nContent-Disposition: form-data; name=\"description\"\r\n\r\n\(d)\r\n") }
+        if let costTier { append("--\(boundary)\r\nContent-Disposition: form-data; name=\"costTier\"\r\n\r\n\(costTier.rawValue)\r\n") }
         append("--\(boundary)--\r\n")
         req.httpBody = body
 
@@ -517,7 +519,8 @@ final class APIService {
     /// Guest (signed-out) estimate. Hits the public endpoint that runs the AI but
     /// persists nothing, and returns just the result. The caller wraps it in a
     /// throwaway Estimation so the same result UI can render it.
-    func guestEstimation(images: [Data], roomType: String?, description: String?) async throws -> EstimationResult {
+    func guestEstimation(images: [Data], roomType: String?, description: String?,
+                         costTier: CostTier? = nil) async throws -> EstimationResult {
         let url = base.appendingPathComponent("estimations/guest")
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
@@ -535,6 +538,7 @@ final class APIService {
         }
         if let rt = roomType { append("--\(boundary)\r\nContent-Disposition: form-data; name=\"roomType\"\r\n\r\n\(rt)\r\n") }
         if let d = description { append("--\(boundary)\r\nContent-Disposition: form-data; name=\"description\"\r\n\r\n\(d)\r\n") }
+        if let costTier { append("--\(boundary)\r\nContent-Disposition: form-data; name=\"costTier\"\r\n\r\n\(costTier.rawValue)\r\n") }
         append("--\(boundary)--\r\n")
         req.httpBody = body
 

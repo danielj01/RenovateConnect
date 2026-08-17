@@ -919,6 +919,82 @@ textarea:focus {
   white-space: nowrap;
 }
 
+/* --- Finish level picker -------------------------------------------------- */
+
+/* fieldset/legend rather than a div so the three options are announced as one
+   labelled group; the real radios stay in the DOM (visually hidden) so keyboard
+   and screen-reader behaviour is the native one. */
+.tier-field {
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+.tier-field legend {
+  padding: 0;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  margin-bottom: 8px;
+}
+
+.tier-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.tier-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 12px 8px;
+  text-align: center;
+  cursor: pointer;
+  border: 1.5px solid var(--separator);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  transition: border-color 140ms var(--ease), background 140ms var(--ease);
+}
+.tier-option:hover { border-color: var(--separator-strong); }
+.tier-option.is-selected {
+  border-color: var(--blue);
+  background: var(--blue-tint);
+}
+/* The input itself is visually hidden, so lift its focus ring onto the tile. */
+.tier-option:has(input:focus-visible) {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+
+.tier-dollars {
+  font-family: var(--font-numeric);
+  font-weight: 700;
+  font-size: 0.9375rem;
+  color: var(--label-tertiary);
+  letter-spacing: 0.02em;
+}
+.tier-option.is-selected .tier-dollars { color: var(--blue-text); }
+
+.tier-label { font-weight: 600; font-size: 0.9375rem; }
+
+.tier-hint {
+  font-size: 0.75rem;
+  line-height: 1.3;
+  color: var(--label-secondary);
+}
+
+.tier-note {
+  margin: 8px 0 0;
+  font-size: 0.8125rem;
+  color: var(--label-secondary);
+}
+
+@media (max-width: 430px) {
+  .tier-group { grid-template-columns: 1fr; }
+  .tier-option { flex-direction: row; flex-wrap: wrap; justify-content: flex-start; text-align: left; gap: 8px; }
+  .tier-hint { width: 100%; }
+}
+
 /* --- Estimate loading ----------------------------------------------------- */
 
 /* The photo estimator can run 15–40s depending on which AI provider answers,

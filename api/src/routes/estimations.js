@@ -43,9 +43,9 @@ router.post('/guest', guestEstimateLimiter, upload.array('images', 5), async (re
       return res.status(400).json({ error: 'At least one image is required' });
     }
 
-    const { roomType, description } = estimateInputSchema.parse(req.body);
+    const { roomType, description, costTier } = estimateInputSchema.parse(req.body);
     const imageBase64Array = req.files.map((f) => f.buffer.toString('base64'));
-    const result = await estimateRenovationCost({ imageBase64Array, roomType, description });
+    const result = await estimateRenovationCost({ imageBase64Array, roomType, description, costTier });
 
     res.status(200).json({ result });
   } catch (err) {
@@ -69,6 +69,10 @@ const shareLimiter = rateLimit({
 const estimateInputSchema = z.object({
   roomType: z.string().max(60).optional(),
   description: z.string().max(2000).optional(),
+  // Finish level the homeowner is planning for. Same LOW/MEDIUM/HIGH tiers as
+  // contractor price level (services/costTier.js) — pinning it is what lets
+  // the model quote a tight range instead of hedging across every spec.
+  costTier: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
 });
 
 // A real estimate serializes to well under 20 KB. Bounding the stored blob
@@ -135,9 +139,9 @@ router.post('/', authMiddleware, upload.array('images', 5), async (req, res, nex
       req.files.map((f) => uploadImage(f.buffer, f.mimetype))
     );
 
-    const { roomType, description } = estimateInputSchema.parse(req.body);
+    const { roomType, description, costTier } = estimateInputSchema.parse(req.body);
     const imageBase64Array = req.files.map((f) => f.buffer.toString('base64'));
-    const result = await estimateRenovationCost({ imageBase64Array, roomType, description });
+    const result = await estimateRenovationCost({ imageBase64Array, roomType, description, costTier });
 
     const estimation = await db.estimation.create({
       data: { userId: req.user.id, imageUrls, roomType, description, result },

@@ -12,6 +12,20 @@ const API_BASE = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:3000
 const ROOM_TYPES = ['Kitchen', 'Bathroom', 'Bedroom', 'Living room', 'Whole home', 'Exterior', 'Other'];
 const MAX_PHOTOS = 5;
 
+/**
+ * Finish level. Shares the LOW/MEDIUM/HIGH vocabulary with contractor price
+ * tier (the API's services/costTier.js) so there's one scale across the app.
+ * Pinning this is what lets the estimator quote a tight range instead of
+ * hedging across every possible spec — the examples are shown because "budget"
+ * means very different things to different people.
+ */
+type CostTier = 'LOW' | 'MEDIUM' | 'HIGH';
+const TIERS: { value: CostTier; dollars: string; label: string; hint: string }[] = [
+  { value: 'LOW', dollars: '$', label: 'Budget', hint: 'Stock cabinets, laminate counters' },
+  { value: 'MEDIUM', dollars: '$$', label: 'Mid-range', hint: 'Quartz counters, semi-custom cabinets' },
+  { value: 'HIGH', dollars: '$$$', label: 'High-end', hint: 'Stone counters, custom cabinetry' },
+];
+
 const LOADING_MESSAGES = [
   'Analyzing your photos…',
   'Identifying materials and condition…',
@@ -31,6 +45,9 @@ type Mode = 'ai' | 'guide';
 export function EstimateClient() {
   const [files, setFiles] = useState<File[]>([]);
   const [roomType, setRoomType] = useState(ROOM_TYPES[0]);
+  // Mid-range by default: the most common choice, and it means the estimate is
+  // narrow out of the box rather than only once someone finds this control.
+  const [costTier, setCostTier] = useState<CostTier>('MEDIUM');
   const [metroSlug, setMetroSlug] = useState('san-francisco');
   const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle');
@@ -99,6 +116,7 @@ export function EstimateClient() {
       const form = new FormData();
       files.slice(0, MAX_PHOTOS).forEach((f) => form.append('images', f));
       form.append('roomType', roomType);
+      form.append('costTier', costTier);
       // The API takes no city field, but `description` feeds the model — and Bay
       // Area labor swings ~15% between these cities, so the city belongs in the
       // prompt rather than only in the offline fallback.
@@ -220,6 +238,34 @@ export function EstimateClient() {
               {ROOM_TYPES.map((r) => <option key={r} value={r}>{r}</option>)}
             </select>
           </label>
+
+          <fieldset className="field tier-field">
+            <legend>Finish level</legend>
+            <div className="tier-group">
+              {TIERS.map((t) => (
+                <label
+                  key={t.value}
+                  className={`tier-option${costTier === t.value ? ' is-selected' : ''}`}
+                >
+                  <input
+                    type="radio"
+                    name="costTier"
+                    value={t.value}
+                    checked={costTier === t.value}
+                    onChange={() => setCostTier(t.value)}
+                    className="visually-hidden"
+                  />
+                  <span className="tier-dollars">{t.dollars}</span>
+                  <span className="tier-label">{t.label}</span>
+                  <span className="tier-hint">{t.hint}</span>
+                </label>
+              ))}
+            </div>
+            <p className="tier-note">
+              Telling us the finish level is the single biggest thing you can do
+              to narrow the range — it&rsquo;s what most of the spread comes from.
+            </p>
+          </fieldset>
 
           <label className="field" htmlFor="metro">
             <span>City</span>

@@ -81,8 +81,42 @@ Return a JSON object with this exact shape:
 }
 Return ONLY the JSON, no prose.`;
 
-function estimatePrompt(roomType, description) {
-  return `Room type: ${roomType || 'unknown'}. Additional context: ${description || 'none provided'}.`;
+// Concrete materials per tier rather than a bare "budget"/"high-end" label —
+// the label alone leaves the actual spec to the model's imagination, which is
+// the thing we're trying to pin down. Keyed by the same LOW/MEDIUM/HIGH tiers
+// used for contractor price level (services/costTier.js) so there's one
+// vocabulary across the app.
+const FINISH_GUIDANCE = {
+  LOW: 'Budget — builder-grade and stock materials: laminate or butcher-block '
+    + 'counters, stock cabinets, vinyl or laminate flooring, basic fixtures. '
+    + 'Assume the existing layout, plumbing, and electrical stay where they are.',
+  MEDIUM: 'Mid-range — quality mid-market materials: quartz counters, '
+    + 'semi-custom cabinets, tile or engineered hardwood, name-brand fixtures. '
+    + 'Minor layout tweaks are fine, but no structural work.',
+  HIGH: 'High-end — premium materials: natural stone counters, custom '
+    + 'cabinetry, hardwood or large-format tile, designer fixtures. Layout '
+    + 'changes, relocated plumbing, and structural work are in scope.',
+};
+
+function estimatePrompt(roomType, description, costTier) {
+  const parts = [
+    `Room type: ${roomType || 'unknown'}.`,
+    `Additional context: ${description || 'none provided'}.`,
+  ];
+
+  const guidance = costTier ? FINISH_GUIDANCE[costTier] : null;
+  if (guidance) {
+    parts.push(
+      `Finish level the homeowner is planning for — ${guidance}`,
+      'Price to that finish level specifically. Because it is pinned, the '
+      + 'largest source of variance in a renovation estimate is already '
+      + 'removed: keep the low–high spread tight (the high should land around '
+      + '1.3–1.4x the low, not several times it) and do not hedge by spanning '
+      + 'other finish levels.',
+    );
+  }
+
+  return parts.join(' ');
 }
 
 // Low-level "find the {...} and parse it" shared by both response parsers
@@ -132,7 +166,7 @@ function parseEstimateJsonFromText(text, truncated) {
   }
 }
 
-async function estimateWithAnthropic({ imageBase64Array, mediaTypes, roomType, description }) {
+async function estimateWithAnthropic({ imageBase64Array, mediaTypes, roomType, description, costTier }) {
   const imageContent = imageBase64Array.map((b64, i) => ({
     type: 'image',
     source: { type: 'base64', media_type: mediaTypes[i], data: b64 },
@@ -148,7 +182,7 @@ async function estimateWithAnthropic({ imageBase64Array, mediaTypes, roomType, d
     messages: [
       {
         role: 'user',
-        content: [...imageContent, { type: 'text', text: estimatePrompt(roomType, description) }],
+        content: [...imageContent, { type: 'text', text: estimatePrompt(roomType, description, costTier) }],
       },
     ],
   });
@@ -162,12 +196,12 @@ async function estimateWithAnthropic({ imageBase64Array, mediaTypes, roomType, d
 // risking an upstream error on an unsupported format.
 const NVIDIA_VISION_SUPPORTED_TYPES = new Set(['image/jpeg', 'image/png']);
 
-async function estimateWithNvidia({ imageBase64Array, mediaTypes, roomType, description }) {
+async function estimateWithNvidia({ imageBase64Array, mediaTypes, roomType, description, costTier }) {
   const imageDataUrls = imageBase64Array.map((b64, i) => `data:${mediaTypes[i]};base64,${b64}`);
   const { text, truncated } = await aiProvider.visionCompletion({
     system: ESTIMATE_SYSTEM_PROMPT,
     imageDataUrls,
-    prompt: estimatePrompt(roomType, description),
+    prompt: estimatePrompt(roomType, description, costTier),
     maxTokens: 3000,
   });
   return parseEstimateJsonFromText(text, truncated);
@@ -181,19 +215,19 @@ async function estimateWithNvidia({ imageBase64Array, mediaTypes, roomType, desc
 // NVIDIA is unconfigured, not on a runtime failure; the estimator gets the
 // stronger guarantee because it's the app's core "aha moment" — a homeowner
 // hitting a dead end here is a much worse outcome than an extra Anthropic call.
-async function estimateRenovationCost({ imageBase64Array, roomType, description }) {
+async function estimateRenovationCost({ imageBase64Array, roomType, description, costTier }) {
   const mediaTypes = imageBase64Array.map(mediaTypeFromBase64);
   const nvidiaCompatible = mediaTypes.every((t) => NVIDIA_VISION_SUPPORTED_TYPES.has(t));
 
   if (aiProvider.isConfigured() && nvidiaCompatible) {
     try {
-      return await estimateWithNvidia({ imageBase64Array, mediaTypes, roomType, description });
+      return await estimateWithNvidia({ imageBase64Array, mediaTypes, roomType, description, costTier });
     } catch (err) {
       console.error('[ai] NVIDIA vision failed, falling back to Anthropic:', err && err.message);
     }
   }
 
-  return estimateWithAnthropic({ imageBase64Array, mediaTypes, roomType, description });
+  return estimateWithAnthropic({ imageBase64Array, mediaTypes, roomType, description, costTier });
 }
 
 // The chatbot is pure text, so it can run on any provider. When an
