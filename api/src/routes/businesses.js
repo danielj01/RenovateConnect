@@ -67,14 +67,71 @@ const searchQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90).optional(),
   lng: z.coerce.number().min(-180).max(180).optional(),
   radiusMiles: z.coerce.number().min(0).max(3000).optional(),
+  recommended: z.enum(['true', 'false']).optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Questionnaire-based recommendation scoring
+// ---------------------------------------------------------------------------
+
+function weightsFromPreferences(prefs) {
+  const w = { rating: 0.25, reviews: 0.25, years: 0.25, budget: 0.25 };
+  if (!prefs) return w;
+
+  const priorities = Array.isArray(prefs.priorities) ? prefs.priorities : [];
+  const bump = 0.3;
+  if (priorities.includes('Top Rated'))        w.rating  = Math.min(1, w.rating  + bump);
+  if (priorities.includes('Most Trusted'))     w.reviews = Math.min(1, w.reviews + bump);
+  if (priorities.includes('Most Experienced')) w.years   = Math.min(1, w.years   + bump);
+  if (priorities.includes('Best Value'))       w.budget  = Math.min(1, w.budget  + bump);
+
+  if (prefs.constructionType === 'New construction') w.years = Math.min(1, w.years + 0.2);
+  if (prefs.scope === 'Full renovation' || prefs.scope === 'New addition') {
+    w.years = Math.min(1, w.years + 0.1);
+  }
+
+  const total = Object.values(w).reduce((a, b) => a + b, 0);
+  if (total > 0) Object.keys(w).forEach((k) => { w[k] /= total; });
+  return w;
+}
+
+function budgetBounds(label) {
+  switch (label) {
+    case 'Under $5k':  return [0,     5000];
+    case '$5k–$20k':   return [5000,  20000];
+    case '$20k–$50k':  return [20000, 50000];
+    case '$50k+':      return [50000, Infinity];
+    default:           return [0, Infinity];
+  }
+}
+
+function scoreBusinessForUser(business, weights, prefs, maxima) {
+  const normalRating  = maxima.rating  > 0 ? business.averageRating  / maxima.rating  : 0;
+  const normalReviews = maxima.reviews > 0 ? business.reviewCount    / maxima.reviews : 0;
+  const normalYears   = maxima.years   > 0 ? business.yearsInBusiness / maxima.years  : 0;
+
+  let budgetFit = 0;
+  if (prefs?.budget && business.portfolio?.length) {
+    const [bMin, bMax] = budgetBounds(prefs.budget);
+    budgetFit = business.portfolio.some(
+      (p) => p.costMin != null && p.costMax != null && p.costMax >= bMin && p.costMin <= bMax,
+    ) ? 1 : 0;
+  }
+
+  return (
+    weights.rating  * normalRating
+    + weights.reviews * normalReviews
+    + weights.years   * normalYears
+    + weights.budget  * budgetFit
+  );
+}
 
 // Public: search businesses
 router.get('/', async (req, res, next) => {
   try {
     const {
       specialty, city, state, q, costTier,
-      page: pageNum, limit: take, lat, lng, radiusMiles,
+      page: pageNum, limit: take, lat, lng, radiusMiles, recommended,
     } = searchQuerySchema.parse(req.query);
     const skip = (pageNum - 1) * take;
 
@@ -179,6 +236,58 @@ router.get('/', async (req, res, next) => {
         }).catch(() => {});
       }
       return res.json({ businesses: pageItems, total: filtered.length, page: pageNum, limit: take, sponsored });
+    }
+
+    // Recommended mode — score a candidate pool using the homeowner's stored
+    // questionnaire preferences, then paginate the ranked result.
+    if (recommended === 'true') {
+      let prefs = null;
+      const header = req.headers.authorization;
+      if (header?.startsWith('Bearer ')) {
+        try {
+          const payload = require('jsonwebtoken').verify(header.slice(7), process.env.JWT_SECRET);
+          const user = await db.user.findUnique({
+            where: { id: payload.id },
+            select: { questionnaireCompleted: true, questionnairePreferences: true },
+          });
+          if (user?.questionnaireCompleted) prefs = user.questionnairePreferences;
+        } catch { /* invalid token — treat as anonymous, use default weights */ }
+      }
+
+      const weights = weightsFromPreferences(prefs);
+      // Fetch candidates with full portfolio for budget scoring; trim to 1 for response.
+      const portfolioInclude = {
+        reviews: { take: 3, orderBy: { createdAt: 'desc' } },
+        portfolio: { where: { approvalStatus: 'APPROVED' }, orderBy: [{ featured: 'desc' }, { createdAt: 'desc' }] },
+      };
+      const [candidates, total] = await Promise.all([
+        db.business.findMany({ where, include: portfolioInclude, take: 200, orderBy: { averageRating: 'desc' } }),
+        db.business.count({ where }),
+      ]);
+
+      const maxima = {
+        rating:  Math.max(...candidates.map((b) => b.averageRating),   0.001),
+        reviews: Math.max(...candidates.map((b) => b.reviewCount),     0.001),
+        years:   Math.max(...candidates.map((b) => b.yearsInBusiness), 0.001),
+      };
+
+      const scored = candidates
+        .map((b) => ({ ...b, _score: scoreBusinessForUser(b, weights, prefs, maxima) }))
+        .sort((a, b) => b._score - a._score);
+
+      const pageItems = scored.slice(skip, skip + take).map((b) => {
+        const trimmed = { ...b, portfolio: b.portfolio?.slice(0, 1) ?? [] };
+        delete trimmed._score;
+        return trimmed;
+      });
+
+      if (pageItems.length > 0) {
+        db.business.updateMany({
+          where: { id: { in: pageItems.map((b) => b.id) } },
+          data: { searchImpressions: { increment: 1 } },
+        }).catch(() => {});
+      }
+      return res.json({ businesses: pageItems, total, page: pageNum, limit: take, sponsored });
     }
 
     const [businesses, total] = await Promise.all([
