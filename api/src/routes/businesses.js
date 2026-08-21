@@ -67,14 +67,80 @@ const searchQuerySchema = z.object({
   lat: z.coerce.number().min(-90).max(90).optional(),
   lng: z.coerce.number().min(-180).max(180).optional(),
   radiusMiles: z.coerce.number().min(0).max(3000).optional(),
+  recommended: z.enum(['true', 'false']).optional(),
 });
+
+// ---------------------------------------------------------------------------
+// Questionnaire-based recommendation scoring
+// ---------------------------------------------------------------------------
+
+function weightsFromPreferences(prefs) {
+  const w = { rating: 0.25, reviews: 0.25, years: 0.25, budget: 0.25 };
+  if (!prefs) return w;
+
+  const priorities = Array.isArray(prefs.priorities) ? prefs.priorities : [];
+  const bump = 0.3;
+  if (priorities.includes('Top Rated'))        w.rating  = Math.min(1, w.rating  + bump);
+  if (priorities.includes('Most Trusted'))     w.reviews = Math.min(1, w.reviews + bump);
+  if (priorities.includes('Most Experienced')) w.years   = Math.min(1, w.years   + bump);
+  if (priorities.includes('Best Value'))       w.budget  = Math.min(1, w.budget  + bump);
+
+  if (prefs.constructionType === 'New construction') w.years = Math.min(1, w.years + 0.2);
+  if (prefs.scope === 'Full renovation' || prefs.scope === 'New addition') {
+    w.years = Math.min(1, w.years + 0.1);
+  }
+
+  const total = Object.values(w).reduce((a, b) => a + b, 0);
+  if (total > 0) Object.keys(w).forEach((k) => { w[k] /= total; });
+  return w;
+}
+
+// Bounds for a budget bucket, or null when the label isn't one we know. The
+// config labels use an en dash; clients that send an ASCII hyphen still match.
+// An unrecognized label MUST return null, not an open range — an open range
+// would score every priced business as a perfect budget fit.
+function budgetBounds(label) {
+  if (typeof label !== 'string') return null;
+  switch (label.replace(/[–—]/g, '-')) {
+    case 'Under $5k': return [0,     5000];
+    case '$5k-$20k':  return [5000,  20000];
+    case '$20k-$50k': return [20000, 50000];
+    case '$50k+':     return [50000, Infinity];
+    default:          return null;
+  }
+}
+
+// costRanges: Map of businessId -> [{ costMin, costMax }] across all approved
+// portfolio projects (the response only carries one hero project, so budget fit
+// is scored from this side table rather than the hydrated relation).
+function scoreBusinessForUser(business, weights, prefs, maxima, costRanges) {
+  const normalRating  = maxima.rating  > 0 ? business.averageRating  / maxima.rating  : 0;
+  const normalReviews = maxima.reviews > 0 ? business.reviewCount    / maxima.reviews : 0;
+  const normalYears   = maxima.years   > 0 ? business.yearsInBusiness / maxima.years  : 0;
+
+  let budgetFit = 0;
+  const bounds = prefs?.budget ? budgetBounds(prefs.budget) : null;
+  if (bounds) {
+    const [bMin, bMax] = bounds;
+    budgetFit = (costRanges.get(business.id) ?? []).some(
+      (p) => p.costMin != null && p.costMax != null && p.costMax >= bMin && p.costMin <= bMax,
+    ) ? 1 : 0;
+  }
+
+  return (
+    weights.rating  * normalRating
+    + weights.reviews * normalReviews
+    + weights.years   * normalYears
+    + weights.budget  * budgetFit
+  );
+}
 
 // Public: search businesses
 router.get('/', async (req, res, next) => {
   try {
     const {
       specialty, city, state, q, costTier,
-      page: pageNum, limit: take, lat, lng, radiusMiles,
+      page: pageNum, limit: take, lat, lng, radiusMiles, recommended,
     } = searchQuerySchema.parse(req.query);
     const skip = (pageNum - 1) * take;
 
@@ -150,6 +216,98 @@ router.get('/', async (req, res, next) => {
     const viewerLat = lat ?? null;
     const viewerLng = lng ?? null;
     const distanceMode = Number.isFinite(viewerLat) && Number.isFinite(viewerLng);
+
+    // Recommended mode — score a candidate pool using the homeowner's stored
+    // questionnaire preferences, then paginate the ranked result. Checked
+    // BEFORE distance mode so `?recommended=true&lat=&lng=` still personalizes;
+    // coordinates narrow the pool here rather than replacing the ranking.
+    if (recommended === 'true') {
+      let prefs = null;
+      const header = req.headers.authorization;
+      if (header?.startsWith('Bearer ')) {
+        try {
+          const payload = require('jsonwebtoken').verify(header.slice(7), process.env.JWT_SECRET);
+          const user = await db.user.findUnique({
+            where: { id: payload.id },
+            select: { questionnaireCompleted: true, questionnairePreferences: true },
+          });
+          if (user?.questionnaireCompleted) prefs = user.questionnairePreferences;
+        } catch { /* invalid token — treat as anonymous, use default weights */ }
+      }
+
+      const weights = weightsFromPreferences(prefs);
+
+      // The pool is capped, so it can't be pre-sorted by a single dimension:
+      // ordering by rating alone would cut a 35-year contractor with no reviews
+      // before the "Most Experienced" weight could ever reach them. Take the
+      // top slice of each scored dimension and union them instead.
+      const POOL_PER_DIMENSION = 200;
+      const poolOrderings = [
+        { averageRating: 'desc' },
+        { reviewCount: 'desc' },
+        { yearsInBusiness: 'desc' },
+      ];
+      const pools = await Promise.all(poolOrderings.map((orderBy) => db.business.findMany({
+        where, include, take: POOL_PER_DIMENSION, orderBy,
+      })));
+      const byId = new Map();
+      pools.flat().forEach((b) => { if (!byId.has(b.id)) byId.set(b.id, b); });
+      let candidates = [...byId.values()];
+
+      // Coordinates given alongside ?recommended=true: annotate distance and
+      // apply the radius filter, but keep the personalized ranking.
+      if (distanceMode) {
+        const radius = radiusMiles ?? null;
+        candidates = candidates.map((b) => ({
+          ...b,
+          distanceMiles: (b.lat != null && b.lng != null)
+            ? Math.round(milesBetween(viewerLat, viewerLng, b.lat, b.lng) * 10) / 10
+            : null,
+        }));
+        if (radius != null) {
+          candidates = candidates.filter((b) => b.distanceMiles != null && b.distanceMiles <= radius);
+        }
+      }
+
+      // Budget fit needs every approved project's cost range, but the response
+      // only carries one hero project — pull the ranges as a narrow side query
+      // instead of hydrating full portfolio rows for the whole pool.
+      const costRanges = new Map();
+      if (prefs?.budget && candidates.length > 0) {
+        const rows = await db.portfolioProject.findMany({
+          where: { businessId: { in: candidates.map((b) => b.id) }, approvalStatus: 'APPROVED' },
+          select: { businessId: true, costMin: true, costMax: true },
+        });
+        rows.forEach((r) => {
+          if (!costRanges.has(r.businessId)) costRanges.set(r.businessId, []);
+          costRanges.get(r.businessId).push(r);
+        });
+      }
+
+      const maxima = {
+        rating:  Math.max(...candidates.map((b) => b.averageRating),   0.001),
+        reviews: Math.max(...candidates.map((b) => b.reviewCount),     0.001),
+        years:   Math.max(...candidates.map((b) => b.yearsInBusiness), 0.001),
+      };
+
+      const scored = candidates
+        .map((b) => ({ b, score: scoreBusinessForUser(b, weights, prefs, maxima, costRanges) }))
+        .sort((x, y) => y.score - x.score)
+        .map((x) => x.b);
+
+      const pageItems = scored.slice(skip, skip + take);
+      if (pageItems.length > 0) {
+        db.business.updateMany({
+          where: { id: { in: pageItems.map((b) => b.id) } },
+          data: { searchImpressions: { increment: 1 } },
+        }).catch(() => {});
+      }
+      // total is the ranked pool size, not a raw table count — pagination runs
+      // over `scored`, so a larger count would hand the client empty pages.
+      return res.json({
+        businesses: pageItems, total: scored.length, page: pageNum, limit: take, sponsored,
+      });
+    }
 
     if (distanceMode) {
       const radius = radiusMiles ?? null;

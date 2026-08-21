@@ -31,6 +31,7 @@ const reportRoutes = require('./routes/reports');
 const blockRoutes = require('./routes/blocks');
 const verificationDocumentsRoutes = require('./routes/verificationDocuments');
 const internalRoutes = require('./routes/internal');
+const questionnaireBundlesRoutes = require('./routes/questionnaireBundles');
 
 const { assertStorageConfigured } = require('./services/storage');
 const { assertEmailConfigured } = require('./services/email');
@@ -123,6 +124,7 @@ app.use('/reports', reportRoutes);
 app.use('/blocks', blockRoutes);
 // Ops-only, key-guarded (cron-driven). 404s entirely when INTERNAL_API_KEY is unset.
 app.use('/internal', internalRoutes);
+app.use('/questionnaire-bundles', questionnaireBundlesRoutes);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 

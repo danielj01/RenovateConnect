@@ -129,6 +129,12 @@ model User {
   passwordResetCodeHash  String?
   passwordResetExpiresAt DateTime?
 
+  // Onboarding questionnaire — set once after the homeowner completes the
+  // wizard. preferences holds the raw answers keyed by question id so the
+  // scoring layer and AI chat can read them without re-parsing.
+  questionnaireCompleted   Boolean @default(false)
+  questionnairePreferences Json?
+
   business     Business?
   sentMessages     Message[]   @relation("SentMessages")
   conversations    Conversation[] @relation("ClientConversations")

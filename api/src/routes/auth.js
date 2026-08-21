@@ -149,7 +149,7 @@ async function findOrCreateSocialUser({ email, name }) {
 // Answer a social sign-in with the same token payload as /login.
 async function socialSignIn(res, { email, name }) {
   const user = await findOrCreateSocialUser({ email, name });
-  res.json({ token: signToken(user), user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+  res.json({ token: signToken(user), user: { id: user.id, email: user.email, name: user.name, role: user.role, questionnaireCompleted: user.questionnaireCompleted } });
 }
 
 router.post('/register', authLimiter, async (req, res, next) => {
@@ -217,7 +217,7 @@ router.post('/login', authLimiter, async (req, res, next) => {
         email: user.email,
       });
     }
-    res.json({ token: signToken(user), user: { id: user.id, email: user.email, name: user.name, role: user.role } });
+    res.json({ token: signToken(user), user: { id: user.id, email: user.email, name: user.name, role: user.role, questionnaireCompleted: user.questionnaireCompleted } });
   } catch (err) {
     next(err);
   }
@@ -244,7 +244,7 @@ router.post('/verify-email', authLimiter, async (req, res, next) => {
       where: { id: user.id },
       data: { emailVerified: true, emailVerifyCodeHash: null, emailVerifyExpiresAt: null },
     });
-    res.json({ token: signToken(updated), user: { id: updated.id, email: updated.email, name: updated.name, role: updated.role } });
+    res.json({ token: signToken(updated), user: { id: updated.id, email: updated.email, name: updated.name, role: updated.role, questionnaireCompleted: updated.questionnaireCompleted } });
   } catch (err) {
     next(err);
   }
@@ -326,7 +326,7 @@ router.post('/reset-password', authLimiter, async (req, res, next) => {
         emailVerifyExpiresAt: null,
       },
     });
-    res.json({ token: signToken(updated), user: { id: updated.id, email: updated.email, name: updated.name, role: updated.role } });
+    res.json({ token: signToken(updated), user: { id: updated.id, email: updated.email, name: updated.name, role: updated.role, questionnaireCompleted: updated.questionnaireCompleted } });
   } catch (err) {
     next(err);
   }
