@@ -142,6 +142,50 @@ describe('POST /questionnaire-bundles/responses — validation', () => {
     expect(res.body.error).toMatch(/specialty/);
   });
 
+  test('rejects more selections than maxSelections', async () => {
+    const { token } = await createClient();
+    // 'priorities' caps at 2 — all four would normalize back to default weights
+    const res = await request(app)
+      .post('/questionnaire-bundles/responses')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ answers: { priorities: ['Top Rated', 'Best Value', 'Most Trusted', 'Most Experienced'] } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/at most 2/);
+  });
+
+  test('rejects a value that is not one of the question options', async () => {
+    const { token } = await createClient();
+    const res = await request(app)
+      .post('/questionnaire-bundles/responses')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ answers: { specialty: 'Underwater Basket Weaving' } });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not an allowed option/);
+  });
+
+  test('rejects a budget label with the wrong dash character', async () => {
+    const { token } = await createClient();
+    // ASCII hyphen instead of the config's en dash — must not silently store
+    const res = await request(app)
+      .post('/questionnaire-bundles/responses')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ answers: { budget: '$5k-$20k' } });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('rejects a location object for a non-location question', async () => {
+    const { token } = await createClient();
+    const res = await request(app)
+      .post('/questionnaire-bundles/responses')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ answers: { specialty: { city: 'Austin' } } });
+
+    expect(res.status).toBe(400);
+  });
+
   test('rejects missing answers field', async () => {
     const { token } = await createClient();
     const res = await request(app)
