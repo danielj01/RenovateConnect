@@ -20,13 +20,19 @@ final class APIService {
     static let shared = APIService()
 
     #if DEBUG
-    // Dev server on the Mac, addressed by its mDNS (.local) hostname instead of
-    // a hard-coded LAN IP. The hostname resolves to whatever IP the router
-    // currently assigns, so switching WiFi networks no longer breaks the app
-    // (the IP changes; the hostname doesn't). Both devices must be on the same
-    // network. Simulator can also use http://localhost:3000.
-    // To find this name on the Mac: `scutil --get LocalHostName` (+ ".local").
-    private let base = URL(string: "http://Daniels-MacBook-Air-204.local:3000")!
+    #if targetEnvironment(simulator)
+    // The Simulator shares the Mac's network stack, so localhost IS the Mac.
+    // Preferred over the .local name because macOS renumbers that on hostname
+    // collisions — it silently drifted from -204 to -235 and every request in
+    // the app timed out against a host that no longer existed.
+    private let base = URL(string: "http://localhost:3000")!
+    #else
+    // Physical device on the same WiFi: reach the Mac by its mDNS (.local)
+    // name rather than a hard-coded LAN IP, so a new DHCP lease doesn't break
+    // it. The name itself can still drift (see above) — check the current one
+    // with `scutil --get LocalHostName` and update here if requests hang.
+    private let base = URL(string: "http://Daniels-MacBook-Air-235.local:3000")!
+    #endif
     #else
     // Production API (Render service from render.yaml), served via the
     // custom domain now that DNS/TLS are set up (see LAUNCH_READINESS.md).
