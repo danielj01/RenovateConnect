@@ -1,9 +1,10 @@
-// storage.uploadFile() URL precedence. Regression for the dev-mode bug where
-// the request-derived host (e.g. http://192.168.x:3000) got baked into stored
-// image URLs — when the Mac moved to a different WiFi, every previously-
-// uploaded image broke because the URL pointed at an IP the phone could no
-// longer reach. PUBLIC_BASE_URL now wins over the request-derived host so
-// the URL stays stable regardless of which network the dev server is on.
+// storage.uploadFile() must never persist a hostname. Regression for the
+// dev-mode bug where the request-derived host (e.g. http://192.168.x:3000, or
+// the Mac's .local name) got baked into stored image URLs — when the Mac moved
+// to a different WiFi, every previously-uploaded image broke, because the row
+// pointed at an address the phone could no longer reach. Local uploads are now
+// stored root-relative and made absolute per-request on the way out; see
+// middleware/absoluteUploadUrls.js.
 
 const fs = require('fs');
 const path = require('path');
@@ -28,26 +29,27 @@ afterEach(() => {
   else process.env.PUBLIC_BASE_URL = savedEnv;
 });
 
-describe('storage.uploadFile URL precedence', () => {
-  test('falls back to the request-derived host when PUBLIC_BASE_URL is unset', async () => {
+describe('storage.uploadFile local fallback', () => {
+  test('returns a root-relative path, not an absolute URL', async () => {
+    delete process.env.PUBLIC_BASE_URL;
+    const url = await uploadFile(Buffer.from('x'), 'image/jpeg');
+    expect(url).toMatch(/^\/uploads\/[\w-]+\.jpg$/);
+    cleanupNewest();
+  });
+
+  test('PUBLIC_BASE_URL does not leak into the stored value', async () => {
+    process.env.PUBLIC_BASE_URL = 'http://api.example.test:3000';
+    const url = await uploadFile(Buffer.from('x'), 'image/jpeg');
+    expect(url.startsWith('/uploads/')).toBe(true);
+    expect(url).not.toContain('api.example.test');
+    cleanupNewest();
+  });
+
+  test('an extra base-url argument is ignored rather than baked in', async () => {
     delete process.env.PUBLIC_BASE_URL;
     const url = await uploadFile(Buffer.from('x'), 'image/jpeg', 'http://192.168.1.5:3000');
-    expect(url.startsWith('http://192.168.1.5:3000/uploads/')).toBe(true);
-    cleanupNewest();
-  });
-
-  test('PUBLIC_BASE_URL wins over the request-derived host', async () => {
-    process.env.PUBLIC_BASE_URL = 'http://api.example.test:3000';
-    const url = await uploadFile(Buffer.from('x'), 'image/jpeg', 'http://192.168.1.5:3000');
-    expect(url.startsWith('http://api.example.test:3000/uploads/')).toBe(true);
-    cleanupNewest();
-  });
-
-  test('trailing slashes on PUBLIC_BASE_URL are stripped', async () => {
-    process.env.PUBLIC_BASE_URL = 'http://api.example.test:3000///';
-    const url = await uploadFile(Buffer.from('x'), 'image/jpeg', 'http://ignored:3000');
-    expect(url.startsWith('http://api.example.test:3000/uploads/')).toBe(true);
-    expect(url).not.toContain('////');
+    expect(url).not.toContain('192.168.1.5');
+    expect(url.startsWith('/uploads/')).toBe(true);
     cleanupNewest();
   });
 });

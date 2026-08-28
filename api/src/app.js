@@ -8,6 +8,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const { globalLimiter } = require('./middleware/rateLimit');
+const absoluteUploadUrls = require('./middleware/absoluteUploadUrls');
 
 const authRoutes = require('./routes/auth');
 const businessRoutes = require('./routes/businesses');
@@ -95,6 +96,11 @@ app.use(express.json({ limit: '10mb' }));
 // Locally-stored uploads (avatars, portfolio photos) when S3 isn't in use.
 // Mounted before the rate limiter so loading images doesn't burn the quota.
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+
+// Locally-stored uploads are persisted as root-relative "/uploads/<file>"
+// paths so no hostname ever lands in the database; expand them into absolute
+// URLs against this request's host on the way out.
+app.use(absoluteUploadUrls);
 
 // Baseline API rate limit (per-user when authed, per-IP otherwise). Stripe
 // webhooks are mounted above this so Stripe is never throttled. Stricter

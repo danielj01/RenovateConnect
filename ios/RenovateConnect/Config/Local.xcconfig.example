@@ -1,0 +1,23 @@
+// Per-developer overrides for the Debug build. NOT committed.
+//
+//   cp Config/Local.xcconfig.example Config/Local.xcconfig
+//
+// then edit the host below and rebuild. Config/Local.xcconfig is gitignored;
+// never commit a machine name or LAN IP.
+//
+// You only need this for running on a physical device over the LAN. In the
+// Simulator, leave it unset — the app defaults to http://localhost:3000.
+//
+// Find your Mac's mDNS name (prefer this over a LAN IP; the IP changes when
+// the router reassigns the lease, the name does not):
+//
+//   scutil --get LocalHostName        # -> "Your-MacBook-Air-123"
+//                                     #    use "Your-MacBook-Air-123.local"
+//
+// Both devices must be on the same WiFi network, and the API must be bound to
+// 0.0.0.0 (not 127.0.0.1) so it accepts connections from off-host.
+//
+// NOTE: xcconfig treats "//" as the start of a comment, even mid-value, so the
+// scheme separator has to be spelled through a variable. Keep RC_SLASH.
+RC_SLASH = /
+API_BASE_URL = http:$(RC_SLASH)$(RC_SLASH)YOUR-MAC-NAME.local:3000

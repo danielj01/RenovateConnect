@@ -266,9 +266,8 @@ router.post('/:id/messages', authMiddleware, upload.array('images', 5), async (r
       return res.status(403).json({ error: 'Cannot message this user' });
     }
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
     const imageUrls = hasImages
-      ? await Promise.all(req.files.map((f) => uploadImage(f.buffer, f.mimetype, baseUrl)))
+      ? await Promise.all(req.files.map((f) => uploadImage(f.buffer, f.mimetype)))
       : [];
 
     const message = await db.message.create({

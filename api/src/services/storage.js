@@ -59,11 +59,18 @@ function extFor(mimetype) {
   }
 }
 
-// Persist a file and return a URL that can be loaded back. Prefers S3; falls
-// back to local disk. `baseUrl` (e.g. "http://192.168.1.5:3000") is used to
-// build an absolute URL for the local fallback so devices on the LAN can fetch
-// it — pass `${req.protocol}://${req.get('host')}` from the route.
-async function uploadFile(buffer, mimetype, baseUrl) {
+// Persist a file and return a URL that can be loaded back. S3 returns an
+// absolute https URL; the local-disk fallback returns a ROOT-RELATIVE path
+// ("/uploads/<file>").
+//
+// The relative form is deliberate. Building an absolute URL here baked
+// whatever host the upload request happened to arrive on — a Mac LAN IP, a
+// .local hostname — into the database row, so every stored image broke the
+// moment that machine changed networks, and was unreachable from any other
+// machine forever. A relative path is host-agnostic; the absoluteUploadUrls
+// middleware expands it per-request on the way out, against the host the
+// client actually reached. Callers pass no base URL.
+async function uploadFile(buffer, mimetype) {
   const file = `${crypto.randomUUID()}.${extFor(mimetype)}`;
   const key = `uploads/${file}`;
 
@@ -84,13 +91,7 @@ async function uploadFile(buffer, mimetype, baseUrl) {
 
   fs.mkdirSync(LOCAL_DIR, { recursive: true });
   fs.writeFileSync(path.join(LOCAL_DIR, file), buffer);
-  // PUBLIC_BASE_URL wins over the request-derived host so the stored URL
-  // doesn't bake in the Mac's current LAN IP. Set it in .env to your dev IP
-  // (e.g. http://10.0.0.152:3000) and you can hop between WiFi networks
-  // without re-uploading every image — or, better, point it at the deployed
-  // staging URL.
-  const base = (process.env.PUBLIC_BASE_URL || baseUrl || '').replace(/\/+$/, '');
-  return `${base}/${key}`;
+  return `/${key}`;
 }
 
 // Backwards-compatible alias — existing image upload callers passed image

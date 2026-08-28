@@ -331,10 +331,17 @@ Full detail + primary sources: see the memory file
   Commit trailer: `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`.
 - **SwiftUI gotcha:** heavy view bodies hit "compiler unable to type-check in
   reasonable time" — extract into `@ViewBuilder` helpers / ViewModifiers.
-- **Dev API host:** addressed by the Mac's mDNS hostname
-  (`Daniels-MacBook-Air-204.local:3000`) in both the iOS DEBUG base URL and
-  `api/.env` `PUBLIC_BASE_URL` — survives WiFi changes. Don't hardcode a raw IP.
-  Restart `npm run dev` after `.env` changes.
+- **Dev API host:** never hardcoded — not in Swift, not in a committed config.
+  The iOS DEBUG base URL comes from `API_BASE_URL` in
+  `ios/RenovateConnect/Config/Local.xcconfig` (gitignored; copy
+  `Local.xcconfig.example`), and defaults to `http://localhost:3000` when
+  unset, which is all the Simulator needs. Set it only for on-device LAN
+  testing, using the mDNS name from `scutil --get LocalHostName` plus `.local`
+  rather than a raw IP. See BUILD_GUIDE.md section 4.4. Uploads no longer
+  persist a host at all (root-relative `/uploads/<file>`, expanded per-request
+  by `api/src/middleware/absoluteUploadUrls.js`), so `PUBLIC_BASE_URL` only
+  affects the URLs a response renders. Restart `npm run dev` after `.env`
+  changes.
 - **Prisma:** schema changes need both a schema edit AND a hand-written migration
   in `api/prisma/migrations/<ts>_name/migration.sql` (prod runs
   `prisma migrate deploy`; tests use `db push`).

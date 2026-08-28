@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		CE3DDCFB2FC134B9008FAE4F /* RenovateConnect.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RenovateConnect.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		CE3DDD0A2FC134C4008FAE4F /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -33,6 +34,7 @@
 			isa = PBXGroup;
 			children = (
 				CE3DDCFD2FC134B9008FAE4F /* RenovateConnect */,
+				CE3DDD0B2FC134C4008FAE4F /* Config */,
 				CE3DDCFC2FC134B9008FAE4F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +45,14 @@
 				CE3DDCFB2FC134B9008FAE4F /* RenovateConnect.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		CE3DDD0B2FC134C4008FAE4F /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				CE3DDD0A2FC134C4008FAE4F /* Debug.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -246,6 +256,7 @@
 		};
 		CE3DDD072FC134C4008FAE4F /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = CE3DDD0A2FC134C4008FAE4F /* Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -259,7 +270,6 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Used to find renovation contractors near you and sort them by distance.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -295,7 +305,6 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Used to find renovation contractors near you and sort them by distance.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UIBackgroundModes = "remote-notification";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";

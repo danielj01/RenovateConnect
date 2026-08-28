@@ -495,7 +495,7 @@ the URLSession dance and decodes JSON:
 ```swift
 class APIService {
     static let shared = APIService()
-    private let base = URL(string: "http://192.168.11.212:3000")!
+    private let base = APIService.debugBaseURL()   // see "Where the dev host comes from" below
     var token: String?
 
     private func request<T: Decodable>(
@@ -529,6 +529,47 @@ A few patterns to call out:
   `let leads: [Lead] = try await request("leads")`.
 - **`Encodable` body parameter** lets us pass any struct, array, or
   `[String: String]` dictionary as the body without overloads.
+
+**Where the dev host comes from.** `base` is not a literal. Hardcoding a dev
+hostname is how this file kept breaking: the Mac gets renamed (or the router
+hands out a new lease), the committed name stops resolving, and every DEBUG
+build fails for everyone, not just the person who set it. So the value travels
+in from the build, never the source:
+
+```
+Config/Local.xcconfig  (gitignored, per developer)
+  API_BASE_URL = http://your-mac.local:3000
+        ↓  #include? — optional, absent on a fresh checkout
+Config/Debug.xcconfig  (committed, base config of the Debug target)
+  API_BASE_URL =                       ← empty default
+  INFOPLIST_FILE = Config/Info.plist
+        ↓  $(API_BASE_URL) expanded at build time
+Config/Info.plist      (merged into the Info.plist Xcode generates)
+  APIBaseURL = <the URL, or "">
+        ↓  Bundle.main.object(forInfoDictionaryKey:)
+APIService.debugBaseURL()
+  empty or unparseable → http://localhost:3000
+```
+
+Consequences worth knowing:
+
+- **The Simulator needs no setup.** It shares the Mac's network stack, so the
+  `http://localhost:3000` fallback just works. Leave `Local.xcconfig` absent.
+- **A device needs `Local.xcconfig`.** Use the mDNS name from
+  `scutil --get LocalHostName` plus `.local` rather than a LAN IP — the IP
+  changes when the lease is reassigned, the name doesn't. See the README.
+- **`//` is a comment in xcconfig, even mid-value.** Writing
+  `API_BASE_URL = http://host:3000` silently yields `http:`. The example file
+  spells the separator through `$(RC_SLASH)`; keep that. `debugBaseURL()`
+  rejects a URL with no host and falls back rather than failing every request
+  with something cryptic.
+- **The custom key needs the partial plist.** Xcode's Info.plist generator only
+  honours keys it recognises and silently drops an `INFOPLIST_KEY_APIBaseURL`,
+  which is why `Config/Info.plist` exists. `GENERATE_INFOPLIST_FILE` stays
+  `YES`; Xcode merges the two.
+- **Release is untouched.** `Debug.xcconfig` is the base config of the Debug
+  build only, so the shipped Info.plist has no `APIBaseURL` key and the `#else`
+  branch keeps its `https://api.renovateconnect.com` literal.
 
 For multipart uploads we drop down to manual URLRequest assembly because
 JSON encoders don't speak multipart. See `uploadPortfolioImages` in

@@ -728,8 +728,7 @@ router.post(
       }
       if (!req.files?.length) return res.status(400).json({ error: 'No images uploaded' });
 
-      const base = `${req.protocol}://${req.get('host')}`;
-      const urls = await Promise.all(req.files.map((f) => uploadImage(f.buffer, f.mimetype, base)));
+      const urls = await Promise.all(req.files.map((f) => uploadImage(f.buffer, f.mimetype)));
       // type=before appends to the Before & After "before" set; default is the
       // "after"/result set (imageUrls), preserving existing behavior.
       const isBefore = req.body.type === 'before';

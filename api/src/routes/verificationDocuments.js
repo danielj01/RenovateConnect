@@ -63,8 +63,7 @@ router.post('/', authMiddleware, requireRole('BUSINESS', 'ADMIN'),
       // Nothing durable to store: reads go through a presigned URL.
       fileUrl = '';
     } else {
-      const baseUrl = `${req.protocol}://${req.get('host')}`;
-      fileUrl = await uploadFile(req.file.buffer, req.file.mimetype, baseUrl);
+      fileUrl = await uploadFile(req.file.buffer, req.file.mimetype);
     }
 
     const doc = await db.verificationDocument.create({
