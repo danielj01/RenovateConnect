@@ -2,32 +2,60 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
+/// The contractor's two publishing surfaces, behind one tab.
+///
+/// Projects are the structured record of completed work that lives on the
+/// public profile and drives the price tier; Inspiration posts are lightweight
+/// slideshows published straight to the feed. They're deliberately separate
+/// (see InspirationComposerView) but they're the same job — "show my work" —
+/// so they share a tab rather than eating another slot in the tab bar.
+enum ShowcaseSection: String, CaseIterable, Identifiable {
+    case projects
+    case inspiration
+
+    var id: String { rawValue }
+    var label: String { self == .projects ? "Projects" : "Inspiration" }
+    var navigationTitle: String { self == .projects ? "Portfolio" : "Inspiration" }
+}
+
 struct PortfolioManagerView: View {
     @EnvironmentObject private var auth: AuthStore
     @State private var projects: [PortfolioProject] = []
     @State private var isLoading = true
     @State private var showAdd = false
+    @State private var showAddPost = false
     @State private var editing: PortfolioProject?
+    @State private var section: ShowcaseSection = .projects
 
     var body: some View {
         NavigationStack {
-            Group {
-                if auth.myBusinessId == nil {
-                    noProfileState
-                } else if isLoading {
-                    ProgressView()
-                } else if projects.isEmpty {
-                    emptyState
-                } else {
-                    grid
+            VStack(spacing: 0) {
+                if auth.myBusinessId != nil { sectionPicker }
+
+                Group {
+                    if auth.myBusinessId == nil {
+                        noProfileState
+                    } else if section == .inspiration {
+                        InspirationPostsList(businessId: auth.myBusinessId ?? "", showAdd: $showAddPost)
+                    } else if isLoading {
+                        ProgressView()
+                    } else if projects.isEmpty {
+                        emptyState
+                    } else {
+                        grid
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .background(Color(.systemBackground))
-            .navigationTitle("Portfolio")
+            .navigationTitle(section.navigationTitle)
             .toolbar {
                 if auth.myBusinessId != nil {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button { showAdd = true } label: { Image(systemName: "plus") }
+                        Button {
+                            if section == .inspiration { showAddPost = true } else { showAdd = true }
+                        } label: { Image(systemName: "plus") }
+                        .accessibilityLabel(section == .inspiration ? "New inspiration post" : "New project")
                     }
                 }
             }
@@ -51,6 +79,15 @@ struct PortfolioManagerView: View {
                 )
             }
         }
+    }
+
+    private var sectionPicker: some View {
+        Picker("Section", selection: $section) {
+            ForEach(ShowcaseSection.allCases) { Text($0.label).tag($0) }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 10)
     }
 
     private var grid: some View {

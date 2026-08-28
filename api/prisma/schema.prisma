@@ -344,6 +344,7 @@ model Business {
   leads           Lead[]
   reviews         Review[]
   portfolio       PortfolioProject[]
+  inspirationPosts InspirationPost[]
   favoritedBy     Favorite[]
   appointments    Appointment[]
   hours           BusinessHours[]
@@ -611,6 +612,50 @@ model PortfolioProject {
   updatedAt   DateTime @updatedAt
 
   business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+}
+
+
+// A native Inspiration post — a contractor publishing STRAIGHT to the
+// Inspiration feed, without first having to file a full PortfolioProject.
+//
+// Why a separate model instead of a flag on PortfolioProject: a portfolio
+// project is a structured record of completed work (cost range, duration,
+// before/afters) that lives on the public profile and feeds the price tier
+// (services/costTier.js). An inspiration post is a lightweight, social,
+// slideshow-first piece of content — "here's the tile we're installing this
+// week" — with a caption and an ordered set of slides. Conflating them would
+// have forced every casual post to masquerade as a completed project and
+// would have polluted the cost-tier calculation with non-project prices.
+//
+// Same admin gate as PortfolioProject: posts start PENDING and are invisible
+// in the feed until approved, and they disappear with their business when
+// its listing lapses (see services/listing.js).
+model InspirationPost {
+  id          String   @id @default(cuid())
+  businessId  String
+  title       String
+  caption     String?
+  category    String?  // e.g. "Kitchen", "Bathroom" — same vocabulary as PortfolioProject
+  costMin     Int?     // optional "what a look like this runs" range, in dollars
+  costMax     Int?
+  // Ordered slides. imageUrls are the photos shown in the slideshow;
+  // beforeImageUrls pair BY INDEX with them (same convention as
+  // PortfolioProject) so any slide can be flipped to its "before".
+  imageUrls   String[]
+  beforeImageUrls String[]
+  featured    Boolean  @default(false)
+
+  approvalStatus  ApprovalStatus @default(PENDING)
+  rejectionReason String?
+  reviewedAt      DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([approvalStatus, createdAt])
 }
 
 

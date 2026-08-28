@@ -27,6 +27,13 @@ const businesses = [
       { title: 'Spa Master Bath', category: 'Bathroom', description: 'Curbless walk-in shower, heated floors, and a freestanding soaking tub.', costMin: 34000, costMax: 45000, durationWeeks: 5, imageUrls: [photo('1584622650111-993a426fbf0a'), photo('1507652313519-d4e9174996dd')] },
       { title: 'Finished Basement Suite', category: 'Basement', description: 'Added a guest bedroom, full bath, and wet bar with egress window.', costMin: 48000, costMax: 60000, durationWeeks: 8, imageUrls: [photo('1646592474273-86049d4f3575'), photo('1646592491963-07ff7e7c31f7')] },
     ],
+    // Native Inspiration posts — published straight to the feed, not tied to a
+    // completed portfolio project. Multi-slide so the slideshow is exercised
+    // in local dev.
+    inspirationPosts: [
+      { title: 'Walnut + brass, three ways', caption: 'Same palette, three very different kitchens. Swipe through.', category: 'Kitchen', costMin: 55000, costMax: 80000, featured: true, imageUrls: [photo('1628745277862-bc0b2d68c50c'), photo('1682888813913-e13f18692019'), photo('1601760561441-16420502c7e0')] },
+      { title: 'Curbless shower detail', caption: 'Linear drain, heated floor, no lip to step over.', category: 'Bathroom', imageUrls: [photo('1584622650111-993a426fbf0a'), photo('1507652313519-d4e9174996dd')] },
+    ],
     reviews: [
       { authorName: 'Sarah L.', rating: 5, body: 'Peak transformed our outdated kitchen into a showpiece. Marcus and his team were professional, clean, and finished ahead of schedule. Highly recommend!' },
       { authorName: 'Tom R.', rating: 5, body: 'Best contractor I have ever worked with. Our bathroom remodel came out better than we imagined. Worth every penny.' },
@@ -48,6 +55,9 @@ const businesses = [
     portfolio: [
       { title: 'West Loop Whole-Floor Remodel', category: 'Kitchen', description: 'New hardwood throughout, repainted interior, and a modern backsplash refresh.', costMin: 40000, costMax: 55000, durationWeeks: 6, featured: true, imageUrls: [photo('1665507279638-5b48073c637b'), photo('1631048498692-af6262577031')] },
       { title: '10-Day Bathroom Refresh', category: 'Bathroom', description: 'Fast-turnaround guest bath remodel with new vanity, tile, and fixtures.', costMin: 12000, costMax: 18000, durationWeeks: 2, imageUrls: [photo('1629079447777-1e605162dc8d'), photo('1521783593447-5702b9bfd267')] },
+    ],
+    inspirationPosts: [
+      { title: 'Backsplash roundup', caption: 'Four tile choices we installed this month.', category: 'Kitchen', imageUrls: [photo('1665507279638-5b48073c637b'), photo('1631048498692-af6262577031'), photo('1629079447777-1e605162dc8d')] },
     ],
     reviews: [
       { authorName: 'Amanda P.', rating: 5, body: 'Metro handled our whole first floor — new hardwood, painted every room, and redid the kitchen backsplash. Seamless experience.' },
@@ -72,6 +82,9 @@ const businesses = [
     portfolio: [
       { title: 'Naperville Showcase Kitchen', category: 'Kitchen', description: 'Designer layout with a 10-ft island, brass fixtures, and integrated paneled appliances.', costMin: 70000, costMax: 95000, durationWeeks: 9, featured: true, imageUrls: [photo('1601760561441-16420502c7e0'), photo('1665507279644-67d8ed143a84')] },
       { title: 'Hers & His Master Bath', category: 'Bathroom', description: 'Double vanity, marble wet room, and custom built-in storage.', costMin: 38000, costMax: 52000, durationWeeks: 6, imageUrls: [photo('1587527901949-ab0341697c1e'), photo('1696987007764-7f8b85dd3033')] },
+    ],
+    inspirationPosts: [
+      { title: 'Before & after: 1970s galley', caption: 'Wall came down, island went in. Tap Before on any slide.', category: 'Kitchen', costMin: 70000, costMax: 95000, imageUrls: [photo('1601760561441-16420502c7e0'), photo('1665507279644-67d8ed143a84')], beforeImageUrls: [photo('1556909212-d5b604d0c90d'), photo('1556911220-bff31c812dba')] },
     ],
     reviews: [
       { authorName: 'Claire W.', rating: 5, body: 'Ryan has a real designer\'s eye. Our kitchen is stunning — the cabinet layout he suggested was so much better than our original plan.' },
@@ -184,7 +197,7 @@ async function main() {
   console.log('  🛡️  admin@renovateconnect.dev (Password123!)');
 
   for (const biz of businesses) {
-    const { reviews, verified = false, averageRating, portfolio = [], profileViews = 0, ...bizData } = biz;
+    const { reviews, verified = false, averageRating, portfolio = [], inspirationPosts = [], profileViews = 0, ...bizData } = biz;
 
     const reviewCount = reviews.length;
     const avgRating = reviews.reduce((s, r) => s + r.rating, 0) / reviewCount;
@@ -240,7 +253,7 @@ async function main() {
     // we clear any leftover demo numbers back to 0 on (re)seed.
     const business = await prisma.business.findUnique({
       where: { userId: user.id },
-      include: { portfolio: true },
+      include: { portfolio: true, inspirationPosts: true },
     });
     if (business) {
       if (business.profileViews !== profileViews) {
@@ -281,6 +294,20 @@ async function main() {
             });
           }
         }
+      }
+      // Native Inspiration posts. Pre-approved for the same reason as the demo
+      // portfolio — a seeded feed that's entirely PENDING renders empty, which
+      // reads as a broken feature rather than a moderation queue.
+      if (business.inspirationPosts.length === 0 && inspirationPosts.length > 0) {
+        await prisma.inspirationPost.createMany({
+          data: inspirationPosts.map(p => ({
+            beforeImageUrls: [],
+            ...p,
+            businessId: business.id,
+            approvalStatus: 'APPROVED',
+            reviewedAt: new Date(),
+          })),
+        });
       }
     }
 
