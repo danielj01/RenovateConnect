@@ -382,13 +382,14 @@ private struct ReelPage: View {
             slides
             gradientScrim
             VStack(spacing: 14) {
+                // Page dots ride centred above the text block, so they read as
+                // part of the photo rather than as a footer under the caption.
+                if item.isMultiSlide { slideDots }
+
                 HStack(alignment: .bottom, spacing: 12) {
                     info
                     actionRail
                 }
-                // Page dots sit centred under everything, TikTok-style, rather
-                // than tucked into the left-hand text column.
-                if item.isMultiSlide { slideDots }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 34)
@@ -474,7 +475,7 @@ private struct ReelPage: View {
 
             if let caption = item.caption, !caption.isEmpty {
                 Text(caption)
-                    .font(.subheadline)
+                    .font(.callout)
                     .foregroundStyle(.white.opacity(0.92))
                     .lineSpacing(2)
                     .lineLimit(captionExpanded ? nil : 4)
