@@ -316,8 +316,20 @@ struct InspirationReelView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)
+            // Dark theming belongs to the reel's own page and nothing else.
+            // Two placements this must NOT have:
+            //   * .preferredColorScheme(.dark) — that is a *preference*, so it
+            //     propagates UP out of this fullScreenCover and restyles the
+            //     whole window; the Profile tab then renders dark as well.
+            //   * this same modifier on the NavigationStack — the environment
+            //     would flow DOWN into pushed destinations, so tapping the
+            //     action rail's Profile button would open the contractor's
+            //     BusinessDetailView in dark mode.
+            // Attached here it scopes to this ZStack alone: the reel stays
+            // dark, the window is untouched, and anything pushed on top of it
+            // keeps whatever scheme the system is actually in.
+            .environment(\.colorScheme, .dark)
         }
-        .preferredColorScheme(.dark)
         .statusBarHidden()
         .onAppear { currentId = startItemId }
         .onChange(of: currentId) { _, newValue in
@@ -352,6 +364,9 @@ private struct ReelPage: View {
 
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var notifications: NotificationManager
+    /// Dismisses the reel's fullScreenCover. ReelPage is the cover's content
+    /// rather than a pushed view, so this closes the reel itself.
+    @Environment(\.dismiss) private var dismiss
     @State private var slideIndex = 0
     /// Per-slide before/after state, keyed by slide id so flipping one slide to
     /// its "before" doesn't flip the rest of the post.
@@ -400,10 +415,16 @@ private struct ReelPage: View {
                                     set: { if !$0 { quoteSummary = nil } })) {
             Button("Open message") {
                 if let id = quoteSummary?.conversationId {
+                    // MainTabView observes this and switches to Messages, and
+                    // ConversationsView opens the thread — but all of that
+                    // happens *underneath* this reel. Without the dismiss the
+                    // routing silently succeeds behind a full-screen cover and
+                    // the button looks broken.
                     notifications.pendingConversationId = id
                     TabRouter.shared.selection = TabRouter.messages
                 }
                 quoteSummary = nil
+                dismiss()
             }
             Button("Stay here", role: .cancel) { quoteSummary = nil }
         } message: {
