@@ -9,5 +9,18 @@
 	     Config/Local.xcconfig sets it. -->
 	<key>APIBaseURL</key>
 	<string>$(API_BASE_URL)</string>
+
+	<!-- Lets the DEBUG build reach the dev API over plaintext HTTP on the
+	     LAN. NSAllowsLocalNetworking is the narrow exception: it covers
+	     *.local (mDNS) and unqualified hostnames only — NOT arbitrary hosts,
+	     and NOT raw private IPs like 10.x or 192.168.x. That is why
+	     Local.xcconfig should hold the Mac's .local name rather than its
+	     current lease. Debug only, via the same wiring as APIBaseURL above,
+	     so the Release build keeps ATS fully enforced. -->
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 </dict>
 </plist>
