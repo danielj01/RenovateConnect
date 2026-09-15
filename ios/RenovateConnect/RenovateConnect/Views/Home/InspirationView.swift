@@ -4,7 +4,7 @@ import Combine
 /// The Inspiration tab.
 ///
 /// Two surfaces over one feed:
-///   • a Pinterest-style masonry grid of post covers (the browse view), and
+///   • a featured carousel, room shortcuts, and project grid (the browse view), and
 ///   • `InspirationReelView` — a full-screen, vertically-paging reel where each
 ///     post is a horizontal slideshow you swipe through (the immersive view).
 ///
@@ -17,266 +17,342 @@ import Combine
 /// this look" path into the estimator. Browsing only — deliberately not a
 /// social network.
 
-// MARK: - Feed store
-
-/// Pagination shared by the grid and the reel, so opening the reel doesn't
-/// re-fetch what the grid already has and scrolling the reel past the end
-/// keeps loading into the same list the grid is showing.
-@MainActor
-final class InspirationFeedStore: ObservableObject {
-    @Published private(set) var items: [FeedItem] = []
-    @Published private(set) var isLoading = false
-    @Published private(set) var loadingMore = false
-    @Published private(set) var error: String?
-    @Published private(set) var loadMoreError: String?
-    @Published var category: String?
-
-    private var page = 1
-    private var hasMore = true
-    /// Guards against a category swap landing an in-flight page from the
-    /// previous category into the new list.
-    private var loadToken = 0
-
-    func setCategory(_ value: String?) async {
-        guard category != value else { return }
-        category = value
-        items = []
-        await load(reset: true)
-    }
-
-    func load(reset: Bool) async {
-        if reset {
-            isLoading = true
-            page = 1
-            hasMore = true
-            error = nil
-            loadMoreError = nil
-        } else {
-            guard hasMore, !loadingMore, loadMoreError == nil else { return }
-            loadingMore = true
-            loadMoreError = nil
-        }
-        loadToken += 1
-        let token = loadToken
-        let requestedCategory = category
-        defer { isLoading = false; loadingMore = false }
-        do {
-            let resp = try await APIService.shared.feed(page: reset ? 1 : page, category: requestedCategory)
-            // A newer load (or a category swap) started while this was in
-            // flight — drop the stale page rather than mixing categories.
-            guard token == loadToken, requestedCategory == category else { return }
-            withAnimation(.easeInOut(duration: 0.2)) {
-                if reset { items = resp.items } else { items += resp.items }
-            }
-            hasMore = resp.hasMore
-            page = resp.page + 1
-        } catch {
-            guard token == loadToken else { return }
-            if reset { self.error = error.localizedDescription }
-            else { loadMoreError = error.localizedDescription }
-        }
-    }
-
-    /// Called as the user nears the end of either surface.
-    func loadMoreIfNeeded(currentItemId: String, lookahead: Int) {
-        guard hasMore, !loadingMore, loadMoreError == nil else { return }
-        guard let idx = items.firstIndex(where: { $0.id == currentItemId }) else { return }
-        guard idx >= items.count - lookahead else { return }
-        Task { await load(reset: false) }
-    }
-
-    func retryLoadMore() {
-        loadMoreError = nil
-        Task { await load(reset: false) }
-    }
-}
-
-// MARK: - Grid
+// MARK: - Inspiration discovery
 
 struct InspirationView: View {
     @StateObject private var store = InspirationFeedStore()
+    @StateObject private var saved = SavedInspirationStore()
+    @State private var showSaved = false
+    // The reference itself is stable; only header subviews observe progress.
+    @State private var headerState = InspirationHeaderState()
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var notifications: NotificationManager
-
-    /// The post the reel opens on. Non-nil presents the full-screen reel.
     @State private var reelStartId: String?
+    @ScaledMetric(relativeTo: .title) private var featuredHeight = 292
 
     private let categories = ["Kitchen", "Bathroom", "Bedroom", "Living room", "Whole home", "Exterior"]
-
-    // Simple two-column waterfall: alternate items by index. Good enough without
-    // knowing image dimensions up front; heights vary naturally with each photo.
-    // Split once per items change (via the destructured tuple) so a body
-    // re-render from an unrelated state change (e.g. loadingMore flipping)
-    // doesn't recompute both columns.
-    private var columns: (left: [FeedItem], right: [FeedItem]) {
-        var left: [FeedItem] = []
-        var right: [FeedItem] = []
-        for (i, item) in store.items.enumerated() {
-            if i.isMultiple(of: 2) { left.append(item) } else { right.append(item) }
-        }
-        return (left, right)
-    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                categoryChips
-
-                if store.isLoading && store.items.isEmpty {
-                    ProgressView().padding(.top, 80)
-                } else if let error = store.error, store.items.isEmpty {
-                    ContentUnavailableView(error, systemImage: "photo.on.rectangle.angled").padding(.top, 60)
-                } else if store.items.isEmpty {
-                    ContentUnavailableView(
-                        "No inspiration yet",
-                        systemImage: "photo.on.rectangle.angled",
-                        description: Text("Project photos from contractors will appear here.")
-                    ).padding(.top, 60)
-                } else {
-                    let cols = columns
-                    HStack(alignment: .top, spacing: 10) {
-                        column(cols.left)
-                        column(cols.right)
+                VStack(alignment: .leading, spacing: 26) {
+                    InspirationLargeHeader(state: headerState)
+                    featuredProjects
+                        .frame(height: featuredHeight)
+                        .allowsHitTesting(!store.isLoading)
+                    roomBrowser
+                    projectSection
+                }
+                .padding(.top, 0)
+                .padding(.bottom, 28)
+            }
+            .coordinateSpace(name: "inspirationScroll")
+            .background(Color(.systemGroupedBackground))
+            .navigationTitle("Inspiration")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    InspirationCompactHeader(state: headerState)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showSaved = true } label: {
+                        Image(systemName: "bookmark")
                     }
-                    .padding(.horizontal, 10)
-                    // Fade-out-then-in on category swap (see Theme.contentSwap).
-                    // Plain .opacity cross-faded both columns simultaneously
-                    // and the previous category's photos visibly bled through
-                    // the new ones at the same grid positions.
-                    .transition(.contentSwap)
-                    // Re-establish identity per category so the ScrollView
-                    // doesn't try to diff a totally different list against the
-                    // old one — that diff is what produces the visible jump.
-                    .id(store.category ?? "all")
-
-                    if store.loadingMore {
-                        ProgressView().padding(.vertical, 16)
-                    } else if let loadMoreError = store.loadMoreError {
-                        VStack(spacing: 6) {
-                            Text(loadMoreError).font(.caption).foregroundStyle(.secondary)
-                            Button("Retry") { store.retryLoadMore() }
-                                .font(.caption.weight(.semibold))
-                        }
-                        .padding(.vertical, 16)
-                    }
+                    .accessibilityLabel("Saved inspiration")
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: store.items.count)
-            .navigationTitle("Inspiration")
-            .task { if store.items.isEmpty { await store.load(reset: true) } }
+            .task(id: auth.currentUser?.id) {
+                saved.useAccount(auth.currentUser?.id)
+                if store.items.isEmpty { await store.load(reset: true) }
+            }
             .refreshable { await store.load(reset: true) }
+
+        }
+        .environmentObject(saved)
+        .sheet(isPresented: $showSaved) {
+            SavedInspirationView()
+                .environmentObject(saved)
+                .environmentObject(auth)
+                .environmentObject(notifications)
+        }
+        .alert("Saved inspiration", isPresented: Binding(
+            get: { saved.errorMessage != nil }, set: { if !$0 { saved.errorMessage = nil } }
+        )) { Button("OK") { saved.errorMessage = nil } } message: {
+            Text(saved.errorMessage ?? "")
         }
         .fullScreenCover(item: Binding(
             get: { reelStartId.map(ReelStart.init(id:)) },
             set: { if $0 == nil { reelStartId = nil } }
         )) { start in
             InspirationReelView(store: store, startItemId: start.id)
+                .environmentObject(saved)
                 .environmentObject(auth)
                 .environmentObject(notifications)
         }
     }
 
-    /// `fullScreenCover(item:)` needs an Identifiable; the raw id string can't
-    /// conform, so wrap it.
     private struct ReelStart: Identifiable { let id: String }
 
-    private var categoryChips: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chip("All", value: nil)
-                ForEach(categories, id: \.self) { chip($0, value: $0) }
+    private var featuredProjects: some View {
+        ZStack {
+            if store.items.isEmpty {
+                RoundedRectangle(cornerRadius: 24)
+                    .fill(Theme.primary.opacity(0.06))
+                    .overlay {
+                        VStack(spacing: 12) {
+                            if store.isLoading {
+                                ProgressView("Finding inspiration…")
+                            } else {
+                                Image(systemName: "photo.on.rectangle.angled").font(.largeTitle)
+                                Text("New spaces to discover soon").font(.subheadline)
+                            }
+                        }
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(.horizontal, 20)
             }
-            .padding(.horizontal, 12).padding(.vertical, 10)
-        }
-    }
-
-    private func chip(_ label: String, value: String?) -> some View {
-        Button {
-            guard store.category != value else { return }
-            // Clear the old grid immediately so the user doesn't see stale
-            // items snap to new ones — the ProgressView covers the gap until
-            // the new page lands.
-            Task { await store.setCategory(value) }
-        } label: {
-            Text(label)
-                .font(.subheadline.weight(.medium))
-                .padding(.horizontal, 14).padding(.vertical, 8)
-                .background(store.category == value ? Theme.primary : Color(.systemGray6))
-                .foregroundStyle(store.category == value ? .white : Color(.label))
-                .clipShape(Capsule())
-                // Explicit easing on the selected-state swap; iOS 18 dropped
-                // the implicit color animation Button labels used to get.
-                .animation(.easeInOut(duration: 0.18), value: store.category)
-        }
-    }
-
-    private func column(_ colItems: [FeedItem]) -> some View {
-        LazyVStack(spacing: 10) {
-            ForEach(colItems) { item in
-                Button {
-                    reelStartId = item.id
-                } label: {
-                    FeedCard(item: item)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 12) {
+                    ForEach(store.featuredItems) { item in
+                        ZStack(alignment: .topTrailing) {
+                            Button { reelStartId = item.id } label: {
+                                FeaturedInspirationCard(item: item)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("Explore \(item.title), \(item.costText ?? "price not listed")")
+                        }
+                        .containerRelativeFrame(.horizontal) { width, _ in min(width - 44, 420) }
+                    }
                 }
-                .buttonStyle(.plain)
+                .scrollTargetLayout()
+            }
+            .contentMargins(.horizontal, 20, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned)
+        }
+    }
+
+    private var roomBrowser: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Text("Browse by room").font(.title3.weight(.bold))
+                Spacer()
+                Button("See all") { Task { await store.setCategory(nil) } }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Theme.primary)
+                    .accessibilityLabel("See projects from all rooms")
+            }
+            .padding(.horizontal, 20)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(categories, id: \.self) { category in
+                        Button {
+                            Task { await store.setCategory(store.category == category ? nil : category) }
+                        } label: {
+                            VStack(spacing: 8) {
+                                InspirationPhoto(url: store.roomCovers[category], symbol: roomSymbol(category))
+                                    .frame(width: 76, height: 80)
+                                    .clipShape(RoundedRectangle(cornerRadius: 18))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 18)
+                                            .strokeBorder(store.category == category ? Theme.primary : .clear, lineWidth: 3)
+                                    }
+                                Text(category)
+                                    .font(.caption.weight(store.category == category ? .bold : .medium))
+                                    .foregroundStyle(store.category == category ? Theme.primary : Color.primary)
+                                    .frame(width: 76)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityAddTraits(store.category == category ? .isSelected : [])
+                        .accessibilityLabel("Browse \(category) projects")
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
+    }
+
+    private var projectSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(store.category.map { "\($0) ideas" } ?? "Find your next project")
+                        .font(.title3.weight(.bold))
+                    Text("Real spaces. Local expertise.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if store.isLoading && !store.items.isEmpty { ProgressView() }
+                if store.category != nil {
+                    Button("Clear") { Task { await store.setCategory(nil) } }
+                        .font(.subheadline).foregroundStyle(Theme.primary)
+                }
+            }
+
+            if store.isLoading && store.items.isEmpty {
+                ProgressView("Finding inspiration…")
+                    .frame(maxWidth: .infinity).padding(.vertical, 56)
+            } else if let error = store.error, store.items.isEmpty {
+                ContentUnavailableView {
+                    Label("Couldn't load inspiration", systemImage: "wifi.exclamationmark")
+                } description: { Text(error) } actions: {
+                    Button("Try again") { Task { await store.load(reset: true) } }
+                }
+            } else if store.items.isEmpty {
+                ContentUnavailableView(
+                    "More inspiration is on its way",
+                    systemImage: "photo.on.rectangle.angled",
+                    description: Text("Project photos from contractors will appear here. Try another room or check back soon.")
+                )
+            } else {
+                HStack(alignment: .top, spacing: 4) {
+                    galleryColumn(offset: 0)
+                    galleryColumn(offset: 1)
+                }
+                .allowsHitTesting(!store.isLoading)
+                if store.loadingMore {
+                    ProgressView().frame(maxWidth: .infinity).padding()
+                } else if let error = store.loadMoreError {
+                    VStack(spacing: 8) {
+                        Text(error).font(.caption).foregroundStyle(.secondary)
+                        Button("Load more projects") { store.retryLoadMore() }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    // Independent columns let each photo determine its own height instead
+    // of forcing neighboring photos into equal-height grid rows.
+    private func galleryColumn(offset: Int) -> some View {
+        let items = offset == 0 ? store.columns.left : store.columns.right
+        return LazyVStack(spacing: 4) {
+            ForEach(items) { item in
+                ZStack(alignment: .topTrailing) {
+                    Button { reelStartId = item.id } label: { FeedCard(item: item) }
+                        .buttonStyle(.plain)
+                }
                 .onAppear { store.loadMoreIfNeeded(currentItemId: item.id, lookahead: 4) }
             }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func roomSymbol(_ category: String) -> String {
+        switch category {
+        case "Kitchen": return "oven"
+        case "Bathroom": return "bathtub"
+        case "Bedroom": return "bed.double"
+        case "Living room": return "sofa"
+        case "Exterior": return "tree"
+        default: return "house"
         }
     }
 }
 
-// MARK: - Grid card
+/// A bounded image keeps differently proportioned uploads from changing the layout.
+private struct InspirationPhoto: View {
+    let url: String?
+    var symbol = "photo"
 
-private struct FeedCard: View {
-    let item: FeedItem
-
-    // Pinterest-style tile: full-bleed cover photo, no boxed text panel, no
-    // price (cost stays in the reel — a grid full of dollar signs reads as an
-    // ad feed, not inspiration). The business name is a light on-image caption
-    // rather than a separate white strip, so the photo does the work.
     var body: some View {
-        ZStack(alignment: .bottom) {
-            AsyncImage(url: URL(string: item.imageUrl)) { phase in
-                switch phase {
-                case .success(let image): image.resizable().scaledToFit()
-                case .failure: Color(.systemGray5).frame(height: 160).overlay(Image(systemName: "photo").foregroundStyle(.secondary))
-                default: Color(.systemGray6).frame(height: 160).overlay(ProgressView())
+        GeometryReader { geometry in
+            InspirationRemoteImage(url: url, pixelLimit: symbol == "photo" ? 1536 : 256) { phase in
+                if let image = phase.image {
+                    image.resizable().scaledToFill()
+                } else {
+                    ZStack {
+                        Theme.primary.opacity(0.08)
+                        if url != nil && phase.error == nil {
+                            ProgressView()
+                        } else {
+                            Image(systemName: symbol)
+                                .font(.title2).foregroundStyle(Theme.primary.opacity(0.6))
+                        }
+                    }
                 }
             }
-            .frame(maxWidth: .infinity)
+            .frame(width: geometry.size.width, height: geometry.size.height)
             .clipped()
+        }
+        .accessibilityHidden(true)
+    }
+}
 
-            LinearGradient(colors: [.black.opacity(0.55), .clear], startPoint: .bottom, endPoint: .top)
-                .frame(height: 54)
-                .allowsHitTesting(false)
+private struct FeaturedInspirationCard: View {
+    let item: FeedItem
+    @ScaledMetric(relativeTo: .title) private var cardHeight = 292
 
-            HStack {
-                Text(item.business.companyName)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 10)
-            .padding(.bottom, 8)
-
-            // No slide-count badge: the tile stays a clean photo. The page
-            // dots in the reel carry the "there's more here" signal instead.
-            if item.hasBeforeAfter {
-                VStack {
-                    HStack {
-                        Text("Before & After")
-                            .font(.caption2.weight(.bold))
-                            .padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(.ultraThinMaterial, in: Capsule())
-                        Spacer(minLength: 0)
+    var body: some View {
+        ZStack(alignment: .bottomLeading) {
+            InspirationPhoto(url: item.imageUrl)
+            LinearGradient(colors: [.clear, .black.opacity(0.15), .black.opacity(0.8)],
+                           startPoint: .top, endPoint: .bottom)
+            VStack(alignment: .leading, spacing: 10) {
+                Text(item.category?.uppercased() ?? "EXPLORE THE POSSIBILITIES")
+                    .font(.caption2.weight(.bold)).tracking(1.5)
+                HStack(alignment: .bottom, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(item.title)
+                            .font(.system(.title, design: .serif, weight: .semibold))
+                            .lineLimit(3)
+                        Text(item.costText ?? item.business.companyName)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(2)
                     }
                     Spacer(minLength: 0)
+                    Image(systemName: "arrow.right")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.primary)
+                        .frame(width: 42, height: 42)
+                        .background(.white, in: Circle())
+                        .accessibilityHidden(true)
                 }
-                .padding(8)
+            }
+            .foregroundStyle(.white)
+            .padding(20)
+        }
+        .frame(height: cardHeight)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+    }
+}
+
+struct FeedCard: View {
+    let item: FeedItem
+
+    var body: some View {
+        InspirationRemoteImage(url: item.imageUrl, pixelLimit: 768) { phase in
+            if let image = phase.image {
+                image.resizable().scaledToFit()
+            } else {
+                Rectangle()
+                    .fill(Theme.primary.opacity(0.06))
+                    .aspectRatio(InspirationImagePipeline.shared.cachedAspectRatio(for: item.imageUrl) ?? 0.85, contentMode: .fit)
+                    .overlay {
+                        if phase.error != nil {
+                            Image(systemName: "photo").foregroundStyle(.secondary)
+                        } else {
+                            ProgressView()
+                        }
+                    }
             }
         }
+        .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(alignment: .topLeading) {
+            if item.hasBeforeAfter {
+                Text("Before & after")
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 8).padding(.vertical, 5)
+                    .background(.regularMaterial, in: Capsule())
+                    .padding(8)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(item.hasBeforeAfter ? "\(item.title), before and after" : item.title)
     }
 }
 
@@ -362,6 +438,7 @@ struct InspirationReelView: View {
 private struct ReelPage: View {
     let item: FeedItem
 
+    @EnvironmentObject private var saved: SavedInspirationStore
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var notifications: NotificationManager
     /// Dismisses the reel's fullScreenCover. ReelPage is the cover's content
@@ -545,6 +622,11 @@ private struct ReelPage: View {
 
     private var actionRail: some View {
         VStack(spacing: 18) {
+            railButton(systemImage: saved.contains(item) ? "bookmark.fill" : "bookmark",
+                       label: saved.contains(item) ? "Saved" : "Save") {
+                saved.toggle(item)
+            }
+            .accessibilityLabel(saved.contains(item) ? "Unsave \(item.title)" : "Save \(item.title)")
             // Flagship: inspiration → AI estimate → pre-filled intro DM with
             // the contractor in one tap.
             railButton(systemImage: isQuoting ? nil : "wand.and.stars",
@@ -627,7 +709,7 @@ private struct ReelPhoto: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                AsyncImage(url: URL(string: url)) { phase in
+                InspirationRemoteImage(url: url, pixelLimit: 1536) { phase in
                     switch phase {
                     case .success(let image):
                         ZStack {

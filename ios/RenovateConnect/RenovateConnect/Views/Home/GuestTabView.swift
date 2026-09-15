@@ -16,6 +16,8 @@ struct GuestTabView: View {
     // First-launch intro for signed-out visitors. Persisted so it shows once;
     // separate from the post-login `hasCompletedOnboarding` flag.
     @AppStorage("hasSeenGuestIntro") private var hasSeenGuestIntro = false
+    @State private var showIntro = false
+    @State private var signInAfterIntro = false
 
     // A universal link (contractor profile /b/:id or saved estimate /e/:code)
     // tapped while signed out — guests can view both.
@@ -23,17 +25,17 @@ struct GuestTabView: View {
 
     var body: some View {
         TabView(selection: $router.selection) {
-            BusinessSearchView()
-                .tabItem { Label("Explore", systemImage: "safari.fill") }
-                .tag(TabRouter.explore)
+            InspirationView()
+                .tabItem { Label("Inspiration", systemImage: "photo.on.rectangle.angled") }
+                .tag(TabRouter.inspiration)
 
             EstimationView()
                 .tabItem { Label("Estimate", systemImage: "camera.viewfinder") }
                 .tag(TabRouter.estimate)
 
-            InspirationView()
-                .tabItem { Label("Inspiration", systemImage: "photo.on.rectangle.angled") }
-                .tag(TabRouter.aiChat)
+            BusinessSearchView()
+                .tabItem { Label("Explore", systemImage: "safari.fill") }
+                .tag(TabRouter.explore)
 
             GuestSignInTab()
                 .tabItem { Label("Sign In", systemImage: "person.crop.circle") }
@@ -47,16 +49,25 @@ struct GuestTabView: View {
             GuestSignInCover()
                 .environmentObject(auth)
         }
-        // First-launch intro: explains the app and what signing in unlocks.
-        .fullScreenCover(isPresented: .constant(!hasSeenGuestIntro)) {
-            OnboardingView(role: .client, isGuest: true) {
-                hasSeenGuestIntro = true
-            } onSignIn: {
-                // Dismiss the intro first, then raise sign-in on the next runloop
-                // so the two full-screen covers don't fight over presentation.
-                hasSeenGuestIntro = true
-                DispatchQueue.main.async { auth.requireSignIn() }
+        .onAppear { showIntro = !hasSeenGuestIntro }
+        .fullScreenCover(isPresented: $showIntro, onDismiss: {
+            if signInAfterIntro {
+                signInAfterIntro = false
+                auth.requireSignIn()
             }
+        }) {
+            OnboardingView(role: .client, isGuest: true, onFinish: {
+                hasSeenGuestIntro = true
+                showIntro = false
+            }, onSignIn: {
+                hasSeenGuestIntro = true
+                signInAfterIntro = true
+                showIntro = false
+            }, onChooseDestination: { tab in
+                router.selection = tab
+                hasSeenGuestIntro = true
+                showIntro = false
+            })
         }
         // Universal links while signed out: guests can view a contractor profile
         // or a saved estimate directly (account-only actions inside still prompt

@@ -24,13 +24,13 @@ final class AuthStore: ObservableObject {
         promptSignIn = true
     }
 
-    /// After a successful sign-in, land on the first tab (Explore for homeowners,
+    /// After a successful sign-in, land on the first tab (Inspiration for homeowners,
     /// Dashboard for contractors) rather than wherever the shared tab router was
     /// left — e.g. the guest "Sign In" tab, which would otherwise drop the user
     /// on Profile.
     private func landOnFirstTab() {
         guard currentUser != nil else { return }
-        TabRouter.shared.selection = TabRouter.explore
+        TabRouter.shared.selection = 0
     }
 
     init() {
@@ -236,7 +236,8 @@ final class AuthStore: ObservableObject {
         // Drop locally-persisted AI chat history so the next account on this
         // device doesn't inherit the previous user's conversation.
         UserDefaults.standard.removeObject(forKey: "aiChatHistory")
-        // Re-show the welcome flow for whoever signs in next (role may differ).
+        // Per-account onboarding completion survives logout. Clear only the
+        // legacy global flag, which must not migrate into another account.
         UserDefaults.standard.removeObject(forKey: "hasCompletedOnboarding")
         UserDefaults.standard.removeObject(forKey: "hasSeenProfileChecklist")
         currentUser = nil
@@ -288,6 +289,7 @@ final class AuthStore: ObservableObject {
             // Only sign out if we don't already have a session (e.g. cold start with a stale token).
             if currentUser == nil {
                 AuthToken.clear()
+                self.error = "We couldn’t finish signing in. Please try again. " + Self.signInMessage(for: error)
             }
         }
     }

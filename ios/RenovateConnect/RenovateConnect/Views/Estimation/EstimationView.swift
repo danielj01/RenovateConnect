@@ -23,25 +23,24 @@ private struct EstimatorIntroView: View {
     @State private var codeInput = ""
     @State private var presentedCode: PresentedEstimateCode?
 
-    // Outcome-first "how it works" — each step sells the benefit, not the spec.
+    // Explain the starting estimate and the details a contractor still needs to confirm.
     private let steps: [(icon: String, title: String, detail: String)] = [
         ("photo.badge.plus", "Add a few photos",
          "Snap or upload up to 5 photos of the space you want to renovate."),
         ("sparkles", "AI sizes up the work",
-         "It reads materials, dimensions, and condition to scope the project."),
+         "Uses visible details to suggest a starting scope. Measurements and site conditions still need checking."),
         ("list.bullet.rectangle.portrait", "Get an itemized range",
-         "A line-by-line breakdown with a low–high total, in seconds."),
+         "Review estimated costs, then discuss the work with a contractor."),
     ]
 
     var body: some View {
         ScrollView {
             VStack(spacing: 22) {
                 hero
-                perks
-                howItWorks
                 cta
-                codeEntryButton
                 disclaimer
+                howItWorks
+                codeEntryButton
             }
             .padding(20)
         }
@@ -66,6 +65,22 @@ private struct EstimatorIntroView: View {
         }
     }
 
+    private var hero: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Image(systemName: "camera.viewfinder")
+                .font(.largeTitle).foregroundStyle(Theme.primary)
+                .frame(width: 64, height: 64)
+                .background(Theme.primaryLight, in: RoundedRectangle(cornerRadius: 18))
+            Text("Plan your renovation\nwith a clearer budget.")
+                .font(.largeTitle.bold()).fixedSize(horizontal: false, vertical: true)
+            Text("Add photos of your space for a starting cost range. Refine the details with a contractor when you’re ready.")
+                .font(.body).foregroundStyle(.secondary)
+            Label("Free · No commitment", systemImage: "checkmark.circle")
+                .font(.subheadline.weight(.medium)).foregroundStyle(Theme.primary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
+    }
+
     // New-install fallback for the saved-estimate handoff: type the code shown on
     // the web /e/<code> page.
     private var codeEntryButton: some View {
@@ -74,56 +89,6 @@ private struct EstimatorIntroView: View {
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(Theme.primary)
         }
-    }
-
-    private var hero: some View {
-        VStack(spacing: 14) {
-            ZStack {
-                Circle().fill(.white.opacity(0.18)).frame(width: 84, height: 84)
-                Image(systemName: "camera.viewfinder")
-                    .font(.system(size: 40, weight: .semibold))
-                    .foregroundStyle(.white)
-            }
-            VStack(spacing: 6) {
-                Text("What will it cost?")
-                    .font(.system(size: 26, weight: .bold, design: .rounded))
-                    .foregroundStyle(.white)
-                Text("Get a ballpark renovation estimate from a few photos — before you call a single contractor.")
-                    .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.92))
-                    .multilineTextAlignment(.center)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 28).padding(.horizontal, 20)
-        .background(
-            ZStack {
-                Theme.gradient
-                Circle().fill(.white.opacity(0.08)).frame(width: 200, height: 200).offset(x: -110, y: -70)
-                Circle().fill(.white.opacity(0.06)).frame(width: 150, height: 150).offset(x: 120, y: 60)
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .shadow(color: Theme.primary.opacity(0.30), radius: 16, y: 8)
-    }
-
-    private var perks: some View {
-        HStack(spacing: 10) {
-            perk("bolt.fill", "~30 seconds")
-            perk("gift.fill", "Free")
-            perk("checkmark.seal.fill", "No commitment")
-        }
-    }
-
-    private func perk(_ icon: String, _ text: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon).font(.caption2).foregroundStyle(Theme.primary)
-            Text(text).font(.caption.weight(.semibold)).foregroundStyle(.primary)
-        }
-        .padding(.horizontal, 10).padding(.vertical, 8)
-        .frame(maxWidth: .infinity)
-        .background(Theme.primaryLight)
-        .clipShape(Capsule())
     }
 
     private var howItWorks: some View {
@@ -139,7 +104,7 @@ private struct EstimatorIntroView: View {
                     }
                     VStack(alignment: .leading, spacing: 3) {
                         Text(step.title).font(.subheadline.weight(.semibold))
-                        Text(step.detail).font(.caption).foregroundStyle(.secondary)
+                        Text(step.detail).font(.subheadline).foregroundStyle(.secondary)
                     }
                     Spacer(minLength: 0)
                 }
@@ -161,10 +126,11 @@ private struct EstimatorIntroView: View {
                 Text("Start your estimate").font(.headline)
             }
             .foregroundStyle(.white)
-            .frame(maxWidth: .infinity).frame(height: 54)
-            .background(Theme.gradient)
+            .frame(maxWidth: .infinity).frame(minHeight: 54)
+            .padding(.vertical, 4)
+            .background(Theme.primary)
             .clipShape(RoundedRectangle(cornerRadius: 16))
-            .shadow(color: Theme.primary.opacity(0.35), radius: 12, y: 6)
+            .shadow(color: Theme.primary.opacity(0.12), radius: 12, y: 6)
         }
     }
 
@@ -179,11 +145,15 @@ private struct EstimatorIntroView: View {
 // MARK: - Estimator form
 
 private struct EstimatorFormView: View {
+    @State private var showAIConsent = false
     // Pops this view off the NavigationStack it was pushed onto (back to
     // EstimatorIntroView) — distinct from EstimationResultView's own
     // \.dismiss, which closes its sheet. SwiftUI resolves each to the right
     // action for how that particular view was presented.
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @FocusState private var detailsFocused: Bool
+    @State private var isImportingPhotos = false
     @EnvironmentObject private var auth: AuthStore
     @State private var selectedItems: [PhotosPickerItem] = []
     // One source of truth for both sources. The library picker used to replace
@@ -214,98 +184,48 @@ private struct EstimatorFormView: View {
             if isLoading {
                 EstimateLoadingView(isComplete: $loadingComplete)
             } else {
-                Form {
-                    Section("Photos (up to \(maxPhotos))") {
-                        // Hidden in the Simulator and anywhere without a usable
-                        // camera, rather than opening a picker with nothing behind it.
-                        if CameraPicker.isAvailable {
-                            Button { showCamera = true } label: {
-                                Label("Take a photo", systemImage: "camera.fill")
-                            }
-                            .disabled(isPhotoLimitReached)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 24) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Tell us about your space")
+                                .font(.title2.bold())
+                            Text("Add a photo, then choose the finish you have in mind.")
+                                .font(.subheadline).foregroundStyle(.secondary)
                         }
 
-                        PhotosPicker(selection: $selectedItems,
-                                     maxSelectionCount: maxPhotos,
-                                     matching: .images) {
-                            Label("Choose from library", systemImage: "photo.on.rectangle.angled")
-                        }
-                        .disabled(isPhotoLimitReached)
-                        .onChange(of: selectedItems) { _, items in
-                            guard !items.isEmpty else { return }
-                            Task { await appendPicked(items) }
-                        }
+                        photosSection
+                        roomSection
+                        finishSection
+                        detailsSection
 
-                        if !selectedImages.isEmpty {
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 10) {
-                                    ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, img in
-                                        ZStack(alignment: .topTrailing) {
-                                            Image(uiImage: img)
-                                                .resizable().aspectRatio(contentMode: .fill)
-                                                .frame(width: 80, height: 80)
-                                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                            // Camera shots have no other source
-                                            // of truth to re-pick from, so they
-                                            // need an explicit way out.
-                                            Button {
-                                                selectedImages.remove(at: index)
-                                            } label: {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .foregroundStyle(.white, .black.opacity(0.6))
-                                            }
-                                            .buttonStyle(.borderless)
-                                            .padding(3)
-                                            .accessibilityLabel("Remove photo \(index + 1)")
-                                        }
-                                    }
-                                }
-                                .padding(.vertical, 4)
-                            }
+                        if let error {
+                            Label(error, systemImage: "exclamationmark.circle")
+                                .font(.subheadline).foregroundStyle(.red)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("estimate.error")
                         }
                     }
-
-                    Section("Room type") {
-                        Picker("Type", selection: $roomType) {
-                            Text("Select…").tag("")
-                            ForEach(roomTypes, id: \.self) { Text($0).tag($0) }
-                        }
-                    }
-
-                    Section {
-                        Picker("Finish level", selection: $costTier) {
-                            ForEach(CostTier.allCases) { tier in
-                                Text("\(tier.dollars)  \(tier.label)").tag(tier)
-                            }
-                        }
-                        .pickerStyle(.inline)
-                        .labelsHidden()
-                    } header: {
-                        Text("Finish level")
-                    } footer: {
-                        Text(costTier.estimateHint)
-                    }
-
-                    Section("Additional details (optional)") {
-                        TextField("Describe what you'd like done…", text: $description, axis: .vertical)
-                            .lineLimit(3...6)
-                    }
-
-                    if let error {
-                        Section { Text(error).foregroundStyle(.red).font(.caption) }
-                    }
-
-                    Section {
-                        Button("Get AI estimate") {
-                            Task { await submit() }
-                        }
-                        .disabled(selectedImages.isEmpty)
-                    }
+                    .padding(20)
                 }
+                .scrollDismissesKeyboard(.interactively)
+                .background(Color(.systemGroupedBackground))
+                .safeAreaInset(edge: .bottom, spacing: 0) { estimateAction }
+
             }
         }
         .navigationTitle("New Estimate")
         .navigationBarTitleDisplayMode(.inline)
+        .tint(Theme.primary)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { detailsFocused = false }
+            }
+        }
+        .onChange(of: selectedItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task { await appendPicked(items) }
+        }
         .fullScreenCover(isPresented: $showCamera) {
             CameraPicker { image in
                 selectedImages = Array((selectedImages + [image]).prefix(maxPhotos))
@@ -324,12 +244,195 @@ private struct EstimatorFormView: View {
         }
     }
 
+    private var photosSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Photos", systemImage: "photo.on.rectangle.angled").font(.headline)
+                Spacer()
+                Text("\(selectedImages.count) / \(maxPhotos)")
+                    .font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                    .accessibilityLabel("\(selectedImages.count) of \(maxPhotos) photos added")
+            }
+
+            if selectedImages.isEmpty {
+                libraryPicker
+            } else {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(Array(selectedImages.enumerated()), id: \.offset) { index, img in
+                            Image(uiImage: img)
+                                .resizable().scaledToFill()
+                                .frame(width: 104, height: 104)
+                                .clipShape(RoundedRectangle(cornerRadius: 14))
+                                .overlay(alignment: .topTrailing) {
+                                    Button { selectedImages.remove(at: index) } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.title3).foregroundStyle(.white, .black.opacity(0.7))
+                                            .frame(width: 44, height: 44)
+                                    }
+                                    .accessibilityLabel("Remove photo \(index + 1)")
+                                }
+                        }
+                    }
+                }
+                libraryPicker
+            }
+
+            if CameraPicker.isAvailable {
+                Button { showCamera = true } label: {
+                    Label("Take a photo", systemImage: "camera")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }
+                .disabled(isPhotoLimitReached || isImportingPhotos)
+            }
+            Text(isPhotoLimitReached ? "All five photos added. Remove one to replace it." : "One wide shot is enough to start. Add details from other angles if you have them.")
+                .font(.footnote).foregroundStyle(.secondary)
+        }
+    }
+
+    private var libraryPicker: some View {
+        PhotosPicker(selection: $selectedItems,
+                     maxSelectionCount: max(1, maxPhotos - selectedImages.count),
+                     matching: .images) {
+            VStack(spacing: 10) {
+                if selectedImages.isEmpty {
+                    Image(systemName: "photo.badge.plus")
+                        .font(.system(size: 30, weight: .medium))
+                    Text("Add room photos").font(.headline)
+                    Text("Choose from your photo library")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                } else {
+                    Label("Add more photos", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
+                }
+                if isImportingPhotos { ProgressView("Adding photos…") }
+            }
+            .foregroundStyle(Theme.primary)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, selectedImages.isEmpty ? 24 : 12)
+            .padding(.horizontal, 16)
+            .background(Theme.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
+            .overlay {
+                RoundedRectangle(cornerRadius: 18)
+                    .strokeBorder(Theme.primary.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [6, 5]))
+            }
+        }
+        .accessibilityLabel("Choose from library")
+        .disabled(isPhotoLimitReached || isImportingPhotos)
+    }
+
+    private var roomSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeading("Room", optional: true)
+            Picker("Room type", selection: $roomType) {
+                Text("Not specified").tag("")
+                ForEach(roomTypes, id: \.self) { Text($0).tag($0) }
+            }
+            .pickerStyle(.menu)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        }
+    }
+
+    private var finishSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeading("Finish level")
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: 10))
+                : AnyLayout(HStackLayout(alignment: .top, spacing: 10))
+            layout {
+                ForEach(CostTier.allCases) { tier in
+                    Button { costTier = tier } label: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack {
+                                Text(tier.dollars).font(.headline)
+                                Spacer(minLength: 4)
+                                Image(systemName: costTier == tier ? "checkmark.circle.fill" : "circle")
+                                    .font(.subheadline)
+                            }
+                            Text(tier.label).font(.subheadline.weight(.semibold))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .foregroundStyle(costTier == tier ? Theme.primary : Color.primary)
+                        .frame(maxWidth: .infinity, minHeight: dynamicTypeSize.isAccessibilitySize ? 44 : 64, alignment: .topLeading)
+                        .padding(12)
+                        .background(costTier == tier ? Theme.primary.opacity(0.08) : Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 16)
+                                .strokeBorder(costTier == tier ? Theme.primary : Color.primary.opacity(0.08), lineWidth: costTier == tier ? 1.5 : 1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(tier.label) finish")
+                    .accessibilityAddTraits(costTier == tier ? .isSelected : [])
+                    .accessibilityIdentifier("estimate.finish.\(tier.rawValue)")
+                }
+            }
+            Text(costTier.estimateHint)
+                .font(.footnote).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var detailsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeading("What would you like to change?", optional: true)
+            TextField("For example, replace the cabinets and keep the current layout…", text: $description, axis: .vertical)
+                .font(.body).lineLimit(3...6)
+                .focused($detailsFocused)
+                .accessibilityLabel("Project details")
+                .padding(16)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        }
+    }
+
+    private func sectionHeading(_ title: String, optional: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.headline)
+            if optional { Text("Optional").font(.caption).foregroundStyle(.secondary) }
+        }
+    }
+
+    private var estimateAction: some View {
+        VStack(spacing: 8) {
+            Button {
+                detailsFocused = false
+                showAIConsent = true
+            } label: {
+                Label("Get AI estimate", systemImage: "sparkles")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .padding(.horizontal, 12)
+                    .foregroundStyle(selectedImages.isEmpty || isImportingPhotos ? Color.secondary : .white)
+                    .background(selectedImages.isEmpty || isImportingPhotos ? Color(.tertiarySystemFill) : Theme.primary, in: RoundedRectangle(cornerRadius: 16))
+            }
+            .disabled(selectedImages.isEmpty || isImportingPhotos)
+            .accessibilityIdentifier("estimate.submit")
+            .alert("Send these photos to AI?", isPresented: $showAIConsent) {
+                Button("Send to AI") { Task { await submit() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Your selected photos, room type, project description, and finish level will be sent to NVIDIA to generate an estimate. If needed, they may also be sent to Anthropic as a fallback. Only send photos you have permission to share. Cancel to keep them unsent.")
+            }
+            Text(selectedImages.isEmpty ? "Add at least one photo to continue" : "AI guidance · Final pricing comes from your contractor")
+                .font(.caption).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 12)
+        .background(.regularMaterial)
+    }
+
     private var isPhotoLimitReached: Bool { selectedImages.count >= maxPhotos }
 
     /// Load the picked library items and append them. `selectedItems` is reset
     /// afterwards so picking the same photo again still registers as a change
     /// (same pattern as the portfolio editor).
     private func appendPicked(_ items: [PhotosPickerItem]) async {
+        guard !isImportingPhotos else { return }
+        isImportingPhotos = true
+        defer { isImportingPhotos = false }
         var loaded: [UIImage] = []
         for item in items {
             if let data = try? await item.loadTransferable(type: Data.self),
@@ -338,10 +441,13 @@ private struct EstimatorFormView: View {
             }
         }
         selectedImages = Array((selectedImages + loaded).prefix(maxPhotos))
+        if loaded.count < items.count { error = "Some photos couldn’t be opened. Try selecting them again." }
+        else { error = nil }
         selectedItems = []
     }
 
     private func submit() async {
+        guard !selectedImages.isEmpty, !isLoading, !isImportingPhotos else { return }
         isLoading = true
         loadingComplete = false
         error = nil

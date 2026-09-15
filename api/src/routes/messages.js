@@ -41,6 +41,7 @@ router.get('/', authMiddleware, async (req, res, next) => {
       where,
       include: {
         business: { select: { id: true, companyName: true, logoUrl: true, city: true, userId: true } },
+        client: { select: { id: true, name: true, avatarUrl: true } },
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
       orderBy: { updatedAt: 'desc' },
@@ -110,6 +111,7 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         business: { select: { id: true, companyName: true, logoUrl: true, city: true } },
+        client: { select: { id: true, name: true, avatarUrl: true } },
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
     });

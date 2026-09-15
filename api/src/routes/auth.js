@@ -3,8 +3,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const crypto = require('crypto');
-const { createPublicKey } = require('crypto');
-const https = require('https');
+const { verifyAppleIdentity } = require('../services/appleIdentity');
 const db = require('../services/db');
 const googleAuth = require('../services/googleAuth');
 const { authMiddleware } = require('../middleware/auth');
@@ -38,15 +37,12 @@ function maybeDevCode(code) {
 }
 
 // Fetch Apple's public JWK keys (used to verify identity tokens)
-function fetchAppleKeys() {
-  return new Promise((resolve, reject) => {
-    https.get('https://appleid.apple.com/auth/keys', res => {
-      let data = '';
-      res.on('data', chunk => (data += chunk));
-      res.on('end', () => resolve(JSON.parse(data).keys));
-      res.on('error', reject);
-    });
-  });
+async function fetchAppleKeys() {
+  const response = await fetch('https://appleid.apple.com/auth/keys', { signal: AbortSignal.timeout(10000) });
+  if (!response.ok) throw new Error('Apple identity service unavailable');
+  const body = await response.json();
+  if (!Array.isArray(body.keys)) throw new Error('Invalid Apple key response');
+  return body.keys;
 }
 
 function base64urlDecode(str) {
@@ -369,17 +365,10 @@ router.post('/apple', authLimiter, async (req, res, next) => {
     const jwk = keys.find(k => k.kid === kid);
     if (!jwk) return res.status(401).json({ error: 'Apple public key not found' });
 
-    // Pin the audience to our app's bundle id so an identity token minted for
-    // some other app can't authenticate here. APPLE_BUNDLE_ID falls back to
-    // APNS_BUNDLE_ID (they're the same id); unset in dev skips the check.
-    const appleAudience = process.env.APPLE_BUNDLE_ID || process.env.APNS_BUNDLE_ID;
+    // Verify the issuer, signature, and intended app even without env overrides.
     let payload;
     try {
-      payload = jwt.verify(identityToken, createPublicKey({ key: jwk, format: 'jwk' }), {
-        algorithms: ['RS256'],
-        issuer: 'https://appleid.apple.com',
-        ...(appleAudience ? { audience: appleAudience } : {}),
-      });
+      payload = verifyAppleIdentity(identityToken, jwk);
     } catch {
       return res.status(401).json({ error: 'Invalid Apple identity token' });
     }

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ConversationsView: View {
+    @State private var loadError: String?
     @State private var conversations: [Conversation] = []
     @State private var isLoading = true
     @State private var deepLinkConversation: Conversation?
@@ -14,6 +15,14 @@ struct ConversationsView: View {
             Group {
                 if isLoading {
                     ProgressView()
+                } else if loadError != nil && conversations.isEmpty {
+                    ContentUnavailableView {
+                        Label("Couldn’t load messages", systemImage: "wifi.exclamationmark")
+                    } description: {
+                        Text("Your conversations haven’t been removed. Check your connection and try again.")
+                    } actions: {
+                        Button("Try again") { Task { await load() } }.buttonStyle(.borderedProminent).tint(Theme.primary)
+                    }
                 } else if conversations.isEmpty {
                     if auth.currentUser?.role == .client {
                         ContentUnavailableView {
@@ -33,9 +42,19 @@ struct ConversationsView: View {
                         ContentUnavailableView("No conversations yet", systemImage: "message", description: Text("Leads from homeowners will appear here."))
                     }
                 } else {
-                    List(conversations) { conv in
-                        NavigationLink(destination: MessagingView(conversation: conv)) {
-                            ConversationRowView(conversation: conv)
+                    List {
+                        Section {
+                            ForEach(conversations) { conv in
+                                NavigationLink(destination: MessagingView(conversation: conv)) {
+                                    ConversationRowView(conversation: conv)
+                                }
+                                .listRowInsets(EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
+                            }
+                        } header: { Text("Your conversations") }
+                    }
+                    .safeAreaInset(edge: .top) {
+                        if loadError != nil {
+                            HStack { Text("Couldn’t refresh. Showing previous messages.").font(.caption); Button("Retry") { Task { await load() } } }.padding()
                         }
                     }
                 }
@@ -62,10 +81,16 @@ struct ConversationsView: View {
     }
 
     private func load() async {
-        isLoading = true
+        isLoading = conversations.isEmpty
+        loadError = nil
         defer { isLoading = false }
-        conversations = (try? await APIService.shared.myConversations()) ?? []
-        await inbox.refresh()
+        do {
+            conversations = try await APIService.shared.myConversations()
+            await inbox.refresh()
+        } catch {
+            loadError = error.localizedDescription
+
+        }
     }
 
     /// Deep link from a tapped push: ensure the thread is loaded, then navigate.
@@ -80,30 +105,34 @@ struct ConversationsView: View {
 
 struct ConversationRowView: View {
     let conversation: Conversation
+    @EnvironmentObject private var auth: AuthStore
+    private var participant: String {
+        auth.isBusiness ? (conversation.client?.name ?? "Homeowner") : (conversation.business?.companyName ?? "Business")
+    }
 
     var body: some View {
         HStack(spacing: 12) {
-            AsyncImage(url: URL(string: conversation.business?.logoUrl ?? "")) { img in
-                img.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: { Color.secondary.opacity(0.2) }
-            .frame(width: 48, height: 48)
-            .clipShape(Circle())
+
+            BusinessAvatar(name: participant, logoUrl: auth.isBusiness ? conversation.client?.avatarUrl : conversation.business?.logoUrl, size: 48, cornerRadius: 16)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(conversation.business?.companyName ?? "Business")
+                Text(participant)
                     .font(.subheadline)
                     .fontWeight(conversation.hasUnread ? .bold : .semibold)
                 if let lastMsg = conversation.messages?.first {
                     Text(lastMsg.hasText ? lastMsg.body : (lastMsg.images.isEmpty ? "" : "📷 Photo"))
-                        .font(.caption)
+                        .font(.subheadline)
                         .foregroundStyle(conversation.hasUnread ? .primary : .secondary)
                         .fontWeight(conversation.hasUnread ? .medium : .regular)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
             }
 
             Spacer()
 
+            if let date = (conversation.messages?.first?.createdAt ?? conversation.updatedAt).iso8601Date {
+                Text(date, format: .dateTime.month(.abbreviated).day()).font(.caption).foregroundStyle(.secondary)
+            }
             if conversation.hasUnread {
                 Text("\(conversation.unreadCount ?? 0)")
                     .font(.caption2.bold())

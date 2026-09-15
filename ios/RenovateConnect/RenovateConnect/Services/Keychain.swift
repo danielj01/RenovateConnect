@@ -48,24 +48,33 @@ enum Keychain {
 /// signed-in users keep their session without re-authenticating.
 enum AuthToken {
     private static let key = "authToken"
+    // Keep the active session usable even if persistence is unavailable (for
+    // example, an unsigned simulator build without Keychain entitlements).
+    // This copy never goes to disk and is discarded on logout/process exit.
+    private static var sessionToken: String?
 
     static var value: String? {
-        if let token = Keychain.get(key) { return token }
+        if let sessionToken { return sessionToken }
+        if let token = Keychain.get(key) {
+            sessionToken = token
+            return token
+        }
         // One-time migration from the previous UserDefaults storage.
         if let legacy = UserDefaults.standard.string(forKey: key) {
-            Keychain.set(legacy, for: key)
-            UserDefaults.standard.removeObject(forKey: key)
+            set(legacy)
             return legacy
         }
         return nil
     }
 
     static func set(_ token: String) {
+        sessionToken = token
         Keychain.set(token, for: key)
         UserDefaults.standard.removeObject(forKey: key) // ensure no plaintext copy lingers
     }
 
     static func clear() {
+        sessionToken = nil
         Keychain.remove(key)
         UserDefaults.standard.removeObject(forKey: key)
     }

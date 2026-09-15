@@ -179,3 +179,25 @@ describe('Single conversation (read receipts)', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('Conversation participant identity', () => {
+  test('members receive minimal homeowner identity and outsiders cannot read it', async () => {
+    const { business, token: businessToken } = await createBusiness();
+    const { user: client, token: clientToken } = await createClient({ name: 'Review Homeowner' });
+    const { token: outsiderToken } = await createClient();
+    const conversation = await seedConversation(business, client);
+    for (const token of [businessToken, clientToken]) {
+      const list = await request(app).get('/conversations').set('Authorization', `Bearer ${token}`);
+      expect(list.status).toBe(200);
+      expect(list.body[0].client).toEqual({ id: client.id, name: 'Review Homeowner', avatarUrl: null });
+      const detail = await request(app).get(`/conversations/${conversation.id}`).set('Authorization', `Bearer ${token}`);
+      expect(detail.status).toBe(200);
+      expect(detail.body.client).toEqual(list.body[0].client);
+    }
+    const list = await request(app).get('/conversations').set('Authorization', `Bearer ${outsiderToken}`);
+    expect(list.body).toEqual([]);
+    const detail = await request(app).get(`/conversations/${conversation.id}`).set('Authorization', `Bearer ${outsiderToken}`);
+    expect(detail.status).toBe(403);
+    expect(detail.body.client).toBeUndefined();
+  });
+});

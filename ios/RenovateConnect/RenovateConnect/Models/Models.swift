@@ -252,6 +252,7 @@ struct Conversation: Codable, Identifiable, Hashable {
     let businessId: String
     var clientId: String?
     let business: BusinessSummary?
+    var client: ConversationClient?
     let updatedAt: String
     let messages: [ChatMessage]?
     var unreadCount: Int?
@@ -267,6 +268,12 @@ struct Conversation: Codable, Identifiable, Hashable {
     // without forcing Hashable on every nested model.
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: Conversation, rhs: Conversation) -> Bool { lhs.id == rhs.id }
+}
+
+struct ConversationClient: Codable {
+    let id: String
+    let name: String
+    var avatarUrl: String?
 }
 
 struct BusinessSummary: Codable {

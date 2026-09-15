@@ -85,9 +85,11 @@ services:
       - key: NVIDIA_API_KEY
         sync: false
       - key: NVIDIA_CHAT_MODEL
-        value: deepseek-ai/deepseek-v4-flash-0731
+        value: nvidia/nemotron-3.5-lightning-30b-a3b
+      - key: NVIDIA_CHAT_FALLBACK_MODEL
+        value: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
       - key: NVIDIA_VISION_MODEL
-        value: nvidia/nemotron-nano-12b-v2-vl
+        value: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET

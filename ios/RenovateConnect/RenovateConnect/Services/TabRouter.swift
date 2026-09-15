@@ -20,10 +20,10 @@ final class TabRouter: ObservableObject {
     // doesn't stick around and re-apply on an unrelated later tab switch.
     @Published var pendingSearchSpecialty: String?
 
-    // Client tab bar: Explore(0) · Estimate(1) · AI Chat(2) · Messages(3) · Profile(4)
-    static let explore = 0
+    // Client tab bar: Inspiration(0) · Estimate(1) · Explore(2) · Messages(3) · Profile(4)
+    static let inspiration = 0
+    static let explore = 2
     static let estimate = 1
-    static let aiChat = 2
     // Shared across both bars.
     static let messages = 3
     static let profile = 4

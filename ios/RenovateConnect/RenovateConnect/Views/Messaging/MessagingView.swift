@@ -3,6 +3,7 @@ import PhotosUI
 import UIKit
 
 struct MessagingView: View {
+    @State private var messageError: String?
     let conversation: Conversation
     @State private var messages: [ChatMessage] = []
     @State private var input = ""
@@ -81,6 +82,7 @@ struct MessagingView: View {
                     }
                     .padding()
                 }
+                .refreshable { await load() }
                 .onChange(of: messages.count) {
                     if let last = messages.last {
                         withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
@@ -88,9 +90,17 @@ struct MessagingView: View {
                 }
             }
 
-            inputBar
+            if let messageError {
+                HStack(alignment: .top) {
+                    Image(systemName: "exclamationmark.circle")
+                    Text(messageError).font(.footnote)
+                    Spacer()
+                    Button("Dismiss") { self.messageError = nil }.font(.footnote)
+                }.foregroundStyle(.secondary).padding(12).background(Color(.secondarySystemBackground))
+            }
+            inputBar.disabled(isSending)
         }
-        .navigationTitle(conversation.business?.companyName ?? "Conversation")
+        .navigationTitle(auth.isBusiness ? (conversation.client?.name ?? "Homeowner") : (conversation.business?.companyName ?? "Conversation"))
         .navigationBarTitleDisplayMode(.inline)
         .modifier(ModerationModifier(
             otherUserId: otherUserId,
@@ -108,8 +118,8 @@ struct MessagingView: View {
         }
         .task {
             await load()
-            // Poll the other party's read state while the thread is open so the
-            // "Seen" receipt updates live. Cancelled automatically on disappear.
+            // Refresh replies and read receipts while the thread is open.
+            // SwiftUI cancels this task when the screen disappears.
             await pollReceipts()
         }
     }
@@ -195,7 +205,14 @@ struct MessagingView: View {
     // MARK: - Data
 
     private func load() async {
-        messages = (try? await APIService.shared.getMessages(conversationId: conversation.id)) ?? []
+        do {
+            let fresh = try await APIService.shared.getMessages(conversationId: conversation.id)
+            mergeMessages(fresh)
+            messageError = nil
+        } catch {
+            messageError = "Couldn’t refresh messages. Pull down to try again."
+            return
+        }
         // Opening the thread marks it read; refresh the inbox badge.
         try? await APIService.shared.markConversationRead(conversationId: conversation.id)
         await inbox.refresh()
@@ -216,22 +233,24 @@ struct MessagingView: View {
     private func send() async {
         let body = input.trimmingCharacters(in: .whitespaces)
         let imgs = attachments
-        guard !body.isEmpty || !imgs.isEmpty else { return }
-        input = ""
-        attachments = []
-        pickerItems = []
+        guard !isSending, !body.isEmpty || !imgs.isEmpty else { return }
+
+        messageError = nil
         isSending = true
         defer { isSending = false }
         do {
             let msg = imgs.isEmpty
                 ? try await APIService.shared.sendMessage(conversationId: conversation.id, body: body)
                 : try await APIService.shared.sendMessage(conversationId: conversation.id, body: body, images: imgs)
-            withAnimation { messages.append(msg) }
+            input = ""
+            attachments = []
+            pickerItems = []
+            withAnimation { mergeMessages([msg]) }
             // First real engagement → a great moment to ask for push permission.
             notifications.considerPriming()
         } catch {
-            // Restore the text so a failed send isn't silently lost.
-            input = body
+            // Keep the existing text and photo draft available for retry.
+            messageError = "Message wasn’t sent. Your text and photos are still here—tap Send to retry."
         }
     }
 
@@ -257,10 +276,29 @@ struct MessagingView: View {
         withAnimation { otherLastReadAt = stamp?.iso8601Date }
     }
 
+    /// Merge by ID so a slow refresh cannot remove a message sent while it was loading.
+    private func mergeMessages(_ fresh: [ChatMessage]) {
+        var byID = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+        for message in fresh { byID[message.id] = message }
+        messages = byID.values.sorted {
+            let left = $0.createdAt.iso8601Date ?? .distantPast
+            let right = $1.createdAt.iso8601Date ?? .distantPast
+            return left == right ? $0.id < $1.id : left < right
+        }
+    }
+
     private func pollReceipts() async {
         while !Task.isCancelled {
             try? await Task.sleep(for: .seconds(5))
             if Task.isCancelled { break }
+            if let fresh = try? await APIService.shared.getMessages(conversationId: conversation.id) {
+                let previousCount = messages.count
+                mergeMessages(fresh)
+                if messages.count > previousCount {
+                    try? await APIService.shared.markConversationRead(conversationId: conversation.id)
+                    await inbox.refresh()
+                }
+            }
             await refreshReceipt()
         }
     }
@@ -380,7 +418,7 @@ private struct ImageZoomView: View {
     }
 }
 
-private extension String {
+extension String {
     /// Parse an ISO-8601 timestamp (with or without fractional seconds) to Date.
     var iso8601Date: Date? {
         let iso = ISO8601DateFormatter()

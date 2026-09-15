@@ -1,0 +1,36 @@
+# Local inspiration photo sources
+
+30 Pexels stock photographs added to the local development feed. These images are free to use under the [Pexels License](https://www.pexels.com/license/); they are licensed stock photos, not public-domain images or evidence of work completed by the demo contractors. Existing content is preserved.
+
+Rerun from `api/`: `node --env-file=.env scripts/seed-local-inspiration.js`. The script rejects nonlocal databases and skips duplicate post IDs. Images live in gitignored `api/uploads/demo-pexels-*.jpg`.
+
+- **Kitchen — Marble island and warm timber**: [DOAN THANH BINH](https://www.pexels.com/photo/modern-kitchen-interior-with-marble-island-36834043/)
+- **Bathroom — A light-filled bathroom retreat**: [Claudia Schmalz](https://www.pexels.com/photo/bathroom-interior-with-bathtub-near-windows-5906348/)
+- **Bedroom — Modern bedroom storage**: [Hiba Q. Omar](https://www.pexels.com/photo/modern-bedroom-interior-14613398/)
+- **Living room — A bright space to gather**: [Curtis Adams](https://www.pexels.com/photo/sofa-in-living-room-16641324/)
+- **Exterior — Garden-facing outdoor living**: [Camilo](https://www.pexels.com/photo/photo-of-a-house-exterior-5177211/)
+- **Whole home — Behind the finish: interior painting**: [Tima Miroshnichenko](https://www.pexels.com/photo/a-man-working-at-a-construction-site-6474301/)
+- **Kitchen — Clean lines and a statement island**: [Martin Lang](https://www.pexels.com/photo/modern-contemporary-kitchen-with-marble-island-28753088/)
+- **Bathroom — Marble finishes and double vanity**: [Max Vakhtbovych](https://www.pexels.com/photo/interior-of-modern-bathroom-with-white-walls-and-bathtub-7534571/)
+- **Bedroom — Soft linen and bedside timber**: [Aljona Ovtšinnikova](https://www.pexels.com/photo/cozy-bedroom-interior-with-bed-and-nightstand-28536694/)
+- **Living room — A quiet corner by the window**: [Caleb Oquendo](https://www.pexels.com/photo/living-room-interior-with-sofa-against-window-at-home-7513991/)
+- **Exterior — A coastal patio escape**: [Robert So](https://www.pexels.com/photo/house-with-patio-13122003/)
+- **Whole home — Preparing a home for a fresh finish**: [Antoni Shkraba](https://www.pexels.com/photo/a-man-renovating-a-home-5493666/)
+- **Bathroom — A bath with a view**: [Brett Jordan](https://www.pexels.com/photo/modern-bathroom-with-large-window-and-bathtub-30786732/)
+- **Bedroom — A warm wooden bedroom**: [Karolina K](https://www.pexels.com/photo/cozy-bedroom-interior-with-elegant-design-30857191/)
+- **Living room — Contemporary comfort**: [Alejandro Robles Duque](https://www.pexels.com/photo/sofa-in-a-living-room-17678671/)
+- **Exterior — A backyard made for weekends**: [Max Vakhtbovych](https://www.pexels.com/photo/house-backyard-with-lawn-green-grass-7546775/)
+- **Whole home — Teamwork on an interior refresh**: [DΛVΞ GΛRCIΛ](https://www.pexels.com/photo/construction-workers-painting-interior-walls-36153946/)
+- **Bedroom — Layered neutrals and a bedroom bench**: [Max Vakhtbovych](https://www.pexels.com/photo/bedroom-interior-with-comfy-bed-and-bench-7147299/)
+- **Living room — Room for everyone**: [Max Vakhtbovych](https://www.pexels.com/photo/living-room-interior-with-couches-near-tv-and-windows-7174113/)
+- **Exterior — A welcoming modern entrance**: [Max Vakhtbovych](https://www.pexels.com/photo/frontage-of-a-residential-house-with-garden-8134817/)
+- **Whole home — The craft behind custom woodwork**: [Tima Miroshnichenko](https://www.pexels.com/photo/carpenter-working-on-a-piece-of-wood-6790977/)
+- **Bedroom — A sunlit sleeping space**: [Charlotte May](https://www.pexels.com/photo/bedroom-interior-with-soft-cushions-on-bed-at-home-5825567/)
+- **Living room — Elegant living room details**: [Max Vakhtbovych](https://www.pexels.com/photo/interior-of-living-room-with-couch-7535028/)
+- **Exterior — Open-air living and greenery**: [Pew Nguyen](https://www.pexels.com/photo/patio-of-luxurious-house-13600836/)
+- **Whole home — Inside a home renovation**: [Karl Shields](https://www.pexels.com/photo/a-man-working-on-a-house-renovation-16767783/)
+- **Bedroom — Simple timber bedroom details**: [Max Vakhtbovych](https://www.pexels.com/photo/cozy-bedroom-with-comfortable-bed-and-wooden-furniture-6585602/)
+- **Living room — A compact lounge with texture**: [Max Vakhtbovych](https://www.pexels.com/photo/a-sofa-in-a-living-room-7614543/)
+- **Exterior — Timber accents and garden edges**: [Pew Nguyen](https://www.pexels.com/photo/modern-minimalist-house-exterior-with-garden-30278097/)
+- **Whole home — Workshop details and wood finishes**: [Tima Miroshnichenko](https://www.pexels.com/photo/man-working-at-carpentry-7480733/)
+- **Whole home — Preparing walls for paint**: [Antoni Shkraba](https://www.pexels.com/photo/a-man-renovating-a-home-5493656/)

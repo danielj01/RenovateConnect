@@ -35,9 +35,9 @@ describe('provider configuration', () => {
     expect(aiProvider.chatModel()).toBe('deepseek-ai/deepseek-r1');
   });
 
-  test('vision model id defaults to nemotron-nano-12b-v2-vl and is overridable', () => {
+  test('vision model id defaults to nemotron-3-nano-omni-30b-a3b-reasoning and is overridable', () => {
     delete process.env.NVIDIA_VISION_MODEL;
-    expect(aiProvider.visionModel()).toBe('nvidia/nemotron-nano-12b-v2-vl');
+    expect(aiProvider.visionModel()).toBe('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning');
     process.env.NVIDIA_VISION_MODEL = 'meta/llama-3.2-11b-vision-instruct';
     expect(aiProvider.visionModel()).toBe('meta/llama-3.2-11b-vision-instruct');
   });
@@ -64,7 +64,9 @@ describe('visionCompletion', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toMatch(/\/chat\/completions$/);
     const body = JSON.parse(init.body);
-    expect(body.model).toBe('nvidia/nemotron-nano-12b-v2-vl');
+    expect(body.model).toBe('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning');
+    expect(body.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(init.signal).toBeInstanceOf(AbortSignal);
     expect(body.messages[0]).toEqual({ role: 'system', content: 'You are an estimator.' });
     const userContent = body.messages[1].content;
     expect(userContent[0]).toEqual({ type: 'image_url', image_url: { url: 'data:image/jpeg;base64,AAAA' } });
@@ -150,7 +152,7 @@ describe('chat routing', () => {
     process.env.NVIDIA_API_KEY = 'nvapi-fake';
     jest.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ choices: [{ message: { content: 'routed to nvidia' } }] }),
+      json: async () => ({ choices: [{ message: { content: '\n  routed to nvidia\n\n**Second paragraph**\n ' } }] }),
     });
 
     // Require after the env is set so the module reads the configured state.
@@ -161,6 +163,40 @@ describe('chat routing', () => {
         { companyName: 'Peak', city: 'Austin', state: 'TX', specialties: ['Kitchen'], averageRating: 5 },
       ],
     });
-    expect(reply).toBe('routed to nvidia');
+    expect(reply).toBe('routed to nvidia\n\n**Second paragraph**');
+  });
+});
+
+describe('chat availability recovery', () => {
+  beforeEach(() => {
+    process.env.NVIDIA_CHAT_MODEL = 'primary';
+    process.env.NVIDIA_CHAT_FALLBACK_MODEL = 'backup';
+  });
+
+  test.each([503, 429, 404, 410])('uses backup on provider status %s', async status => {
+    const mock = jest.spyOn(global, 'fetch')
+      .mockResolvedValueOnce({ ok: false, status })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: 'Recovered' } }] }) });
+    expect(await aiProvider.chatCompletion({ messages: [{ role: 'user', content: 'hi' }] })).toBe('Recovered');
+    expect(mock.mock.calls.map(([, init]) => JSON.parse(init.body).model)).toEqual(['primary', 'backup']);
+  });
+
+  test('recovers after a connection timeout', async () => {
+    jest.spyOn(global, 'fetch')
+      .mockRejectedValueOnce(new DOMException('Timed out', 'TimeoutError'))
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ choices: [{ message: { content: 'Recovered' } }] }) });
+    expect(await aiProvider.chatCompletion({ messages: [] })).toBe('Recovered');
+  });
+
+  test('does not retry invalid credentials across models', async () => {
+    const mock = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: false, status: 401 });
+    await expect(aiProvider.chatCompletion({ messages: [] })).rejects.toMatchObject({ status: 503 });
+    expect(mock).toHaveBeenCalledTimes(1);
+  });
+
+  test('stops after both models fail', async () => {
+    const mock = jest.spyOn(global, 'fetch').mockResolvedValue({ ok: false, status: 503 });
+    await expect(aiProvider.chatCompletion({ messages: [] })).rejects.toMatchObject({ status: 503 });
+    expect(mock).toHaveBeenCalledTimes(2);
   });
 });

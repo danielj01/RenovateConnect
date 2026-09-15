@@ -13,12 +13,12 @@ struct MainTabView: View {
     @StateObject private var activity = ActivityStore.shared
 
     // First-run welcome flow; flipped true once the user finishes or skips.
-    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
+    @State private var showWelcome = false
     // One-time Profile Strength interstitial for a new contractor, shown once
     // right after business setup. Once dismissed it doesn't come back — the
     // Dashboard's ProfileStrengthCard carries the same nudge afterward for as
     // long as the profile stays incomplete.
-    @AppStorage("hasSeenProfileChecklist") private var hasSeenProfileChecklist = false
+    @State private var hasSeenProfileChecklist = false
     @StateObject private var profileCompletion = ProfileCompletionStore.shared
 
     // A tapped push/activity that targets a pushable screen (appointment/quote/
@@ -50,6 +50,9 @@ struct MainTabView: View {
                     BusinessProfileSetupView()
                 } else if !hasSeenProfileChecklist {
                     ProfileStrengthChecklistView {
+                        if let user = auth.currentUser {
+                            OnboardingProgress().completeChecklist(userID: user.id)
+                        }
                         hasSeenProfileChecklist = true
                     }
                 } else {
@@ -97,11 +100,27 @@ struct MainTabView: View {
                 .environmentObject(notifications)
                 .presentationDetents([.large])
         }
-        .fullScreenCover(isPresented: .constant(!hasCompletedOnboarding && auth.currentUser != nil)) {
-            OnboardingView(role: auth.currentUser?.role ?? .client) {
-                hasCompletedOnboarding = true
-            }
+        .task(id: auth.currentUser?.id) {
+            guard let user = auth.currentUser else { showWelcome = false; return }
+            hasSeenProfileChecklist = OnboardingProgress().hasCompletedChecklist(userID: user.id)
+            showWelcome = OnboardingProgress().shouldPresent(
+                userID: user.id, role: user.role,
+                sawGuestIntro: UserDefaults.standard.bool(forKey: "hasSeenGuestIntro"))
         }
+        .fullScreenCover(isPresented: $showWelcome) {
+            OnboardingView(role: auth.currentUser?.role ?? .client, onFinish: finishWelcome,
+                           onChooseDestination: { tab in
+                router.selection = tab
+                finishWelcome()
+            })
+        }
+    }
+
+    private func finishWelcome() {
+        if let user = auth.currentUser {
+            OnboardingProgress().complete(userID: user.id, role: user.role)
+        }
+        showWelcome = false
     }
 
     /// Route a normalized deep link: conversations hand off to the Messages tab
@@ -136,18 +155,17 @@ struct MainTabView: View {
     // Homeowners: discover contractors, estimate, chat, message.
     private var clientTabs: some View {
         TabView(selection: $router.selection) {
-            BusinessSearchView()
-                .tabItem { Label("Explore", systemImage: "safari.fill") }
-                .tag(0)
+            InspirationView()
+                .tabItem { Label("Inspiration", systemImage: "photo.on.rectangle.angled") }
+                .tag(TabRouter.inspiration)
 
             EstimationView()
                 .tabItem { Label("Estimate", systemImage: "camera.viewfinder") }
                 .tag(1)
 
-            // Inspiration replaces the AI Chat tab; AI chat now opens from Explore.
-            InspirationView()
-                .tabItem { Label("Inspiration", systemImage: "photo.on.rectangle.angled") }
-                .tag(2)
+            BusinessSearchView()
+                .tabItem { Label("Explore", systemImage: "safari.fill") }
+                .tag(TabRouter.explore)
 
             ConversationsView()
                 .tabItem { Label("Messages", systemImage: "message.fill") }
