@@ -249,10 +249,10 @@ export default function Home() {
               <li><CheckCircleIcon /><span><strong>Founding contractors</strong> get set up by hand before launch.</span></li>
             </ul>
             <div className="btn-row mt-6">
-              <Link className="btn btn-primary" href="/waitlist?for=contractor">
+              <a className="btn btn-primary" href="/waitlist?for=contractor">
                 Claim a founding spot
                 <ArrowRightIcon size={17} />
-              </Link>
+              </a>
             </div>
           </div>
           <div className="split-media">

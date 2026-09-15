@@ -176,7 +176,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   <li><Link href="/estimate">Get an estimate</Link></li>
                   <li><Link href="/cost">Cost guides</Link></li>
                   <li><Link href="/waitlist">Join the waitlist</Link></li>
-                  <li><Link href="/waitlist?for=contractor">For contractors</Link></li>
+                  <li><a href="/waitlist?for=contractor">For contractors</a></li>
                 </ul>
               </div>
 
