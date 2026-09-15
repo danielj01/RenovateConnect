@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import {
@@ -5,7 +6,7 @@ import {
 } from '@/lib/costData';
 import { appStoreUrl, hasAppStoreListing, SITE_URL } from '@/lib/config';
 
-interface Props { params: { metro: string; category: string } }
+interface Props { params: Promise<{ metro: string; category: string }> }
 
 const YEAR = 2026;
 
@@ -17,9 +18,9 @@ export function generateStaticParams() {
   );
 }
 
-export function generateMetadata({ params }: Props): Metadata {
-  const metro = metroBySlug(params.metro);
-  const category = categoryBySlug(params.category);
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const metro = metroBySlug((await params).metro);
+  const category = categoryBySlug((await params).category);
   if (!metro || !category) return { title: 'Cost guide not found' };
   const { totalLow, totalHigh } = scaledCost(category, metro);
   const title = `${category.name} Cost in ${metro.name} (${YEAR})`;
@@ -31,9 +32,9 @@ export function generateMetadata({ params }: Props): Metadata {
   };
 }
 
-export default function CostPage({ params }: Props) {
-  const metro = metroBySlug(params.metro);
-  const category = categoryBySlug(params.category);
+export default async function CostPage({ params }: Props) {
+  const metro = metroBySlug((await params).metro);
+  const category = categoryBySlug((await params).category);
   if (!metro || !category) notFound();
 
   const { items, totalLow, totalHigh } = scaledCost(category, metro);
@@ -74,7 +75,7 @@ export default function CostPage({ params }: Props) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
       <nav className="muted" style={{ fontSize: '0.8125rem' }}>
-        <a href="/cost">Cost guides</a> · {metro.name}
+        <Link href="/cost">Cost guides</Link> · {metro.name}
       </nav>
 
       <h1 style={{ fontSize: 'clamp(1.75rem, 1.4rem + 1.6vw, 2.5rem)', marginTop: 10 }}>
@@ -132,9 +133,9 @@ export default function CostPage({ params }: Props) {
             Get the app
           </a>
         ) : (
-          <a className="btn btn-secondary btn-block mt-4" href="/waitlist">
+          <Link className="btn btn-secondary btn-block mt-4" href="/waitlist">
             Join the waitlist
-          </a>
+          </Link>
         )}
       </section>
 

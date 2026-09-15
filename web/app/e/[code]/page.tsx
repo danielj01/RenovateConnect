@@ -6,10 +6,10 @@ import { formatCode, money } from '@/lib/estimate';
 import { appStoreUrl, hasAppStoreListing } from '@/lib/config';
 import { WaitlistForm } from '@/components/WaitlistForm';
 
-interface Props { params: { code: string } }
+interface Props { params: Promise<{ code: string }> }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const est = await getSharedEstimate(params.code).catch(() => null);
+  const est = await getSharedEstimate((await params).code).catch(() => null);
   if (!est) return { title: 'Saved estimate' };
   const r = est.roomType ? `${est.roomType} ` : '';
   return {
@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function SavedEstimatePage({ params }: Props) {
-  const est = await getSharedEstimate(params.code).catch(() => null);
+  const est = await getSharedEstimate((await params).code).catch(() => null);
   if (!est) notFound();
 
   // This page's own URL is a universal link — tapping the button opens the app

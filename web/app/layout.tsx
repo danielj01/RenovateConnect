@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { siteName, tagline, appleAppStoreId } from '@/lib/config';
@@ -140,14 +141,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         <header className="site-header">
           <div className="container">
-            <a href="/" className="brand" aria-label={`${siteName} home`}>
+            <Link href="/" className="brand" aria-label={`${siteName} home`}>
               <BrandMark />
               {siteName}
-            </a>
+            </Link>
             <nav className="nav-links" aria-label="Primary">
-              <a href="/estimate">Estimate</a>
-              <a href="/cost" className="nav-hide-sm">Cost guides</a>
-              <a href="/waitlist" className="nav-cta">Join waitlist</a>
+              <Link href="/estimate">Estimate</Link>
+              <Link href="/cost" className="nav-hide-sm">Cost guides</Link>
+              <Link href="/waitlist" className="nav-cta">Join waitlist</Link>
             </nav>
           </div>
         </header>
@@ -158,10 +159,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="container">
             <div className="footer-grid">
               <div className="footer-about">
-                <a href="/" className="brand" style={{ marginBottom: 12 }}>
+                <Link href="/" className="brand" style={{ marginBottom: 12 }}>
                   <BrandMark />
                   {siteName}
-                </a>
+                </Link>
                 <p style={{ maxWidth: '34ch', fontSize: '0.9375rem' }}>
                   Instant AI renovation estimates and licensed Bay Area contractors.
                   You hire and pay the contractor directly — we never hold your money
@@ -172,9 +173,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div>
                 <p className="footer-heading">Product</p>
                 <ul className="footer-list">
-                  <li><a href="/estimate">Get an estimate</a></li>
-                  <li><a href="/cost">Cost guides</a></li>
-                  <li><a href="/waitlist">Join the waitlist</a></li>
+                  <li><Link href="/estimate">Get an estimate</Link></li>
+                  <li><Link href="/cost">Cost guides</Link></li>
+                  <li><Link href="/waitlist">Join the waitlist</Link></li>
                   <li><a href="/waitlist?for=contractor">For contractors</a></li>
                 </ul>
               </div>
@@ -182,8 +183,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <div>
                 <p className="footer-heading">Company</p>
                 <ul className="footer-list">
-                  <li><a href="/privacy">Privacy Policy</a></li>
-                  <li><a href="/terms">Terms of Service</a></li>
+                  <li><Link href="/privacy">Privacy Policy</Link></li>
+                  <li><Link href="/terms">Terms of Service</Link></li>
                   <li><a href="mailto:support@renovateconnect.com">support@renovateconnect.com</a></li>
                 </ul>
               </div>

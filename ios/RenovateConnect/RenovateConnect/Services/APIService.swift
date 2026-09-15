@@ -149,8 +149,10 @@ final class APIService {
 
     /// Change the signed-in user's password (requires the current password).
     func changePassword(currentPassword: String, newPassword: String) async throws {
-        try await requestNoContent("auth/change-password", method: "POST",
+        struct PasswordChangeResponse: Decodable { let token: String }
+        let response: PasswordChangeResponse = try await request("auth/change-password", method: "POST",
                                    body: ["currentPassword": currentPassword, "newPassword": newPassword])
+        AuthToken.set(response.token)
     }
 
     /// Record (re-)acceptance of the current Terms of Service for the signed-in

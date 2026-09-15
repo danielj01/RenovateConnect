@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const { z } = require('zod');
 const db = require('../services/db');
-const { authMiddleware, requireRole } = require('../middleware/auth');
+const { authMiddleware, requireRole, sessionUser } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { uploadImage } = require('../services/storage');
 const { recomputeBusinessCostTier, tierForQuery } = require('../services/costTier');
@@ -223,16 +223,13 @@ router.get('/', async (req, res, next) => {
     // coordinates narrow the pool here rather than replacing the ranking.
     if (recommended === 'true') {
       let prefs = null;
-      const header = req.headers.authorization;
-      if (header?.startsWith('Bearer ')) {
-        try {
-          const payload = require('jsonwebtoken').verify(header.slice(7), process.env.JWT_SECRET);
-          const user = await db.user.findUnique({
-            where: { id: payload.id },
-            select: { questionnaireCompleted: true, questionnairePreferences: true },
-          });
-          if (user?.questionnaireCompleted) prefs = user.questionnairePreferences;
-        } catch { /* invalid token — treat as anonymous, use default weights */ }
+      const viewer = await sessionUser(req.headers.authorization);
+      if (viewer) {
+        const user = await db.user.findUnique({
+          where: { id: viewer.id },
+          select: { questionnaireCompleted: true, questionnairePreferences: true },
+        });
+        if (user?.questionnaireCompleted) prefs = user.questionnairePreferences;
       }
 
       const weights = weightsFromPreferences(prefs);
@@ -423,16 +420,9 @@ router.get('/:id', async (req, res, next) => {
   try {
     // Optional auth parse — used both for the approval gate and to skip the
     // owner's own profile view.
-    let viewerId = null;
-    let viewerRole = null;
-    const header = req.headers.authorization;
-    if (header?.startsWith('Bearer ')) {
-      try {
-        const payload = require('jsonwebtoken').verify(header.slice(7), process.env.JWT_SECRET);
-        viewerId = payload.id;
-        viewerRole = payload.role;
-      } catch { /* ignore */ }
-    }
+    const viewer = await sessionUser(req.headers.authorization);
+    const viewerId = viewer?.id;
+    const viewerRole = viewer?.role;
 
     const business = await db.business.findUnique({
       where: { id: req.params.id },
@@ -633,16 +623,9 @@ async function requireBusinessOwner(req, res) {
 // preview pending submissions in the portfolio manager).
 router.get('/:id/portfolio', async (req, res, next) => {
   try {
-    let viewerId = null;
-    let viewerRole = null;
-    const header = req.headers.authorization;
-    if (header?.startsWith('Bearer ')) {
-      try {
-        const payload = require('jsonwebtoken').verify(header.slice(7), process.env.JWT_SECRET);
-        viewerId = payload.id;
-        viewerRole = payload.role;
-      } catch { /* ignore */ }
-    }
+    const viewer = await sessionUser(req.headers.authorization);
+    const viewerId = viewer?.id;
+    const viewerRole = viewer?.role;
     const business = await db.business.findUnique({ where: { id: req.params.id } });
     if (!business) return res.status(404).json({ error: 'Not found' });
     const isOwner = viewerId === business.userId;

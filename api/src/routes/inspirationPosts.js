@@ -17,7 +17,7 @@
 const router = require('express').Router({ mergeParams: true });
 const { z } = require('zod');
 const db = require('../services/db');
-const { authMiddleware, requireRole } = require('../middleware/auth');
+const { authMiddleware, requireRole, sessionUser } = require('../middleware/auth');
 const upload = require('../middleware/upload');
 const { uploadImage } = require('../services/storage');
 
@@ -68,16 +68,9 @@ function resubmitOnEdit(req) {
 // everything so the composer can show pending/rejected items with their status.
 router.get('/', async (req, res, next) => {
   try {
-    let viewerId = null;
-    let viewerRole = null;
-    const header = req.headers.authorization;
-    if (header?.startsWith('Bearer ')) {
-      try {
-        const payload = require('jsonwebtoken').verify(header.slice(7), process.env.JWT_SECRET);
-        viewerId = payload.id;
-        viewerRole = payload.role;
-      } catch { /* ignore — treat as an anonymous viewer */ }
-    }
+    const viewer = await sessionUser(req.headers.authorization);
+    const viewerId = viewer?.id;
+    const viewerRole = viewer?.role;
     const business = await db.business.findUnique({ where: { id: req.params.id } });
     if (!business) return res.status(404).json({ error: 'Not found' });
     const isOwner = viewerId === business.userId;

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 // Home. The job of this page is to make one number feel reachable — what will
 // this cost? — and then hand the visitor to either the estimator or the
 // waitlist. Everything claimed here has to stay true of the post-2026-06-26
@@ -84,11 +85,11 @@ export default function Home() {
             </p>
 
             <div className="btn-row mt-6">
-              <a className="btn btn-primary" href="/estimate">
+              <Link className="btn btn-primary" href="/estimate">
                 Get an instant estimate
                 <ArrowRightIcon size={17} />
-              </a>
-              <a className="btn btn-ghost" href="/waitlist">Join the waitlist</a>
+              </Link>
+              <Link className="btn btn-ghost" href="/waitlist">Join the waitlist</Link>
             </div>
 
             <div className="trust-row">
@@ -163,10 +164,10 @@ export default function Home() {
         </div>
 
         <p className="center mt-8">
-          <a className="btn btn-secondary" href="/cost">
+          <Link className="btn btn-secondary" href="/cost">
             All cities and cost guides
             <ArrowRightIcon size={17} />
-          </a>
+          </Link>
         </p>
       </section>
 
@@ -280,13 +281,13 @@ export default function Home() {
           part of the Bay yet, we&rsquo;ll save your spot.
         </p>
         <div className="btn-row">
-          <a className="btn btn-on-dark" href="/estimate">
+          <Link className="btn btn-on-dark" href="/estimate">
             Get an instant estimate
             <ArrowRightIcon size={17} />
-          </a>
-          <a className="btn btn-ghost" href="/waitlist" style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.4)' }}>
+          </Link>
+          <Link className="btn btn-ghost" href="/waitlist" style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.4)' }}>
             Join the waitlist
-          </a>
+          </Link>
         </div>
       </section>
     </>

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { appStoreUrl, hasAppStoreListing } from '@/lib/config';
 
 export default function NotFound() {
@@ -9,8 +10,8 @@ export default function NotFound() {
       </p>
 
       <div className="btn-row mt-8" style={{ justifyContent: 'center' }}>
-        <a className="btn btn-primary" href="/estimate">Get an instant estimate</a>
-        <a className="btn btn-ghost" href="/cost">Browse cost guides</a>
+        <Link className="btn btn-primary" href="/estimate">Get an instant estimate</Link>
+        <Link className="btn btn-ghost" href="/cost">Browse cost guides</Link>
       </div>
 
       {hasAppStoreListing ? (
