@@ -41,6 +41,8 @@ concurrency:
 
 jobs:
   sweep:
+    # Enable only after the existing Render cron has been suspended.
+    if: vars.LISTING_SWEEP_ENABLED == 'true'
     name: Run listing sweep
     runs-on: ubuntu-latest
     timeout-minutes: 10
