@@ -78,7 +78,7 @@ const appleSchema = z.object({
 }).strict();
 
 function signToken(user) {
-  return jwt.sign({ id: user.id, role: user.role }, process.env.JWT_SECRET, { expiresIn: '30d' });
+  return jwt.sign({ id: user.id, role: user.role, sessionVersion: user.sessionVersion }, process.env.JWT_SECRET, { expiresIn: '30d' });
 }
 
 // Strip every secret/credential field before returning a user row to a client:
@@ -86,6 +86,7 @@ function signToken(user) {
 // and their expiries (a code hash is low-entropy and should never be exposed).
 function sanitizeUser(user) {
   if (!user) return user;
+  delete user.sessionVersion;
   delete user.passwordHash;
   delete user.emailVerifyCodeHash;
   delete user.emailVerifyExpiresAt;
@@ -134,6 +135,7 @@ async function findOrCreateSocialUser({ email, name }) {
       data: {
         emailVerified: true,
         passwordHash: await unguessablePasswordHash(),
+        sessionVersion: { increment: 1 },
         emailVerifyCodeHash: null,
         emailVerifyExpiresAt: null,
       },
@@ -312,9 +314,10 @@ router.post('/reset-password', authLimiter, async (req, res, next) => {
 
     const passwordHash = await bcrypt.hash(password, 12);
     const updated = await db.user.update({
-      where: { id: user.id },
+      where: { id: user.id, passwordResetCodeHash: hashCode(code), passwordResetExpiresAt: { gt: new Date() } },
       data: {
         passwordHash,
+        sessionVersion: { increment: 1 },
         emailVerified: true,
         passwordResetCodeHash: null,
         passwordResetExpiresAt: null,
@@ -324,6 +327,7 @@ router.post('/reset-password', authLimiter, async (req, res, next) => {
     });
     res.json({ token: signToken(updated), user: { id: updated.id, email: updated.email, name: updated.name, role: updated.role, questionnaireCompleted: updated.questionnaireCompleted } });
   } catch (err) {
+    if (err.code === 'P2025') return res.status(400).json({ error: 'Credentials changed or the code expired. Please try again.' });
     next(err);
   }
 });
@@ -342,9 +346,13 @@ router.post('/change-password', authMiddleware, authLimiter, async (req, res, ne
       return res.status(401).json({ error: 'Your current password is incorrect.' });
     }
     const passwordHash = await bcrypt.hash(newPassword, 12);
-    await db.user.update({ where: { id: user.id }, data: { passwordHash } });
-    res.json({ ok: true });
+    const updated = await db.user.update({
+      where: { id: user.id, sessionVersion: req.user.sessionVersion },
+      data: { passwordHash, sessionVersion: { increment: 1 }, passwordResetCodeHash: null, passwordResetExpiresAt: null },
+    });
+    res.json({ ok: true, token: signToken(updated) });
   } catch (err) {
+    if (err.code === 'P2025') return res.status(400).json({ error: 'Credentials changed or the code expired. Please try again.' });
     next(err);
   }
 });

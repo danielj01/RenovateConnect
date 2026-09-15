@@ -5,12 +5,12 @@ import { appStoreUrl, hasAppStoreListing } from '@/lib/config';
 import { WaitlistForm } from '@/components/WaitlistForm';
 import { CheckCircleIcon } from '@/components/Icons';
 
-interface Props { params: { id: string } }
+interface Props { params: Promise<{ id: string }> }
 
 // SEO metadata per profile — this is what makes shared links look good in
 // search results, iMessage, and social previews.
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const business = await getBusiness(params.id).catch(() => null);
+  const business = await getBusiness((await params).id).catch(() => null);
   if (!business) return { title: 'Profile not found' };
   const where = `${business.city}, ${business.state}`;
   return {
@@ -33,7 +33,7 @@ function stars(rating: number): string {
 export default async function BusinessProfilePage({ params }: Props) {
   let business: Business | null;
   try {
-    business = await getBusiness(params.id);
+    business = await getBusiness((await params).id);
   } catch {
     // API error → treat as not found rather than 500 on a public link.
     business = null;

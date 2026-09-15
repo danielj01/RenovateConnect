@@ -103,6 +103,8 @@ export function WaitlistLanding() {
   // and home page both point here. Read on mount so the page stays static.
   useEffect(() => {
     const forParam = new URLSearchParams(window.location.search).get('for');
+    // Resolve the URL default after hydration to preserve static rendering.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (forParam === 'contractor' || forParam === 'business') setAudience('CONTRACTOR');
   }, []);
 

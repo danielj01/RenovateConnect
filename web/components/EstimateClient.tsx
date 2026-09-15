@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { type EstimateResult } from '@/lib/estimate';
 import { categories, metroBySlug, metros, scaledCost } from '@/lib/costData';
@@ -64,6 +66,8 @@ export function EstimateClient() {
   const [cameraSupported, setCameraSupported] = useState(false);
 
   useEffect(() => {
+    // Browser capability is intentionally resolved after hydration.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCameraSupported(Boolean(navigator.mediaDevices?.getUserMedia));
   }, []);
 
@@ -86,6 +90,8 @@ export function EstimateClient() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const room = params.get('room');
+    // Apply URL defaults once after hydration without changing static HTML.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (room && ROOM_TYPES.includes(room)) setRoomType(room);
     const metro = params.get('metro');
     if (metro && metros.some((m) => m.slug === metro)) setMetroSlug(metro);
@@ -411,7 +417,6 @@ function EstimateLoading({ done }: { done: boolean }) {
     if (!reducedMotion || done) return;
     const value = ((messageIndex + 1) / LOADING_MESSAGES.length) * CLIMB_TARGET;
     if (fillRef.current) fillRef.current.style.width = `${value}%`;
-    setPct(Math.round(value));
   }, [reducedMotion, done, messageIndex]);
 
   // Landed — close the bar out from wherever the climb reached.
@@ -423,8 +428,11 @@ function EstimateLoading({ done }: { done: boolean }) {
       fillRef.current.style.transition = 'width 300ms cubic-bezier(0.16, 1, 0.3, 1)';
       fillRef.current.style.width = '100%';
     }
-    setPct(100);
   }, [done]);
+
+  const displayPct = done ? 100 : reducedMotion
+    ? Math.round(((messageIndex + 1) / LOADING_MESSAGES.length) * CLIMB_TARGET)
+    : pct;
 
   return (
     <div className="estimate-loading">
@@ -443,11 +451,11 @@ function EstimateLoading({ done }: { done: boolean }) {
         aria-label="Estimate progress"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={pct}
+        aria-valuenow={displayPct}
       >
         <div className="progress-fill" ref={fillRef} />
       </div>
-      <p className="progress-pct">{pct}%</p>
+      <p className="progress-pct">{displayPct}%</p>
     </div>
   );
 }
@@ -489,9 +497,9 @@ function ResultView({
       </div>
 
       <p className="center mt-6">
-        <a href="/cost" style={{ color: 'var(--blue-text)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <Link href="/cost" style={{ color: 'var(--blue-text)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
           See full Bay Area cost guides <ArrowRightIcon size={15} />
-        </a>
+        </Link>
       </p>
     </main>
   );
