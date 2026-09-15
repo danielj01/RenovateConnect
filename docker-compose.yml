@@ -1,0 +1,43 @@
+# Development Postgres for RenovateConnect.
+#
+# The dev database used to be a Homebrew Postgres on one particular Mac, with
+# that machine's OS username baked into the connection string in api/tests.
+# That made the database a property of the laptop rather than of the project:
+# it couldn't be recreated elsewhere, and nothing recorded what version or
+# extensions it had. This file makes it reproducible — `docker compose up -d`
+# on any machine gives you the same server.
+#
+#   docker compose up -d          start
+#   docker compose down           stop (data survives in the named volume)
+#   docker compose down -v        stop and DELETE the data
+#
+# Port 5433, not 5432, so this can run alongside an existing local Postgres —
+# which is what makes `api/scripts/move-dev-db.sh` able to copy from one to the
+# other. If you have no local Postgres, 5432 here is fine too.
+#
+# Nothing here is production. Production Postgres is provisioned by Render (see
+# render.yaml) and reaches the API as DATABASE_URL, same as this does.
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: renovate-connect-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: renovate
+      POSTGRES_PASSWORD: renovate
+      POSTGRES_DB: renovate_connect
+    ports:
+      - '5433:5432'
+    volumes:
+      - renovate-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # The API and the test suite both fail confusingly against a Postgres
+      # that is up but not yet accepting connections.
+      test: ['CMD-SHELL', 'pg_isready -U renovate -d renovate_connect']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  renovate-pgdata:

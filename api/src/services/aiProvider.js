@@ -36,15 +36,34 @@ function chatModel() {
 // One chat completion. `system` is sent as a leading system message, which is
 // how the OpenAI format carries it (Anthropic takes it as a top-level field —
 // that difference is why this lives behind its own function).
-async function chatCompletion({ system, messages, maxTokens = 512 }) {
-  const res = await fetch(`${baseUrl()}/chat/completions`, {
+async function chatCompletion(options) {
+  const models = [...new Set([chatModel(), process.env.NVIDIA_CHAT_FALLBACK_MODEL].filter(Boolean))];
+  for (let i = 0; i < models.length; i++) {
+    try {
+      return await chatCompletionAttempt({ ...options, model: models[i] });
+    } catch (err) {
+      if (!err.retryable || i === models.length - 1) {
+        throw httpError(503, 'The AI assistant is busy right now. Please try again shortly.');
+      }
+      console.warn('[aiProvider] chat model unavailable; trying configured backup');
+    }
+  }
+}
+
+async function chatCompletionAttempt({ system, messages, maxTokens = 512, model }) {
+  let res;
+  try {
+    res = await fetch(`${baseUrl()}/chat/completions`, {
     method: 'POST',
+    signal: AbortSignal.timeout(20000),
     headers: {
       Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: chatModel(),
+      model,
+      ...(['nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', 'nvidia/nemotron-3.5-lightning-30b-a3b'].includes(model)
+        ? { chat_template_kwargs: { enable_thinking: false } } : {}),
       max_tokens: maxTokens,
       messages: [
         ...(system ? [{ role: 'system', content: system }] : []),
@@ -53,11 +72,15 @@ async function chatCompletion({ system, messages, maxTokens = 512 }) {
     }),
   });
 
+  } catch {
+    throw Object.assign(new Error('AI provider connection failed'), { retryable: true });
+  }
+
   if (!res.ok) {
     // Never surface the provider's response body — it can echo the request and,
     // on some providers, billing details. Log the status; return a safe 503.
-    console.error(`[aiProvider] ${chatModel()} responded ${res.status}`);
-    throw httpError(503, 'This feature is temporarily unavailable. Please try again in a bit.');
+    console.error(`[aiProvider] ${model} responded ${res.status}`);
+    throw Object.assign(new Error('AI provider request failed'), { retryable: [404, 408, 410, 429].includes(res.status) || res.status >= 500 });
   }
 
   let body;
@@ -68,34 +91,17 @@ async function chatCompletion({ system, messages, maxTokens = 512 }) {
   }
 
   const text = body?.choices?.[0]?.message?.content;
-  if (typeof text !== 'string') {
+  if (typeof text !== 'string' || !text.trim()) {
     console.error('[aiProvider] unexpected response shape (no choices[0].message.content)');
     throw httpError(503, 'This feature is temporarily unavailable. Please try again in a bit.');
   }
   return text;
 }
 
-// Vision-language model id. nvidia/nemotron-nano-12b-v2-vl is the default —
-// picked empirically, not by benchmark. Evaluated against real photos across
-// 4 room types with the estimator's actual prompt (see the comment on
-// ESTIMATE_SYSTEM_PROMPT in services/ai.js): it returned valid JSON on every
-// test and gave genuinely photo-specific line items, where
-// meta/llama-3.2-11b-vision-instruct broke JSON format entirely on one test
-// (reverted to markdown prose) and otherwise recited nearly the same generic
-// 8-item checklist regardless of room type — including "replacing the
-// countertops" for a living room. meta/llama-3.2-90b-vision-instruct (what
-// this defaulted to originally) was unreachable across 4 separate attempts
-// spread over this evaluation — NVIDIA's free tier reporting it consistently
-// unavailable, not a quality problem — so it was never actually quality-
-// tested; worth re-trying if NVIDIA's availability for it improves.
-//
-// Confirmed against NVIDIA's NIM API docs/behavior to speak the standard
-// OpenAI `image_url` content-block format (not every NIM-hosted VLM does;
-// some expect an inline base64 <img> tag in the text instead). Tested with
-// JPEG and PNG only, which is what services/ai.js restricts to before
-// routing here.
+// Current hosted vision model. The former Nano 12B V2 VL endpoint was
+// retired by NVIDIA on August 26, 2026 (HTTP 410).
 function visionModel() {
-  return process.env.NVIDIA_VISION_MODEL || 'nvidia/nemotron-nano-12b-v2-vl';
+  return process.env.NVIDIA_VISION_MODEL || 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning';
 }
 
 // One vision completion. `imageDataUrls` are full `data:<mime>;base64,<...>`
@@ -106,12 +112,15 @@ function visionModel() {
 async function visionCompletion({ system, imageDataUrls, prompt, maxTokens = 3000 }) {
   const res = await fetch(`${baseUrl()}/chat/completions`, {
     method: 'POST',
+    signal: AbortSignal.timeout(45000),
     headers: {
       Authorization: `Bearer ${process.env.NVIDIA_API_KEY}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       model: visionModel(),
+      ...(visionModel() === 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning'
+        ? { chat_template_kwargs: { enable_thinking: false } } : {}),
       max_tokens: maxTokens,
       messages: [
         ...(system ? [{ role: 'system', content: system }] : []),

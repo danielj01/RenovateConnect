@@ -16,12 +16,12 @@ const { authMiddleware, requireRole } = require('../middleware/auth');
 
 router.use(authMiddleware, requireRole('ADMIN'));
 
-// GET /admin/pending — everything awaiting review, both kinds. Returned as
-// two parallel arrays so the iOS view can render two sections without
+// GET /admin/pending — everything awaiting review, all kinds. Returned as
+// parallel arrays so the iOS view can render one section each without
 // re-grouping on the client.
 router.get('/pending', async (_req, res, next) => {
   try {
-    const [businesses, projects] = await Promise.all([
+    const [businesses, projects, inspirationPosts] = await Promise.all([
       db.business.findMany({
         where: { approvalStatus: 'PENDING' },
         orderBy: { createdAt: 'asc' },
@@ -34,8 +34,15 @@ router.get('/pending', async (_req, res, next) => {
           business: { select: { id: true, companyName: true } },
         },
       }),
+      db.inspirationPost.findMany({
+        where: { approvalStatus: 'PENDING' },
+        orderBy: { createdAt: 'asc' },
+        include: {
+          business: { select: { id: true, companyName: true } },
+        },
+      }),
     ]);
-    res.json({ businesses, projects });
+    res.json({ businesses, projects, inspirationPosts });
   } catch (err) {
     next(err);
   }
@@ -121,6 +128,31 @@ router.post('/portfolio/:projectId/reject', async (req, res, next) => {
     if (!result) return res.status(404).json({ error: 'Not found' });
     // Rejecting a previously-approved project can drop it out of the tier calc.
     await recomputeBusinessCostTier(result.updated.businessId);
+    res.json(result.updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Native Inspiration posts go through the same gate as portfolio projects.
+// They never touch the price tier — costTier is derived from completed
+// portfolio work only (see services/costTier.js), and a post's optional range
+// is a "looks like this" figure, not a booked job.
+router.post('/inspiration/:postId/approve', async (req, res, next) => {
+  try {
+    const result = await decide(db.inspirationPost)('APPROVED', req.params.postId);
+    if (!result) return res.status(404).json({ error: 'Not found' });
+    res.json(result.updated);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/inspiration/:postId/reject', async (req, res, next) => {
+  try {
+    const { reason } = decisionSchema.parse(req.body || {});
+    const result = await decide(db.inspirationPost)('REJECTED', req.params.postId, reason);
+    if (!result) return res.status(404).json({ error: 'Not found' });
     res.json(result.updated);
   } catch (err) {
     next(err);

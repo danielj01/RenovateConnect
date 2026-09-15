@@ -8,6 +8,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const { globalLimiter } = require('./middleware/rateLimit');
+const absoluteUploadUrls = require('./middleware/absoluteUploadUrls');
 
 const authRoutes = require('./routes/auth');
 const businessRoutes = require('./routes/businesses');
@@ -30,7 +31,9 @@ const waitlistRoutes = require('./routes/waitlist');
 const reportRoutes = require('./routes/reports');
 const blockRoutes = require('./routes/blocks');
 const verificationDocumentsRoutes = require('./routes/verificationDocuments');
+const inspirationPostRoutes = require('./routes/inspirationPosts');
 const internalRoutes = require('./routes/internal');
+const questionnaireBundlesRoutes = require('./routes/questionnaireBundles');
 
 const { assertStorageConfigured } = require('./services/storage');
 const { assertEmailConfigured } = require('./services/email');
@@ -94,6 +97,11 @@ app.use(express.json({ limit: '10mb' }));
 // Mounted before the rate limiter so loading images doesn't burn the quota.
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
+// Locally-stored uploads are persisted as root-relative "/uploads/<file>"
+// paths so no hostname ever lands in the database; expand them into absolute
+// URLs against this request's host on the way out.
+app.use(absoluteUploadUrls);
+
 // Baseline API rate limit (per-user when authed, per-IP otherwise). Stripe
 // webhooks are mounted above this so Stripe is never throttled. Stricter
 // per-endpoint limiters (auth, AI estimator) layer on top in their routers.
@@ -103,6 +111,7 @@ app.use('/auth', authRoutes);
 // Mount verification docs BEFORE businessRoutes so /:id/verification-documents
 // resolves to the dedicated router instead of falling into a generic handler.
 app.use('/businesses/:id/verification-documents', verificationDocumentsRoutes);
+app.use('/businesses/:id/inspiration', inspirationPostRoutes);
 app.use('/businesses', businessRoutes);
 app.use('/estimations', estimationRoutes);
 app.use('/conversations', messageRoutes);
@@ -123,6 +132,7 @@ app.use('/reports', reportRoutes);
 app.use('/blocks', blockRoutes);
 // Ops-only, key-guarded (cron-driven). 404s entirely when INTERNAL_API_KEY is unset.
 app.use('/internal', internalRoutes);
+app.use('/questionnaire-bundles', questionnaireBundlesRoutes);
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
 

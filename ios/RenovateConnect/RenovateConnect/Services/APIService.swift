@@ -20,19 +20,32 @@ final class APIService {
     static let shared = APIService()
 
     #if DEBUG
-    #if targetEnvironment(simulator)
-    // The Simulator shares the Mac's network stack, so localhost IS the Mac.
-    // Preferred over the .local name because macOS renumbers that on hostname
-    // collisions — it silently drifted from -204 to -235 and every request in
-    // the app timed out against a host that no longer existed.
-    private let base = URL(string: "http://localhost:3000")!
-    #else
-    // Physical device on the same WiFi: reach the Mac by its mDNS (.local)
-    // name rather than a hard-coded LAN IP, so a new DHCP lease doesn't break
-    // it. The name itself can still drift (see above) — check the current one
-    // with `scutil --get LocalHostName` and update here if requests hang.
-    private let base = URL(string: "http://Daniels-MacBook-Air-235.local:3000")!
-    #endif
+    // Dev server base URL. The host is *not* compiled in: it comes from the
+    // API_BASE_URL build setting (Config/Local.xcconfig, gitignored — see
+    // Config/Local.xcconfig.example), which Config/Debug.xcconfig surfaces into
+    // the generated Info.plist as `APIBaseURL`.
+    //
+    // A hostname baked into this file rots: rename the Mac and every DEBUG
+    // build stops resolving it, for every checkout, not just the one that set
+    // it. Unset is the normal case and means http://localhost:3000, which is
+    // what the Simulator wants anyway; only on-device testing over the LAN
+    // needs a real value. See BUILD_GUIDE.md section 4.4.
+    private let base = APIService.debugBaseURL()
+
+    nonisolated private static let fallbackBase = URL(string: "http://localhost:3000")!
+
+    nonisolated static func debugBaseURL() -> URL {
+        let configured = (Bundle.main.object(forInfoDictionaryKey: "APIBaseURL") as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !configured.isEmpty else { return fallbackBase }
+        // Reject a half-set value (e.g. "http:" — xcconfig eats everything
+        // after "//") rather than failing every request with a cryptic error.
+        guard let url = URL(string: configured), url.scheme != nil, url.host != nil else {
+            print("⚠️ APIBaseURL is not a usable URL (\(configured)) — falling back to \(fallbackBase).")
+            return fallbackBase
+        }
+        return url
+    }
     #else
     // Production API (Render service from render.yaml), served via the
     // custom domain now that DNS/TLS are set up (see LAUNCH_READINESS.md).
@@ -265,20 +278,118 @@ final class APIService {
     /// "I'd love a quote for this" message. Returns the conversation id so
     /// the client can jump straight to the thread, plus the rough estimate
     /// range to show in the loading state.
-    func quoteThisLook(portfolioProjectId: String, imageUrl: String) async throws -> QuoteThisLookResponse {
-        struct Body: Encodable { let portfolioProjectId: String; let imageUrl: String }
+    /// Pass exactly one of `portfolioProjectId` / `inspirationPostId` — the
+    /// server rejects both or neither. A FeedItem carries exactly one of
+    /// `projectId` / `postId`, so passing both straight through is correct.
+    func quoteThisLook(portfolioProjectId: String? = nil,
+                       inspirationPostId: String? = nil,
+                       imageUrl: String) async throws -> QuoteThisLookResponse {
+        struct Body: Encodable {
+            let portfolioProjectId: String?
+            let inspirationPostId: String?
+            let imageUrl: String
+        }
         return try await request("feed/quote-this-look", method: "POST",
-                                 body: Body(portfolioProjectId: portfolioProjectId, imageUrl: imageUrl))
+                                 body: Body(portfolioProjectId: portfolioProjectId,
+                                            inspirationPostId: inspirationPostId,
+                                            imageUrl: imageUrl))
     }
 
-    /// Public Inspiration feed of contractor project photos.
-    func feed(page: Int = 1, category: String? = nil) async throws -> FeedResponse {
+    /// Public Inspiration feed. Each item is a post with swipeable slides.
+    /// `businessId` narrows it to one contractor ("more from them"); `source`
+    /// is "posts" / "projects" / nil for the mixed feed.
+    func feed(page: Int = 1, category: String? = nil,
+              businessId: String? = nil, source: String? = nil) async throws -> FeedResponse {
         var comps = URLComponents(url: base.appendingPathComponent("feed"), resolvingAgainstBaseURL: false)!
         var items: [URLQueryItem] = [.init(name: "page", value: "\(page)")]
         if let category { items.append(.init(name: "category", value: category)) }
+        if let businessId { items.append(.init(name: "businessId", value: businessId)) }
+        if let source { items.append(.init(name: "source", value: source)) }
         comps.queryItems = items
         guard let url = comps.url else { throw APIError.invalidURL }
         return try await request(url: url)
+    }
+
+    // MARK: - Inspiration posts (contractor composer)
+
+    /// The contractor's own posts, including PENDING/REJECTED ones (the owner
+    /// and admins see everything; the public list is approved-only).
+    func inspirationPosts(businessId: String) async throws -> [InspirationPost] {
+        try await request("businesses/\(businessId)/inspiration")
+    }
+
+    func createInspirationPost(businessId: String, title: String, caption: String?,
+                               category: String?, costMin: Int?, costMax: Int?) async throws -> InspirationPost {
+        struct Body: Encodable {
+            let title: String
+            let caption: String?
+            let category: String?
+            let costMin: Int?
+            let costMax: Int?
+        }
+        return try await request("businesses/\(businessId)/inspiration", method: "POST",
+                                 body: Body(title: title, caption: caption, category: category,
+                                            costMin: costMin, costMax: costMax))
+    }
+
+    /// Edits re-open moderation server-side — the returned post comes back
+    /// PENDING, which the composer surfaces.
+    func updateInspirationPost(businessId: String, postId: String, title: String, caption: String?,
+                               category: String?, costMin: Int?, costMax: Int?) async throws -> InspirationPost {
+        struct Body: Encodable {
+            let title: String
+            let caption: String?
+            let category: String?
+            let costMin: Int?
+            let costMax: Int?
+        }
+        return try await request("businesses/\(businessId)/inspiration/\(postId)", method: "PUT",
+                                 body: Body(title: title, caption: caption, category: category,
+                                            costMin: costMin, costMax: costMax))
+    }
+
+    func deleteInspirationPost(businessId: String, postId: String) async throws {
+        struct Empty: Decodable {}
+        let _: Empty = try await request("businesses/\(businessId)/inspiration/\(postId)", method: "DELETE")
+    }
+
+    /// Upload slides to a post. `type` = "before" pairs the photos with the
+    /// existing slides by index; anything else appends to the slide set.
+    func uploadInspirationImages(businessId: String, postId: String,
+                                 images: [Data], type: String = "after") async throws -> InspirationPost {
+        let url = base.appendingPathComponent("businesses/\(businessId)/inspiration/\(postId)/images")
+        return try await multipartImageUpload(url: url, images: images, type: type)
+    }
+
+    func deleteInspirationImage(businessId: String, postId: String, url: String) async throws -> InspirationPost {
+        struct Body: Encodable { let url: String }
+        return try await request("businesses/\(businessId)/inspiration/\(postId)/images",
+                                 method: "DELETE", body: Body(url: url))
+    }
+
+    /// Shared multipart body builder for the portfolio and inspiration photo
+    /// uploaders — same field names, same server-side contract.
+    private func multipartImageUpload<T: Decodable>(url: URL, images: [Data], type: String) async throws -> T {
+        var req = URLRequest(url: url)
+        req.httpMethod = "POST"
+        if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        let boundary = UUID().uuidString
+        req.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+        var payload = Data()
+        func append(_ s: String) { payload.append(s.data(using: .utf8)!) }
+        append("--\(boundary)\r\nContent-Disposition: form-data; name=\"type\"\r\n\r\n\(type)\r\n")
+        for (i, img) in images.enumerated() {
+            append("--\(boundary)\r\nContent-Disposition: form-data; name=\"images\"; filename=\"img\(i).jpg\"\r\nContent-Type: image/jpeg\r\n\r\n")
+            payload.append(img)
+            append("\r\n")
+        }
+        append("--\(boundary)--\r\n")
+        req.httpBody = payload
+        let (data, response) = try await URLSession.shared.data(for: req)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw APIError.requestFailed((response as? HTTPURLResponse)?.statusCode ?? 0, "Upload failed")
+        }
+        return try JSONDecoder().decode(T.self, from: data)
     }
 
     /// Upload before/after photos to a portfolio project (`type` = before/after).
@@ -487,6 +598,16 @@ final class APIService {
 
     func adminRejectPortfolio(projectId: String, reason: String?) async throws -> PortfolioProject {
         try await request("admin/portfolio/\(projectId)/reject", method: "POST",
+                          body: ["reason": reason ?? ""])
+    }
+
+    func adminApproveInspirationPost(postId: String) async throws -> InspirationPost {
+        struct Empty: Encodable {}
+        return try await request("admin/inspiration/\(postId)/approve", method: "POST", body: Empty())
+    }
+
+    func adminRejectInspirationPost(postId: String, reason: String?) async throws -> InspirationPost {
+        try await request("admin/inspiration/\(postId)/reject", method: "POST",
                           body: ["reason": reason ?? ""])
     }
 

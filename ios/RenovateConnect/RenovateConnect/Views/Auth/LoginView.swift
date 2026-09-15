@@ -38,8 +38,8 @@ final class AppleSignInHandler: NSObject, ObservableObject,
     func authorizationController(controller: ASAuthorizationController,
                                  didCompleteWithError error: Error) {
         let code = (error as NSError).code
-        // 1001 = user cancelled, 1000 = entitlement not yet active on Apple's servers
-        guard code != 1001, code != 1000 else { return }
+        // Cancellation is silent; configuration and other failures must be visible.
+        guard code != ASAuthorizationError.canceled.rawValue else { return }
         DispatchQueue.main.async { self.onError?(error.localizedDescription) }
     }
 
@@ -250,6 +250,7 @@ struct LoginView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14))
             }
 
+            if googleHandler.isConfigured {
             Button { googleHandler.start() } label: {
                 HStack(spacing: 8) {
                     GoogleLogo(size: 18)
@@ -263,6 +264,8 @@ struct LoginView: View {
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(Color(.systemGray4), lineWidth: 1)
                 )
+            }
+
             }
 
             Button {

@@ -211,4 +211,63 @@ describe('POST /feed/quote-this-look', () => {
       .send({ portfolioProjectId: portfolio.id, imageUrl: portfolio.imageUrls[0] });
     expect(res.status).toBe(403);
   });
+
+  // A native inspiration post has no PortfolioProject behind it, so the same
+  // one-tap intro has to work off the post itself.
+  test('works from a native inspiration post', async () => {
+    const { token } = await createClient();
+    const { business } = await createBusiness({ companyName: 'Post Pros', email: 'postpros@t.com' });
+    const inspiration = await db.inspirationPost.create({
+      data: {
+        businessId: business.id,
+        title: 'Herringbone floor',
+        category: 'Kitchen',
+        costMin: 9000,
+        costMax: 15000,
+        approvalStatus: 'APPROVED',
+        imageUrls: ['https://cdn.example.com/uploads/post.jpg'],
+      },
+    });
+
+    const res = await request(app).post('/feed/quote-this-look')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ inspirationPostId: inspiration.id, imageUrl: inspiration.imageUrls[0] });
+
+    expect(res.status).toBe(201);
+    // The post carried its own range, so the estimator stayed out of it.
+    expect(res.body.usedAi).toBe(false);
+    expect(res.body.estimateLow).toBe(9000);
+    expect(res.body.estimationId).toBeNull();
+    expect(ai.estimateRenovationCost).not.toHaveBeenCalled();
+
+    const message = await db.message.findFirst({ where: { conversationId: res.body.conversationId } });
+    expect(message.body).toContain('Herringbone floor');
+    expect(message.imageUrls).toEqual(['https://cdn.example.com/uploads/post.jpg']);
+    expect(await db.lead.count()).toBe(1);
+  });
+
+  test('a pending inspiration post is not quotable', async () => {
+    const { token } = await createClient();
+    const { business } = await createBusiness({ email: 'pendingpost@t.com' });
+    const inspiration = await db.inspirationPost.create({
+      data: { businessId: business.id, title: 'Draft', imageUrls: ['https://cdn.example.com/uploads/d.jpg'] },
+    });
+    const res = await request(app).post('/feed/quote-this-look')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ inspirationPostId: inspiration.id, imageUrl: inspiration.imageUrls[0] });
+    expect(res.status).toBe(404);
+  });
+
+  test('rejects a request naming both sources, or neither', async () => {
+    const { token, portfolio } = await seedFeed();
+    const both = await request(app).post('/feed/quote-this-look')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ portfolioProjectId: portfolio.id, inspirationPostId: 'x', imageUrl: portfolio.imageUrls[0] });
+    expect(both.status).toBe(400);
+
+    const neither = await request(app).post('/feed/quote-this-look')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ imageUrl: portfolio.imageUrls[0] });
+    expect(neither.status).toBe(400);
+  });
 });

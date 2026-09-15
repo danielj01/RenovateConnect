@@ -23,6 +23,9 @@ ios/**/*.dSYM
 ios/Pods/
 ios/**/*.xcarchive
 
+# Per-developer dev API host (see ios/RenovateConnect/Config/Local.xcconfig.example)
+ios/RenovateConnect/Config/Local.xcconfig
+
 # macOS
 .DS_Store
 **/.DS_Store

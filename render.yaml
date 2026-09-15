@@ -10,8 +10,11 @@
 # it and this API at api.renovateconnect.com (see LAUNCH_READINESS.md).
 #
 # COST: web service + Postgres are on the Free plan (deliberate, 2026-08-07).
-# The cron job can't be free (Render doesn't offer free cron instances), so it
-# stays on Starter. ⚠️ Free Postgres is deleted 30 days after creation + a
+# The daily listing sweep is deliberately NOT defined here: Render has no free
+# cron plan, so it was the only billed line on the account. It runs from GitHub
+# Actions instead (.github/workflows/listing-sweep.yml), hitting
+# POST /internal/listing-sweep with the INTERNAL_API_KEY generated below.
+# ⚠️ Free Postgres is deleted 30 days after creation + a
 # 14-day grace period unless upgraded before then — fine for pre-launch
 # testing, NOT fine once there's real user data. Upgrade both plans before
 # accepting real signups.
@@ -66,7 +69,10 @@ services:
         value: https://renovateconnect.com,https://www.renovateconnect.com
       - key: APNS_PRODUCTION
         value: "true"
-      # Shared with the listing-sweep cron below so it can authenticate.
+      # Authenticates the daily listing sweep, which now runs from GitHub
+      # Actions rather than a Render cron. Render generates this value; copy it
+      # into the repo's Actions secrets as INTERNAL_API_KEY. Regenerating it
+      # here silently breaks the sweep (401) until that secret is updated too.
       - key: INTERNAL_API_KEY
         generateValue: true
       # Secrets — set in the Render dashboard.
@@ -79,9 +85,11 @@ services:
       - key: NVIDIA_API_KEY
         sync: false
       - key: NVIDIA_CHAT_MODEL
-        value: deepseek-ai/deepseek-v4-flash-0731
+        value: nvidia/nemotron-3.5-lightning-30b-a3b
+      - key: NVIDIA_CHAT_FALLBACK_MODEL
+        value: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
       - key: NVIDIA_VISION_MODEL
-        value: nvidia/nemotron-nano-12b-v2-vl
+        value: nvidia/nemotron-3-nano-omni-30b-a3b-reasoning
       - key: STRIPE_SECRET_KEY
         sync: false
       - key: STRIPE_WEBHOOK_SECRET
@@ -112,32 +120,3 @@ services:
         sync: false
       - key: APNS_KEY
         sync: false
-
-  # Daily listing-lifecycle sweep: emails/pushes contractors whose free month is
-  # about to end, and those whose listing has just gone hidden. Without it a
-  # business is silently delisted at day 30 and never told why the leads stopped.
-  # Each notice is stamped send-once, so a retry or overlapping run is harmless.
-  # 15:00 UTC ≈ 8am PT — a business-hours nudge, not a 3am one.
-  - type: cron
-    name: renovate-connect-listing-sweep
-    runtime: docker
-    dockerfilePath: ./api/Dockerfile
-    dockerContext: ./api
-    plan: starter
-    schedule: "0 15 * * *"
-    # Was inlined as `sh -c '...'` with nested quotes for the env-var
-    # interpolation — that didn't survive Render's parsing of the YAML field
-    # (failed with the whole curl invocation collapsed into one unresolved
-    # token: "sh: 1: curl -fsS ... : not found"). Moved to a real script
-    # (api/scripts/listing-sweep.sh) so dockerCommand is just a bare path with
-    # nothing for a parser to mis-split.
-    dockerCommand: sh scripts/listing-sweep.sh
-    envVars:
-      - key: API_BASE_URL
-        value: https://api.renovateconnect.com
-      # Must match the web service's generated key above.
-      - key: INTERNAL_API_KEY
-        fromService:
-          name: renovate-connect-api
-          type: web
-          envVarKey: INTERNAL_API_KEY

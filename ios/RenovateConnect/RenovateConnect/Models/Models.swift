@@ -252,6 +252,7 @@ struct Conversation: Codable, Identifiable, Hashable {
     let businessId: String
     var clientId: String?
     let business: BusinessSummary?
+    var client: ConversationClient?
     let updatedAt: String
     let messages: [ChatMessage]?
     var unreadCount: Int?
@@ -267,6 +268,12 @@ struct Conversation: Codable, Identifiable, Hashable {
     // without forcing Hashable on every nested model.
     func hash(into hasher: inout Hasher) { hasher.combine(id) }
     static func == (lhs: Conversation, rhs: Conversation) -> Bool { lhs.id == rhs.id }
+}
+
+struct ConversationClient: Codable {
+    let id: String
+    let name: String
+    var avatarUrl: String?
 }
 
 struct BusinessSummary: Codable {
@@ -372,17 +379,49 @@ struct VerificationDocument: Codable, Identifiable {
 
 /// One photo in the Inspiration feed (GET /feed). Each is a contractor's real
 /// project photo; tapping routes to that contractor.
-struct FeedItem: Codable, Identifiable {
+/// One swipeable photo inside a feed post. `beforeImageUrl` is the paired
+/// "before" shot when the contractor uploaded one for this slide.
+struct FeedSlide: Codable, Identifiable, Hashable {
     let id: String
     let imageUrl: String
     let beforeImageUrl: String?
     let isBeforeAfter: Bool
+}
+
+/// Where a feed item came from. A POST was published straight to the
+/// Inspiration feed; a PROJECT is a portfolio project's photos.
+enum FeedItemKind: String, Codable {
+    case post = "POST"
+    case project = "PROJECT"
+}
+
+/// One item in the Inspiration feed — a *post* with an ordered set of slides
+/// you swipe through, not a single photo. The flat `imageUrl` /
+/// `beforeImageUrl` / `isBeforeAfter` fields mirror `slides[0]` (the cover).
+struct FeedItem: Codable, Identifiable {
+    let id: String
+    let kind: FeedItemKind
+    /// Set when `kind == .post`; the id to pass to quote-this-look.
+    let postId: String?
+    /// Set when `kind == .project`.
+    let projectId: String?
+    let title: String
+    let caption: String?
     let category: String?
     let costMin: Int?
     let costMax: Int?
-    let projectId: String
-    let title: String
+    let slides: [FeedSlide]
+    let slideCount: Int
+    let beforeAfterCount: Int
     let business: FeedBusiness
+
+    // Cover fields (mirror slides[0]).
+    let imageUrl: String
+    let beforeImageUrl: String?
+    let isBeforeAfter: Bool
+
+    var isMultiSlide: Bool { slideCount > 1 }
+    var hasBeforeAfter: Bool { beforeAfterCount > 0 }
 
     var costText: String? {
         switch (costMin, costMax) {
@@ -428,6 +467,41 @@ struct FeedResponse: Codable {
     let page: Int
     let limit: Int
     let hasMore: Bool
+}
+
+/// A contractor's own Inspiration post — the composer's model. Distinct from
+/// `PortfolioProject`: a post is a lightweight slideshow published straight to
+/// the feed, with no duration and no effect on the profile's price tier.
+struct InspirationPost: Codable, Identifiable {
+    let id: String
+    let title: String
+    var caption: String?
+    var category: String?
+    var costMin: Int?
+    var costMax: Int?
+    var imageUrls: [String]
+    var beforeImageUrls: [String]?
+    let featured: Bool
+
+    /// Always present on the owner's own list; the public list only returns
+    /// approved rows, so it's optional for symmetry with PortfolioProject.
+    var approvalStatus: ApprovalStatus?
+    var rejectionReason: String?
+
+    /// Business name alongside pending posts in the admin queue. Only
+    /// populated by GET /admin/pending.
+    var business: AdminPendingBusinessRef?
+
+    var befores: [String] { beforeImageUrls ?? [] }
+
+    var costRangeText: String? {
+        switch (costMin, costMax) {
+        case let (lo?, hi?): return "$\(lo.formatted()) – $\(hi.formatted())"
+        case let (lo?, nil): return "From $\(lo.formatted())"
+        case let (nil, hi?): return "Up to $\(hi.formatted())"
+        default: return nil
+        }
+    }
 }
 
 struct ChatMessage: Codable, Identifiable {
@@ -1012,8 +1086,8 @@ struct AdminPendingBusinessRef: Codable {
     let companyName: String
 }
 
-/// What an admin sees in the queue: businesses awaiting first approval and
-/// portfolio projects awaiting first approval, side by side.
+/// What an admin sees in the queue: businesses, portfolio projects, and native
+/// Inspiration posts awaiting first approval, side by side.
 struct AdminPendingQueue: Codable {
     struct PendingBusiness: Codable, Identifiable {
         let id: String
@@ -1027,6 +1101,11 @@ struct AdminPendingQueue: Codable {
     }
     let businesses: [PendingBusiness]
     let projects: [PortfolioProject]
+    /// Older API builds predate native Inspiration posts, so decode defensively.
+    var inspirationPosts: [InspirationPost]?
+
+    var posts: [InspirationPost] { inspirationPosts ?? [] }
+    var totalPending: Int { businesses.count + projects.count + posts.count }
 }
 
 struct LeadsByStatus: Codable {

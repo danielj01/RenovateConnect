@@ -72,13 +72,12 @@ export default function PrivacyPage() {
 
       <h2>AI processing</h2>
       <p>
-        Photo estimates are powered by Anthropic&rsquo;s Claude models. The
-        in-app assistant (chat) is powered by Anthropic&rsquo;s Claude models
-        or, depending on system configuration, DeepSeek models hosted by
-        NVIDIA — both under service agreements with us. Photos and messages
-        you submit are sent only to the provider handling that feature for
-        processing; they are not used to train models and are not shared with
-        contractors unless you send them in a chat.
+        AI photo estimates and the in-app assistant use models hosted by NVIDIA
+        and Anthropic, depending on availability and system configuration.
+        Selected photos, project details, and messages are sent to the provider
+        handling the request. An estimate may be sent to Anthropic if the
+        NVIDIA request fails. Chat requests include previous messages from
+        that AI conversation to provide context.
       </p>
 
       <h2>Where your data lives</h2>

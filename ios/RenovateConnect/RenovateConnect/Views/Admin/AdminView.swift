@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Approval queue for platform admins. Shows everything awaiting review —
-/// new business listings and new portfolio projects — and lets the admin
-/// approve or reject each. Rejecting prompts for an optional reason that
+/// new business listings, new portfolio projects, and native Inspiration
+/// posts — and lets the admin approve or reject each. Rejecting prompts for an optional reason that
 /// surfaces in the owner's UI so they know what to fix.
 struct AdminView: View {
     @State private var queue: AdminPendingQueue?
@@ -15,11 +15,13 @@ struct AdminView: View {
     enum RejectionTarget: Identifiable {
         case business(id: String, name: String)
         case project(id: String, title: String)
+        case inspirationPost(id: String, title: String)
 
         var id: String {
             switch self {
             case .business(let id, _): return "b-\(id)"
             case .project(let id, _): return "p-\(id)"
+            case .inspirationPost(let id, _): return "i-\(id)"
             }
         }
     }
@@ -29,7 +31,7 @@ struct AdminView: View {
             Group {
                 if isLoading && queue == nil {
                     ProgressView()
-                } else if let q = queue, q.businesses.isEmpty && q.projects.isEmpty {
+                } else if let q = queue, q.totalPending == 0 {
                     emptyState
                 } else if let q = queue {
                     list(q)
@@ -72,6 +74,17 @@ struct AdminView: View {
                         }
                     }
                 }
+                if !q.posts.isEmpty {
+                    Section {
+                        sectionHeader("Inspiration posts", count: q.posts.count)
+                        ForEach(q.posts) { post in
+                            PendingInspirationPostCard(
+                                post: post,
+                                approve: { Task { await approvePost(post) } },
+                                reject: { rejecting = .inspirationPost(id: post.id, title: post.title) })
+                        }
+                    }
+                }
             }
             .padding(.horizontal, 20).padding(.bottom, 24)
         }
@@ -94,7 +107,7 @@ struct AdminView: View {
             Image(systemName: "checkmark.seal.fill")
                 .font(.system(size: 46)).foregroundStyle(.green)
             Text("All caught up").font(.headline)
-            Text("No pending listings or portfolio projects. New submissions will show up here.")
+            Text("No pending listings, projects, or inspiration posts. New submissions will show up here.")
                 .font(.subheadline).foregroundStyle(.secondary)
                 .multilineTextAlignment(.center).padding(.horizontal, 40)
         }
@@ -120,12 +133,19 @@ struct AdminView: View {
         await load()
     }
 
+    private func approvePost(_ p: InspirationPost) async {
+        _ = try? await APIService.shared.adminApproveInspirationPost(postId: p.id)
+        await load()
+    }
+
     private func reject(_ target: RejectionTarget, reason: String?) async {
         switch target {
         case .business(let id, _):
             _ = try? await APIService.shared.adminRejectBusiness(id: id, reason: reason)
         case .project(let id, _):
             _ = try? await APIService.shared.adminRejectPortfolio(projectId: id, reason: reason)
+        case .inspirationPost(let id, _):
+            _ = try? await APIService.shared.adminRejectInspirationPost(postId: id, reason: reason)
         }
         await load()
     }
@@ -209,6 +229,58 @@ private struct PendingProjectCard: View {
     }
 }
 
+private struct PendingInspirationPostCard: View {
+    let post: InspirationPost
+    let approve: () -> Void
+    let reject: () -> Void
+
+    var body: some View {
+        RCCard {
+            VStack(alignment: .leading, spacing: 10) {
+                // Posts are slideshows, so show the whole strip — an admin
+                // approving off the cover alone would be waving through
+                // whatever is on slides 2-n.
+                if !post.imageUrls.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(post.imageUrls, id: \.self) { urlString in
+                                AsyncImage(url: URL(string: urlString)) { img in img.resizable().scaledToFill() }
+                                    placeholder: { Color(.systemGray5) }
+                                    .frame(width: 130, height: 130).clipped()
+                                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                            }
+                        }
+                    }
+                }
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(post.title).font(.subheadline.weight(.semibold))
+                        if let biz = post.business {
+                            Text(biz.companyName).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Label("Post", systemImage: "sparkles")
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+                        .background(Color.purple.opacity(0.15)).foregroundStyle(.purple)
+                        .clipShape(Capsule())
+                }
+                if let caption = post.caption, !caption.isEmpty {
+                    Text(caption).font(.caption).foregroundStyle(.secondary).lineLimit(3)
+                }
+                if !post.befores.isEmpty {
+                    Label("\(post.befores.count) before photo\(post.befores.count == 1 ? "" : "s")",
+                          systemImage: "arrow.triangle.2.circlepath")
+                        .font(.caption2).foregroundStyle(.secondary)
+                }
+                approvalButtons(approve: approve, reject: reject)
+            }
+            .padding(14)
+        }
+    }
+}
+
 @ViewBuilder
 private func approvalButtons(approve: @escaping () -> Void, reject: @escaping () -> Void) -> some View {
     HStack(spacing: 10) {
@@ -242,6 +314,7 @@ private struct RejectionReasonSheet: View {
         switch target {
         case .business(_, let n): return n
         case .project(_, let t): return t
+        case .inspirationPost(_, let t): return t
         }
     }
 

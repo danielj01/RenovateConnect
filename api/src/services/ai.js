@@ -256,7 +256,7 @@ ${businessContext}
 When recommending businesses, use their exact company name. If no business fits perfectly, say so honestly.`;
 
   if (aiProvider.isConfigured()) {
-    return aiProvider.chatCompletion({ system, messages, maxTokens: 512 });
+    return (await aiProvider.chatCompletion({ system, messages, maxTokens: 512 })).trim();
   }
 
   const response = await callModel({
@@ -266,7 +266,7 @@ When recommending businesses, use their exact company name. If no business fits 
     messages,
   });
 
-  return response.content[0].text;
+  return response.content[0].text.trim();
 }
 
 module.exports = {

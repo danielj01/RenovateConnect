@@ -1,0 +1,22 @@
+// Base configuration for the app target's Debug build.
+//
+// The dev API host is deliberately NOT in this file (or in any source file).
+// It differs per machine and per network — a committed hostname silently
+// breaks every other checkout the moment the Mac is renamed or the router
+// hands out a different lease.
+//
+// Empty by default. APIService falls back to http://localhost:3000, which is
+// what the Simulator needs anyway. Only on-device testing over the LAN needs
+// a real value: copy Local.xcconfig.example to Local.xcconfig (gitignored)
+// and set API_BASE_URL there. See BUILD_GUIDE.md section 4.4.
+API_BASE_URL =
+
+#include? "Local.xcconfig"
+
+// Surfaced into the app's Info.plist so it can be read at runtime via
+// Bundle.main. It has to travel through a partial plist rather than an
+// INFOPLIST_KEY_* setting: Xcode's Info.plist generator only honours the keys
+// it knows about and silently drops custom ones. Config/Info.plist is merged
+// into the generated plist, so GENERATE_INFOPLIST_FILE stays YES and the
+// INFOPLIST_KEY_* settings in the project keep working.
+INFOPLIST_FILE = Config/Info.plist

@@ -145,8 +145,18 @@ Both of the original concerns are resolved:
 
 ### 3.2 Push Notifications capability 🟡
 - [x] `aps-environment` entitlement wired via `CODE_SIGN_ENTITLEMENTS`.
-- [x] **Background Modes → Remote notifications**
-      (`INFOPLIST_KEY_UIBackgroundModes`).
+- [x] **Background Modes → Remote notifications: deliberately NOT declared.**
+      That mode exists only to wake the app for *silent* pushes
+      (`content-available: 1`). Every push we send is an alert push —
+      `api/src/services/push.js` always builds an `aps.alert` body and hardcodes
+      `apns-push-type: alert` — and the app has no
+      `didReceiveRemoteNotification` handler to run if one ever arrived. Alert
+      pushes need only the `aps-environment` entitlement above. Declaring an
+      unused background mode is a Guideline 2.5.4 rejection risk, so
+      `INFOPLIST_KEY_UIBackgroundModes` was removed from the project. (It never
+      reached the built Info.plist anyway: Xcode's generator ignores that key.)
+      If silent push is ever added, it needs a real partial Info.plist with an
+      `<array>` value — the build setting alone will not work.
 - [ ] In the Apple Developer portal, create an **APNs Auth Key (.p8)**; load its
       contents + Key ID + Team ID into the server's `APNS_*` env, set
       `APNS_PRODUCTION=true` for App Store / TestFlight builds. Until then every

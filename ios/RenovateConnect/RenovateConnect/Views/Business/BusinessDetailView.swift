@@ -8,6 +8,10 @@ struct BusinessDetailView: View {
     /// When opened from the post-release "leave a review" nudge, auto-present the
     /// review composer once the business has loaded.
     var autoPresentReview: Bool = false
+    private enum ProfileSection: String, CaseIterable { case work = "Work", about = "About", reviews = "Reviews" }
+    @State private var selectedSection: ProfileSection = .work
+    @State private var selectedProject: PortfolioProject?
+    @State private var loadError = false
     @State private var business: Business?
     @State private var isLoading = true
     @State private var showContact = false
@@ -43,15 +47,26 @@ struct BusinessDetailView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         heroSection(biz)
-                        statsRow(biz)
-                        contentSection(biz)
+                        profileNavigation(biz)
+                        Group {
+                            switch selectedSection {
+                            case .work: workSection(biz)
+                            case .about: contentSection(biz)
+                            case .reviews: reviewsSection(biz).padding(20)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.bottom, 24)
                     }
                 }
-                .ignoresSafeArea(edges: .top)
+
                 .safeAreaInset(edge: .bottom) {
                     if canActAsClient {
                         contactButton(biz)
                     }
+                }
+                .sheet(item: $selectedProject) { project in
+                    BrandProjectDetail(project: project)
                 }
                 .sheet(isPresented: $showContact) {
                     if let biz = business {
@@ -87,8 +102,19 @@ struct BusinessDetailView: View {
                         }
                     }
                 }
+            } else if loadError {
+                ContentUnavailableView {
+                    Label("Profile unavailable", systemImage: "wifi.exclamationmark")
+                } description: {
+                    Text("We couldn’t load this contractor. Please try again.")
+                } actions: {
+                    Button("Try again") { Task { isLoading = true; await load() } }
+                        .buttonStyle(.borderedProminent)
+                }
             }
         }
+        .background(Color(.systemBackground))
+        .navigationTitle("Contractor")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if canActAsClient, let biz = business {
@@ -129,83 +155,128 @@ struct BusinessDetailView: View {
         .task { await load() }
     }
 
-    // MARK: - Hero
+    // MARK: - Profile introduction
 
-    @ViewBuilder
     private func heroSection(_ biz: Business) -> some View {
-        ZStack(alignment: .bottomLeading) {
-            Theme.gradient
-                .frame(height: 220)
-
-            VStack(alignment: .leading, spacing: 10) {
-                BusinessAvatar(name: biz.companyName, logoUrl: biz.logoUrl,
-                               size: 72, cornerRadius: 18)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(.white.opacity(0.4), lineWidth: 2)
-                    )
-                    .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(biz.companyName)
-                            .font(.title2.bold())
-                            .foregroundStyle(.white)
-                        if biz.isVerified { VerifiedBadge() }
-                    }
-                    HStack(spacing: 10) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "mappin.circle.fill").font(.caption)
-                            Text("\(biz.city), \(biz.state)").font(.subheadline)
+        VStack(alignment: .leading, spacing: 12) {
+            if let cover = biz.portfolio?.first(where: { !$0.imageUrls.isEmpty }) {
+                Button { selectedProject = cover } label: {
+                    BrandProjectImage(url: cover.imageUrls.first, height: 210)
+                        .overlay(alignment: .bottomTrailing) {
+                            Label("View project", systemImage: "arrow.up.right")
+                                .font(.caption.weight(.semibold))
+                                .padding(10)
+                                .background(.regularMaterial, in: Capsule())
+                                .padding(12)
                         }
-                        // Price level, derived from this contractor's past
-                        // project costs. Styled for the gradient header (the
-                        // light-background CostTierBadge is used on white cards).
-                        if let tier = biz.costTier {
-                            headerCostBadge(tier)
-                        }
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("View project: \(cover.title)")
+            }
+
+            HStack(alignment: .top, spacing: 14) {
+                BusinessAvatar(name: biz.companyName, logoUrl: biz.logoUrl, size: 60, cornerRadius: 16)
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(biz.companyName)
+                        .font(.system(.title, design: .serif, weight: .semibold))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Label("\(biz.city), \(biz.state)", systemImage: "mappin")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+            }
+
+            VStack(alignment: .leading, spacing: 0) {
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 16) { profileFacts(biz) }
+                    VStack(alignment: .leading, spacing: 10) { profileFacts(biz) }
+                }
+                if biz.isVerified {
+                    Button { showVerifiedInfo = true } label: {
+                        Label("RenovateConnect verified", systemImage: "checkmark.seal.fill")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(VerifiedBadge.trust)
+                            .frame(minHeight: 44)
                     }
-                    .foregroundStyle(.white.opacity(0.85))
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Learn what verification covers")
                 }
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 8)
+    }
+
+    @ViewBuilder
+    private func profileFacts(_ biz: Business) -> some View {
+        Button { selectedSection = .reviews } label: {
+            HStack(spacing: 5) {
+                Image(systemName: "star.fill").foregroundStyle(Theme.gold)
+                if biz.reviewCount > 0 {
+                    Text(String(format: "%.1f", biz.averageRating)).bold()
+                    Text("(\(biz.reviewCount) reviews)").foregroundStyle(.secondary)
+                } else {
+                    Text("No reviews yet").foregroundStyle(.secondary)
+                }
+            }
+            .font(.subheadline).frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        if biz.yearsInBusiness > 0 {
+            Text("\(biz.yearsInBusiness) years in business")
+                .font(.caption).foregroundStyle(.secondary)
         }
     }
 
-    /// Price-level badge sized for the white-on-gradient hero: one "$" per
-    /// level ($ / $$ / $$$) plus the short label.
-    @ViewBuilder
-    private func headerCostBadge(_ tier: CostTier) -> some View {
-        HStack(spacing: 5) {
-            Text(tier.dollars)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(.white)
-            Text(tier.label).font(.caption2.weight(.semibold)).foregroundStyle(.white)
+    private func profileNavigation(_ biz: Business) -> some View {
+        Picker("Profile section", selection: $selectedSection) {
+            ForEach(ProfileSection.allCases, id: \.self) { section in
+                Text(section.rawValue).tag(section)
+            }
         }
-        .padding(.horizontal, 8).padding(.vertical, 4)
-        .background(Color.white.opacity(0.18), in: Capsule())
-        .overlay(Capsule().stroke(Color.white.opacity(0.30), lineWidth: 0.5))
-        .accessibilityLabel("Price level: \(tier.label)")
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 24)
     }
 
-    // MARK: - Stats row
-
-    @ViewBuilder
-    private func statsRow(_ biz: Business) -> some View {
-        HStack(spacing: 0) {
-            StatCell(value: String(format: "%.1f", biz.averageRating),
-                     label: "Rating", icon: "star.fill", iconColor: Theme.gold)
-            Divider().frame(height: 40)
-            StatCell(value: "\(biz.reviewCount)",
-                     label: "Reviews", icon: "bubble.left.fill", iconColor: Theme.primary)
-            Divider().frame(height: 40)
-            StatCell(value: "\(biz.yearsInBusiness)",
-                     label: "Yrs exp.", icon: "briefcase.fill", iconColor: Theme.info)
+    private func workSection(_ biz: Business) -> some View {
+        LazyVStack(alignment: .leading, spacing: 20) {
+            HStack(alignment: .firstTextBaseline) {
+                Text("Selected work").font(.title2.weight(.semibold))
+                Spacer()
+                Text("\(biz.portfolio?.count ?? 0) projects")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if let projects = biz.portfolio, !projects.isEmpty {
+                ForEach(projects) { project in
+                    Button { selectedProject = project } label: {
+                        VStack(alignment: .leading, spacing: 10) {
+                            BrandProjectImage(url: project.imageUrls.first, height: 220)
+                            HStack(alignment: .top) {
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(project.title).font(.headline).foregroundStyle(.primary)
+                                    if let category = project.category {
+                                        Text(category).font(.subheadline).foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.up.right").foregroundStyle(Theme.primary)
+                            }
+                            if let cost = project.costRangeText {
+                                Text(cost).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Opens project photos and details")
+                }
+            } else {
+                ContentUnavailableView("Work coming soon", systemImage: "photo.on.rectangle.angled",
+                                       description: Text("This contractor hasn’t shared projects yet. Explore their services in About or contact them to discuss your ideas."))
+            }
         }
-        .padding(.vertical, 16)
-        .background(Color(.systemBackground))
-        .shadow(color: Theme.cardShadow, radius: 8, y: 3)
+        .padding(.horizontal, 20)
     }
 
     // MARK: - Main content
@@ -312,18 +383,6 @@ struct BusinessDetailView: View {
             // Business hours
             hoursSection(biz)
 
-            // Portfolio
-            if let projects = biz.portfolio, !projects.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    Label("Recent Projects", systemImage: "photo.stack.fill")
-                        .font(.headline)
-                        .foregroundStyle(Theme.primary)
-                    ForEach(projects) { project in
-                        PortfolioCard(project: project)
-                    }
-                }
-            }
-
             // Website
             if let site = biz.website, let url = URL(string: site) {
                 RCCard {
@@ -342,10 +401,15 @@ struct BusinessDetailView: View {
                 }
             }
 
-            // Reviews
-            reviewsSection(biz)
-
-            Spacer(minLength: 90)
+            if canActAsClient {
+                Button {
+                    if auth.isLoggedIn { showBooking = true } else { auth.requireSignIn() }
+                } label: {
+                    Label("Request an appointment", systemImage: "calendar.badge.plus")
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.bordered)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.top, 20)
@@ -445,7 +509,7 @@ struct BusinessDetailView: View {
         let isClient = auth.currentUser?.role == .client
         let isOwner = auth.myBusinessId == biz.id
 
-        if !reviews.isEmpty || isClient {
+        Group {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
                     Label("Reviews", systemImage: "star.bubble.fill")
@@ -466,7 +530,7 @@ struct BusinessDetailView: View {
                 .padding(.horizontal, 16)
 
                 if reviews.isEmpty {
-                    Text("No reviews yet. Be the first to share your experience.")
+                    Text(isClient ? "No reviews yet. Be the first to share your experience." : "No reviews yet. Feedback will appear here when customers share their experience.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 16)
@@ -566,56 +630,44 @@ struct BusinessDetailView: View {
 
     @ViewBuilder
     private func contactButton(_ biz: Business) -> some View {
-        VStack(spacing: 10) {
-            Divider()
-            Button {
-                if auth.isLoggedIn { showContact = true } else { auth.requireSignIn() }
+        HStack(spacing: 12) {
+            Menu {
+                Button("Send a message", systemImage: "message") {
+                    if auth.isLoggedIn { showContact = true } else { auth.requireSignIn() }
+                }
+                Button("Request an appointment", systemImage: "calendar") {
+                    if auth.isLoggedIn { showBooking = true } else { auth.requireSignIn() }
+                }
             } label: {
-                Label("Contact \(biz.companyName)", systemImage: "message.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 54)
+                Label("Contact", systemImage: "message")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 48)
+            }
+            .buttonStyle(.bordered)
+            Button {
+                if auth.isLoggedIn { showQuote = true } else { auth.requireSignIn() }
+            } label: {
+                Text("Get a quote")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 48)
             }
             .buttonStyle(.borderedProminent)
-            .tint(Theme.primary)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .padding(.horizontal, 20)
-
-            HStack(spacing: 10) {
-                Button {
-                    if auth.isLoggedIn { showQuote = true } else { auth.requireSignIn() }
-                } label: {
-                    Label("Get a quote", systemImage: "doc.text.magnifyingglass")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                }
-                .buttonStyle(.bordered)
-                .tint(Theme.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-
-                Button {
-                    if auth.isLoggedIn { showBooking = true } else { auth.requireSignIn() }
-                } label: {
-                    Label("Appointment", systemImage: "calendar.badge.plus")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                }
-                .buttonStyle(.bordered)
-                .tint(Theme.primary)
-                .clipShape(RoundedRectangle(cornerRadius: 14))
-            }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
         }
-        .background(.ultraThinMaterial)
+        .tint(Theme.primary)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 10)
+        .background(.bar)
     }
 
     private func load() async {
         defer { isLoading = false }
-        business = try? await APIService.shared.getBusiness(
-            id: businessId, source: fromSponsored ? "sponsored" : nil)
+        do {
+            business = try await APIService.shared.getBusiness(
+                id: businessId, source: fromSponsored ? "sponsored" : nil)
+            loadError = false
+        } catch {
+            loadError = business == nil
+        }
         // Honor a review-nudge deep link, but only for someone who can review
         // (homeowners/guests), and only once after the first successful load.
         if autoPresentReview, business != nil, canActAsClient, !didAutoPresentReview {

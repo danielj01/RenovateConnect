@@ -1,0 +1,65 @@
+name: Listing sweep
+
+# Daily listing-lifecycle sweep: emails/pushes contractors whose free month is
+# about to end, and those whose listing has just gone hidden. Without it a
+# business is silently delisted at day 30 and never told why the leads stopped.
+#
+# This used to be a Render cron job (see render.yaml). Render has no free cron
+# plan, so that one job was the only billed line on an otherwise-free account.
+# A scheduled workflow costs nothing on a public repo and a rounding error of
+# the included minutes on a private one — this job runs well under a minute a
+# day.
+#
+# Setup (one-time): add a repo Actions secret named INTERNAL_API_KEY holding
+# the value Render generated for the API service (Render dashboard ->
+# renovate-connect-api -> Environment -> INTERNAL_API_KEY). Until that secret
+# exists this workflow safely no-ops rather than failing every morning.
+# Note the key is `generateValue: true` in render.yaml, so if Render ever
+# regenerates it, this secret has to be updated to match or the sweep starts
+# 401ing.
+#
+# Two scheduling caveats Render's cron did not have:
+#   * GitHub runs scheduled workflows on a best-effort basis and can delay them
+#     by several minutes at peak times. 15:00 UTC is a business-hours nudge, so
+#     drift of that size is harmless here.
+#   * GitHub disables scheduled workflows in a repository with no pushes for 60
+#     days, emailing the owner when it does. Re-enable from the Actions tab.
+
+on:
+  schedule:
+    # 15:00 UTC ~= 8am PT — a business-hours nudge, not a 3am one. Same slot
+    # the Render cron used.
+    - cron: "0 15 * * *"
+  # Hand-trigger from the Actions tab, replacing the Render dashboard's
+  # "Trigger run" button.
+  workflow_dispatch:
+
+# A cold-started API can make a run slow; never let one overlap the next day's.
+concurrency:
+  group: listing-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    # Enable only after the existing Render cron has been suspended.
+    if: vars.LISTING_SWEEP_ENABLED == 'true'
+    name: Run listing sweep
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: POST /internal/listing-sweep
+        # Everything via env (never interpolate ${{ }} into the script), and
+        # the key stays out of the argv so it isn't visible in a process list.
+        env:
+          API_BASE_URL: https://api.renovateconnect.com
+          INTERNAL_API_KEY: ${{ secrets.INTERNAL_API_KEY }}
+        run: |
+          if [ -z "${INTERNAL_API_KEY}" ]; then
+            echo "INTERNAL_API_KEY is not set — skipping the sweep."
+            echo "See the setup note at the top of this workflow file."
+            exit 0
+          fi
+          sh api/scripts/listing-sweep.sh

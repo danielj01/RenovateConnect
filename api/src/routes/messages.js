@@ -41,6 +41,7 @@ router.get('/', authMiddleware, async (req, res, next) => {
       where,
       include: {
         business: { select: { id: true, companyName: true, logoUrl: true, city: true, userId: true } },
+        client: { select: { id: true, name: true, avatarUrl: true } },
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
       orderBy: { updatedAt: 'desc' },
@@ -110,6 +111,7 @@ router.get('/:id', authMiddleware, async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         business: { select: { id: true, companyName: true, logoUrl: true, city: true } },
+        client: { select: { id: true, name: true, avatarUrl: true } },
         messages: { orderBy: { createdAt: 'desc' }, take: 1 },
       },
     });
@@ -266,9 +268,8 @@ router.post('/:id/messages', authMiddleware, upload.array('images', 5), async (r
       return res.status(403).json({ error: 'Cannot message this user' });
     }
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
     const imageUrls = hasImages
-      ? await Promise.all(req.files.map((f) => uploadImage(f.buffer, f.mimetype, baseUrl)))
+      ? await Promise.all(req.files.map((f) => uploadImage(f.buffer, f.mimetype)))
       : [];
 
     const message = await db.message.create({

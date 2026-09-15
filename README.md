@@ -43,6 +43,23 @@ npm run dev                # starts on :3000
 
 Open `ios/RenovateConnect/RenovateConnect.xcodeproj` in Xcode, set your team and bundle ID, then run on a simulator or device.
 
+**Simulator:** nothing to configure. Debug builds default to `http://localhost:3000`, which reaches the API running on your Mac.
+
+**Physical device:** the device can't reach `localhost`, so point it at your Mac
+over the LAN. Copy the example config and fill in your Mac's mDNS name:
+
+```bash
+cd ios/RenovateConnect
+cp Config/Local.xcconfig.example Config/Local.xcconfig
+scutil --get LocalHostName    # e.g. "Your-MacBook-Air-123" -> use "Your-MacBook-Air-123.local"
+```
+
+Edit `API_BASE_URL` in `Config/Local.xcconfig`, then rebuild. The file is
+gitignored — the dev host is never committed, because machine names and LAN
+leases change and a stale one breaks everyone else's build. Both devices must
+be on the same WiFi, and the API must bind `0.0.0.0` rather than `127.0.0.1`.
+See BUILD_GUIDE.md section 4.4 for how the value reaches the app.
+
 ## Team
 
 | Role | Owner |

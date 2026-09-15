@@ -54,7 +54,7 @@ describe('estimateRenovationCost routing', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toMatch(/\/chat\/completions$/);
     const body = JSON.parse(init.body);
-    expect(body.model).toBe('nvidia/nemotron-nano-12b-v2-vl');
+    expect(body.model).toBe('nvidia/nemotron-3-nano-omni-30b-a3b-reasoning');
     const userMessage = body.messages.find((m) => m.role === 'user');
     expect(userMessage.content[0]).toEqual({
       type: 'image_url',

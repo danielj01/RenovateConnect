@@ -3,6 +3,7 @@ import SwiftUI
 struct AIChatView: View {
     @EnvironmentObject private var chat: ChatStore
     @State private var input = ""
+    @State private var showAIConsent = false
 
     var body: some View {
         NavigationStack {
@@ -54,9 +55,7 @@ struct AIChatView: View {
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(1...4)
                     Button {
-                        let text = input
-                        input = ""
-                        Task { await chat.send(text) }
+                        showAIConsent = true
                     } label: {
                         Image(systemName: "arrow.up.circle.fill")
                             .font(.title2)
@@ -74,6 +73,17 @@ struct AIChatView: View {
                 }
             }
         }
+        .alert("Send this conversation to AI?", isPresented: $showAIConsent) {
+            Button("Send to AI") {
+                let text = input
+                input = ""
+                Task { await chat.send(text) }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Your message and previous messages in this AI conversation will be sent to NVIDIA or Anthropic to generate a reply. Avoid including personal or sensitive details. Cancel to keep the message unsent.")
+        }
+
     }
 
     private var emptyState: some View {
@@ -123,10 +133,12 @@ struct ChatBubble: View {
     // so it renders properly; fall back to the raw string if parsing fails
     // (malformed Markdown shouldn't ever drop a reply on the floor).
     private var rendered: AttributedString {
-        (try? AttributedString(
-            markdown: text,
+        // Also normalize older replies already saved in chat history.
+        let content = isUser ? text : text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return (try? AttributedString(
+            markdown: content,
             options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        )) ?? AttributedString(text)
+        )) ?? AttributedString(content)
     }
 
     var body: some View {

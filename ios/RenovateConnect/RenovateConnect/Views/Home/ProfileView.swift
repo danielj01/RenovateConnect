@@ -3,9 +3,11 @@ import UIKit
 import PhotosUI
 
 struct ProfileView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @EnvironmentObject private var auth: AuthStore
     @EnvironmentObject private var notifications: NotificationManager
     @State private var pushEnabled = true
+    @State private var showAppTour = false
 
     // Profile picture editing
     @State private var selectedPhoto: PhotosPickerItem?
@@ -26,60 +28,31 @@ struct ProfileView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     if let user = auth.currentUser {
-                        // Avatar hero card
-                        RCCard {
-                            VStack(spacing: 14) {
-                                // Tappable avatar — pick a new photo from the
-                                // library. The camera badge is the edit affordance.
-                                PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                                    ZStack(alignment: .bottomTrailing) {
-                                        ProfileAvatar(avatarUrl: user.avatarUrl, name: user.name, size: 80)
-                                            .overlay(Circle().stroke(.white, lineWidth: 3))
-                                            .shadow(color: Theme.cardShadow, radius: 8)
-                                            .opacity(isUploadingAvatar ? 0.5 : 1)
-                                            .overlay {
-                                                if isUploadingAvatar { ProgressView() }
-                                            }
-
-                                        Circle()
-                                            .fill(Theme.primary)
-                                            .frame(width: 26, height: 26)
-                                            .overlay(
-                                                Image(systemName: "camera.fill")
-                                                    .font(.system(size: 11))
-                                                    .foregroundStyle(.white)
-                                            )
-                                            .overlay(Circle().stroke(.white, lineWidth: 2))
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                                .disabled(isUploadingAvatar)
-
-                                VStack(spacing: 4) {
-                                    HStack(spacing: 6) {
-                                        Text(user.name).font(.title2.bold())
-                                        Button {
-                                            nameDraft = user.name
-                                            showNameEdit = true
-                                        } label: {
-                                            Image(systemName: "pencil.circle.fill")
-                                                .font(.title3)
-                                                .foregroundStyle(Theme.primary)
-                                        }
-                                    }
-                                    Text(user.email).font(.subheadline).foregroundStyle(.secondary)
-                                    Text(user.role == .client ? "Homeowner" : "Business Owner")
-                                        .font(.caption.weight(.medium))
-                                        .padding(.horizontal, 12).padding(.vertical, 4)
-                                        .background(Theme.primaryLight)
-                                        .foregroundStyle(Theme.primary)
-                                        .clipShape(Capsule())
-                                }
+                        let headerLayout = dynamicTypeSize.isAccessibilitySize
+                            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 14))
+                            : AnyLayout(HStackLayout(spacing: 14))
+                        headerLayout {
+                            PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                                ProfileAvatar(avatarUrl: user.avatarUrl, name: user.name, size: 56)
+                                    .opacity(isUploadingAvatar ? 0.5 : 1)
+                                    .overlay { if isUploadingAvatar { ProgressView() } }
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 24)
+                            .accessibilityLabel("Change profile photo")
+                            .disabled(isUploadingAvatar)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(user.name).font(.title3.bold())
+                                Text(user.role == .client ? "Homeowner" : "Business owner")
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }
+                            if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                            Button("Edit") { nameDraft = user.name; showNameEdit = true }
+                                .frame(minWidth: 44, minHeight: 44)
+                                .accessibilityLabel("Edit name")
                         }
-                        .padding(.horizontal, 16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(20)
+                        Text("Your projects").font(.title2.bold())
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 20)
 
                         // Appointments hub — both roles: homeowners track requests,
                         // contractors manage incoming bookings.
@@ -189,6 +162,18 @@ struct ProfileView: View {
                                     }
                                     .padding(16)
                                 }
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 16)
+                        }
+
+                        if user.role != .admin {
+                            Button { showAppTour = true } label: {
+                                Label("How RenovateConnect works", systemImage: "sparkles")
+                                    .font(.subheadline.weight(.medium))
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(16)
+                                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
                             }
                             .buttonStyle(.plain)
                             .padding(.horizontal, 16)
@@ -346,6 +331,13 @@ struct ProfileView: View {
                 .padding(.top, 20)
             }
             .background(Color(.systemBackground))
+            .fullScreenCover(isPresented: $showAppTour) {
+                OnboardingView(role: auth.currentUser?.role ?? .client, onFinish: { showAppTour = false },
+                               onChooseDestination: { tab in
+                    TabRouter.shared.selection = tab
+                    showAppTour = false
+                })
+            }
             .navigationTitle("Profile")
             .task {
                 pushEnabled = auth.currentUser?.pushEnabled ?? true
